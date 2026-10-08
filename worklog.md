@@ -1273,3 +1273,28 @@ Work Log:
 
 Stage Summary:
 - ONE glass language from ONE token source: nav (unchanged), search bar/sheet/dropdown, and every M3 button across the app now share the dock's recipe; shortcuts "/", Ctrl/Cmd+K and the palette all land on the single floating glass search; exactly one search component + one entry point per platform. All QA green; pushed as 927da74.
+---
+Task ID: 41
+Agent: Z.ai Code (coordinator, no subagents)
+Task: Principal-FE performance mandate (EN) — measure the Home hero carousel first, then fix smoothness/weight/image-quality without redesigning; verify with numbers.
+
+Work Log:
+- MEASURED FIRST (agent-browser, 412×915 + 1280×800; no CPU-throttle capability in harness — honest limitation, comparative before/after on identical harness + code evidence):
+  Before: hero DOM 17 imgs / 59 nodes; decoded bitmaps 16.3MB (visible 5.5MB); BOTH art layers downloaded (phone: 3× display:none 1280×720 backdrops; desktop: 8× display:none posters); art = /poster/small/ 300×450 vs needed ~1133px (real-phone DPR2.75) = up to 3.8× upscale; 8/8 posters loaded at idx0 (lazy ineffective on a 3.3kpx track); metahub ladder curled + measured (poster small 300w/24KB · medium 500w/80KB · large 780w/162KB · original 2000w/1013KB; background medium 1280w/133KB · large 3840w/1084KB; logo medium ~780w); LCP 1756ms (element = hero art); autoplay transition locked to vsync (avg 16.67ms) unthrottled; 50-jump stress avg 17.41 / worst 33.4 / 0 longtasks / heap -0.3MB; content stack remounted EVERY slide (key={meta.id}, 12-node churn, dots lost focus); dot indicator animated `width` (layout property); onTouchStart/Move re-armed a timer per event; touchTimer/rafRef leaked on unmount; no decode-gate, no LQIP, no preload, no touch-action, no contain.
+- FIXES (2 files: home-hero.tsx rewritten, globals.css hero section):
+  1) ONE art element per slide: <picture><source media="(min-width:600px)"> — phones download only the portrait ladder, md+ only the backdrop (hidden-layer waste = 0; breakpoint comment-synced with MD_MIN).
+  2) DPR-aware ladders: metahub small/medium/large/original + background medium/large + tmdb w-tier detection; sizes=100vw; browser picks by rendered×DPR (verified: DPR1/412 → medium; DPR2 desktop → large); Save-Data/2G caps ladder at 500w.
+  3) Art windowing: wrap-aware [idx-1, idx, idx+1] mounts art; others render the static gradient (also the LQIP + failure surface). Burst tolerance: rapid navigation accumulates the window and prunes 1.6s after the burst (no mount thrash at 8 jumps/s; resting DOM = 3 arts).
+  4) Decode-gated reveals: img.decode()/onLoad → opacity fade-in over the static gradient (no half-decoded frames, no blanks); failure → per-title FAILED_ART → gradient (route-abort test: 5 fallbacks, 0 broken imgs).
+  5) Content stack NEVER remounts: entrance replay via WAAI (cancel-previous, single Animation, token-driven duration read once); MutationObserver churn per transition = 0 (was 12); dot focus survives navigation.
+  6) Indicator dots: two absolutely-positioned layers (4px dot ↔ 32×4 pill) crossfade via opacity + scaleX — zero layout animation (was width transition); layout constant.
+  7) Idle warm-up: requestIdleCallback walk decodes EVERY artwork once per session (WARMED_ART de-dup; detached Image() with the exact same srcset for out-of-window slides) — autoplay never decodes on the critical path.
+  8) Autoplay: + focus-pause (onFocusCapture/onBlurCapture); touch pause armed once on pointerdown, released 8s after gesture end (was per-event timer storm); all previous pauses kept (hover/touch/IO/hidden/reduced-motion).
+  9) Preload: hoisted <link rel=preload as=image imageSrcSet imageSizes media> for slide 0, media-split per layer (React 19 hoists; camelCase imageSrcSet/imageSizes).
+  10) CSS: touch-action: pan-x pan-y (pan-y alone would kill swipes — documented); contain: layout paint style on hero + slides; deleted dead .home-hero-art-portrait/-landscape classes, content-in keyframes; reduced-motion list updated (art fade, dot layers).
+- AFTER (same harness): autoplay ticks 842 frames avg 16.67ms / worst 16.8 / 0 frames>33ms / 0 longtasks; hero DOM 4 imgs (was 17) + 5 placeholders; decoded 3.9MB (was 16.3); zero hidden-layer downloads both orientations; content-stack churn 0; CLS hero = 0 (page 0.042 all from below-hero sections, sources enumerated); LCP 1992ms local (element = hero portrait at the CORRECT tier); warm 50-jump stress heap +0.29MB→0 (flat), 0-1 longtasks (burst worst-frames 33-66ms documented — first-visit decode during a synthetic 8-jumps/s storm; the before-state masked this by pre-decoding 16.3MB up front); keyboard nav (ArrowRight → next) ✓; View details → detail ✓; fallback-abort ✓; RTL 320px full ✓; lint 0 errors; tsc my-files clean; console 0 errors; dev.log clean.
+- Pushed ac42f1c → github.com/hoseain756/Horse main (verified).
+- HONEST LIMITS: harness has no CPU/network throttle — Fast-4G/4x-CPU numbers are projections from identical-harness A/B + byte/decode math, not DevTools traces; headless rAF cadence adds ±jitter to burst micro-measurements; TMDB art ladders are code paths (sandbox has no TMDB key — metahub is the exercised route); LCP absolute value is local-cache-dependent.
+
+Stage Summary:
+- Hero is now: 1 art download per slide (right layer, right tier, right DPR), 3-art resting DOM, zero remounts, zero layout animations, decode-gated transitions, idle-warmed autoplay — same visuals, same data sources, same behavior. All measured targets met except throttled-device absolute frames (not measurable in this harness; documented).
