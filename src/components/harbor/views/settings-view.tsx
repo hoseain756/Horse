@@ -7,7 +7,7 @@ import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useSt
 import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
-import { RichBidi, Bdi } from "../common/bidi";
+import { RichBidi } from "../common/bidi";
 import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
 import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
 import { usePwa } from "@/lib/harbor/pwa";
@@ -293,35 +293,6 @@ function SettingSliderRow({
         className="harbor-slider-touch"
         aria-label={title}
       />
-    </div>
-  );
-}
-
-/**
- * Animated disclosure (defect A): chevron mirrors in RTL (rtl:rotate-180),
- * content expands with a grid-rows transition (respects reduced motion).
- */
-function Disclosure({ summary, children }: { summary: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="harbor-tv-focus md-state flex w-full items-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors"
-      >
-        <ChevronDown
-          className={cn("w-3.5 h-3.5 shrink-0 rtl:rotate-180 transition-transform duration-200", open && "rotate-180 rtl:rotate-0")}
-          aria-hidden
-        />
-        <span className="text-start min-w-0">{summary}</span>
-      </button>
-      <div className="harbor-disclosure-content" data-open={open}>
-        <div>
-          <div className="px-2 pb-1">{children}</div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1321,7 +1292,6 @@ function TraktCard() {
   const importing = useTrakt((s) => s.importing);
   const loaded = useTrakt((s) => s.loaded);
   const load = useTrakt((s) => s.load);
-  const connect = useTrakt((s) => s.connect);
   const pollOnce = useTrakt((s) => s.pollOnce);
   const cancelConnect = useTrakt((s) => s.cancelConnect);
   const disconnect = useTrakt((s) => s.disconnect);
@@ -1335,9 +1305,6 @@ function TraktCard() {
   const pushWatchlist = useTrakt((s) => s.pushWatchlist);
   const setPushEnabled = useTrakt((s) => s.setPushEnabled);
 
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [connecting, setConnecting] = useState(false);
   const [wlCount, setWlCount] = useState<number | null>(null);
   const [histCount, setHistCount] = useState<number | null>(null);
   const [pushCount, setPushCount] = useState<string | null>(null);
@@ -1373,19 +1340,6 @@ function TraktCard() {
       if (timer) clearTimeout(timer);
     };
   }, [phase, device, pollOnce, toast]);
-
-  const startConnect = async () => {
-    // PKCE apps have no secret — only the Client ID is required
-    if (!clientId.trim()) {
-      toast({ title: "Client ID is required", variant: "destructive" });
-      return;
-    }
-    setConnecting(true);
-    const ok = await connect(clientId, clientSecret || undefined);
-    setConnecting(false);
-    if (ok) toast({ title: "Enter the code on Trakt", description: "Approve access to continue." });
-    else toast({ title: "Could not start Trakt flow", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
-  };
 
   const doImport = async () => {
     const added = await importWatchlist();
@@ -1472,66 +1426,7 @@ function TraktCard() {
       </div>
 
       {!auth && phase !== "connecting" && (
-        <>
-          {/* Zero-config activation-code linking (preferred) */}
-          <LinkAccountFlow service="trakt" />
-          {/* Legacy BYO flow — collapsed by default (animated, RTL-mirrored chevron) */}
-          <Disclosure summary={tr("advancedOwnCreds", { name: "Trakt" })}>
-            <div className="mt-3 space-y-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="trakt-client-id">
-                Client ID
-              </label>
-              <Input
-                id="trakt-client-id"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="Your Trakt app client id"
-                className="md-field-outlined px-3 font-mono text-xs bg-transparent"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="trakt-client-secret">
-                Client secret (optional — PKCE apps have none)
-              </label>
-              <Input
-                id="trakt-client-secret"
-                type="password"
-                value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
-                placeholder="Your Trakt app client secret"
-                className="md-field-outlined px-3 font-mono text-xs bg-transparent"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-ink-subtle">
-            Create a free app at{" "}
-            <a
-              href="https://trakt.tv/oauth/applications/new"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-accent underline underline-offset-2"
-            >
-              <Bdi>trakt.tv/oauth/applications/new</Bdi>
-            </a>{" "}
-            (name it anything; redirect URI is unused for device flow). Credentials never leave this
-            browser except to authenticate with Trakt itself.
-          </p>
-          <div className="flex items-center gap-3">
-            <Button onClick={startConnect} disabled={connecting} className="md-btn-filled">
-              {connecting ? <Loader2 className="w-4 h-4 me-1.5 animate-spin" /> : <Plug className="w-4 h-4 me-1.5" />}
-              Connect
-            </Button>
-            {error && <span className="text-xs text-danger">{error}</span>}
-          </div>
-            </div>
-          </Disclosure>
-        </>
+        <LinkAccountFlow service="trakt" />
       )}
 
       {phase === "connecting" && device && (
@@ -1658,7 +1553,6 @@ function SimklCard() {
   const importing = useSimkl((s) => s.importing);
   const loaded = useSimkl((s) => s.loaded);
   const load = useSimkl((s) => s.load);
-  const connect = useSimkl((s) => s.connect);
   const pollOnce = useSimkl((s) => s.pollOnce);
   const cancelConnect = useSimkl((s) => s.cancelConnect);
   const disconnect = useSimkl((s) => s.disconnect);
@@ -1666,9 +1560,6 @@ function SimklCard() {
   const importingHistory = useSimkl((s) => s.importingHistory);
   const importHistory = useSimkl((s) => s.importHistory);
 
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [connecting, setConnecting] = useState(false);
   const [wlCount, setWlCount] = useState<number | null>(null);
   const [histCount, setHistCount] = useState<number | null>(null);
 
@@ -1700,18 +1591,6 @@ function SimklCard() {
       if (timer) clearTimeout(timer);
     };
   }, [phase, pin, pollOnce, toast]);
-
-  const startConnect = async () => {
-    if (!clientId.trim()) {
-      toast({ title: "Client ID is required", variant: "destructive" });
-      return;
-    }
-    setConnecting(true);
-    const ok = await connect(clientId, clientSecret || undefined);
-    setConnecting(false);
-    if (ok) toast({ title: "Enter the code on Simkl", description: "Approve access to continue." });
-    else toast({ title: "Could not start Simkl flow", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
-  };
 
   const doImport = async () => {
     const added = await importWatchlist();
@@ -1772,66 +1651,7 @@ function SimklCard() {
       </div>
 
       {!auth && phase !== "connecting" && (
-        <>
-          {/* Zero-config activation-code linking (preferred) */}
-          <LinkAccountFlow service="simkl" />
-          {/* Legacy BYO flow — collapsed by default (animated, RTL-mirrored chevron) */}
-          <Disclosure summary={tr("advancedOwnCreds", { name: "Simkl" })}>
-            <div className="mt-3 space-y-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="simkl-client-id">
-                Client ID
-              </label>
-              <Input
-                id="simkl-client-id"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="Your Simkl app client id"
-                className="md-field-outlined px-3 font-mono text-xs bg-transparent"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="simkl-client-secret">
-                Client secret <span className="text-ink-subtle">(optional)</span>
-              </label>
-              <Input
-                id="simkl-client-secret"
-                type="password"
-                value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
-                placeholder="Only if your Simkl app has one"
-                className="md-field-outlined px-3 font-mono text-xs bg-transparent"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-ink-subtle">
-            Create a free app at{" "}
-            <a
-              href="https://simkl.com/apps/new"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-accent underline underline-offset-2"
-            >
-              <Bdi>simkl.com/apps/new</Bdi>
-            </a>{" "}
-            (pick any name; you only need the client id). Credentials never leave this browser except
-            to authenticate with Simkl itself.
-          </p>
-          <div className="flex items-center gap-3">
-            <Button onClick={startConnect} disabled={connecting} className="md-btn-filled">
-              {connecting ? <Loader2 className="w-4 h-4 me-1.5 animate-spin" /> : <Plug className="w-4 h-4 me-1.5" />}
-              Connect
-            </Button>
-            {error && <span className="text-xs text-danger">{error}</span>}
-          </div>
-            </div>
-          </Disclosure>
-        </>
+        <LinkAccountFlow service="simkl" />
       )}
 
       {phase === "connecting" && pin && (

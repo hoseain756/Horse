@@ -1,14 +1,22 @@
 // Harbor Web — POST /api/simkl/link/poll { pollId }
-// Polls Simkl /oauth/pin/{code} SERVER-SIDE, stores the token encrypted in
-// the vault, returns the profile + opaque linkId.
+// Polls Simkl SERVER-SIDE, stores the token encrypted in the vault, returns
+// the profile + opaque linkId. Two flavors (recorded on the pending link by
+// link/start — never exposed to the client):
+//   • flow:"oauth2" — RFC-8628 POST /oauth2/token (current Simkl apps)
+//   • flow:"pin"    — legacy GET /oauth/pin/{code}
+// Response contract (consumed by lib/harbor/linking.ts):
+//   {status:"pending"|"authorized"|"expired"|"denied", slowDown?, error?}
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
-import { SIMKL_API } from "@/lib/harbor/simkl-server";
+import { SIMKL_API, resolveSimklClientId, envSimklClientSecret } from "@/lib/harbor/simkl-server";
 import { db } from "@/lib/db";
-import { encryptToken, randomLinkId, getPendingLink, takePendingLink } from "@/lib/harbor/vault";
+import { encryptToken, randomLinkId, getPendingLink, takePendingLink, type PendingLink } from "@/lib/harbor/vault";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ip = clientIp(req);
@@ -26,8 +34,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!pending || pending.provider !== "simkl") {
     return NextResponse.json({ status: "expired" });
   }
-  const clientId = process.env.SIMKL_CLIENT_ID?.trim();
-  const clientSecret = process.env.SIMKL_CLIENT_SECRET?.trim();
+  const clientId = await resolveSimklClientId();
   if (!clientId) {
     return NextResponse.json({ error: "Simkl is not configured on this server.", configured: false }, { status: 501 });
   }
@@ -38,83 +45,154 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   pending.nextPollAt = now + pending.pollIntervalMs;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    let url = `${SIMKL_API}/oauth/pin/${encodeURIComponent(pending.deviceCode)}`;
-    if (clientSecret) {
-      const u = new URL(url);
-      u.searchParams.set("client_id", clientId);
-      u.searchParams.set("client_secret", clientSecret);
-      url = u.toString();
+    if (pending.flow === "oauth2") {
+      return await pollOauth2(pollId, pending, clientId);
     }
-    const res = await fetch(url, {
+    return await pollLegacyPin(pollId, pending, clientId);
+  } catch (e) {
+    const msg = e instanceof Error && e.message.includes("abort") ? "upstream timeout" : "simkl unreachable";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
+}
+
+/** Shared success path: fetch the profile (best-effort) and persist the token
+ * encrypted in the vault, keyed on the provider. */
+async function finishAuthorized(accessToken: string, clientId: string): Promise<NextResponse> {
+  let username: string | null = null;
+  let avatar: string | null = null;
+  try {
+    const meRes = await fetch(`${SIMKL_API}/users/settings`, {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         "simkl-api-key": clientId,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": UA,
       },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
-    const data = (await res.json().catch(() => null)) as {
-      result?: string;
-      access_token?: string;
-      error?: string;
-      message?: string;
-    } | null;
-
-    if (res.ok && data?.access_token) {
-      takePendingLink(pollId); // terminal: consume
-      // Best-effort profile
-      let username: string | null = null;
-      let avatar: string | null = null;
-      try {
-        const meRes = await fetch(`${SIMKL_API}/users/settings`, {
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            "simkl-api-key": clientId,
-            Authorization: `Bearer ${data.access_token}`,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-          },
-          signal: AbortSignal.timeout(10_000),
-          cache: "no-store",
-        });
-        if (meRes.ok) {
-          const me = (await meRes.json()) as { user?: { name?: string; slug?: string; avatar?: string } };
-          username = me?.user?.name ?? me?.user?.slug ?? null;
-          avatar = me?.user?.avatar ?? null;
-        }
-      } catch {
-        /* profile is cosmetic */
-      }
-
-      const linkId = randomLinkId();
-      await db.linkedAccount.upsert({
-        where: { provider: "simkl" },
-        create: { provider: "simkl", accessTokenEnc: encryptToken(data.access_token), username, avatar },
-        update: { accessTokenEnc: encryptToken(data.access_token), username, avatar },
-      });
-      return NextResponse.json({ status: "authorized", linkId, username, avatar });
+    if (meRes.ok) {
+      const me = (await meRes.json()) as { user?: { name?: string; slug?: string; avatar?: string } };
+      username = me?.user?.name ?? me?.user?.slug ?? null;
+      avatar = me?.user?.avatar ?? null;
     }
-
-    // While pending, Simkl answers 401 with an error body.
-    if (res.status === 401) {
-      const errText = `${data?.error ?? ""} ${data?.message ?? ""}`.toLowerCase();
-      const definitive = errText.includes("bad_verification_code") || errText.includes("expired");
-      if (!definitive) {
-        return NextResponse.json({ status: "pending", retryInMs: pending.pollIntervalMs });
-      }
-      takePendingLink(pollId);
-      return NextResponse.json({ status: errText.includes("expired") ? "expired" : "denied" });
-    }
-    return NextResponse.json({ error: data?.message ?? data?.error ?? `Simkl responded ${res.status}` }, { status: 502 });
-  } catch (e) {
-    const msg = e instanceof Error && e.message.includes("abort") ? "upstream timeout" : "simkl unreachable";
-    return NextResponse.json({ error: msg }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
+  } catch {
+    /* profile is cosmetic */
   }
+  const linkId = randomLinkId();
+  await db.linkedAccount.upsert({
+    where: { provider: "simkl" },
+    create: { provider: "simkl", accessTokenEnc: encryptToken(accessToken), username, avatar },
+    update: { accessTokenEnc: encryptToken(accessToken), username, avatar },
+  });
+  return NextResponse.json({ status: "authorized", linkId, username, avatar });
+}
+
+/** RFC-8628 device grant (current "OAuth 2.0" Simkl apps). While waiting the
+ * upstream answers 400 with error=authorization_pending / slow_down. */
+async function pollOauth2(pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
+  const clientSecret = envSimklClientSecret();
+  const body: Record<string, string> = {
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code: pending.deviceCode,
+    client_id: clientId,
+  };
+  if (clientSecret) body.client_secret = clientSecret;
+  const res = await fetch(`${SIMKL_API}/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "simkl-api-key": clientId,
+      "User-Agent": UA,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => null)) as {
+    access_token?: string;
+    error?: string;
+    error_description?: string;
+    message?: string;
+  } | null;
+
+  if (res.ok && data?.access_token) {
+    takePendingLink(pollId);
+    return finishAuthorized(data.access_token, clientId);
+  }
+  const err = `${data?.error ?? ""} ${data?.error_description ?? ""} ${data?.message ?? ""}`.toLowerCase();
+  if (err.includes("authorization_pending")) {
+    return NextResponse.json({ status: "pending" });
+  }
+  if (err.includes("slow_down")) {
+    pending.pollIntervalMs = Math.min(30_000, pending.pollIntervalMs + 5_000);
+    pending.nextPollAt = Date.now() + pending.pollIntervalMs;
+    return NextResponse.json({ status: "pending", slowDown: true });
+  }
+  if (err.includes("expired")) {
+    takePendingLink(pollId);
+    return NextResponse.json({ status: "expired" });
+  }
+  if (err.includes("access_denied") || err.includes("denied")) {
+    takePendingLink(pollId);
+    return NextResponse.json({ status: "denied" });
+  }
+  // Definitive rejection (e.g. confidential app polled without its secret) —
+  // surface it honestly instead of polling forever. HTTP 200 + status:"failed"
+  // is the store's terminal contract for this.
+  const base = data?.error_description ?? data?.message ?? data?.error ?? `Simkl responded ${res.status}`;
+  const hint =
+    err.includes("invalid_client") && !clientSecret
+      ? `${base} — this Simkl app needs its client secret (SIMKL_CLIENT_SECRET) on the server.`
+      : base;
+  takePendingLink(pollId);
+  return NextResponse.json({ status: "failed", error: hint });
+}
+
+/** Legacy PIN poll: a 401 with an (unknown) error body means "still pending";
+ * only definitive text (bad_verification_code/expired) terminates the flow. */
+async function pollLegacyPin(pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
+  const clientSecret = envSimklClientSecret();
+  let url = `${SIMKL_API}/oauth/pin/${encodeURIComponent(pending.deviceCode)}`;
+  if (clientSecret) {
+    const u = new URL(url);
+    u.searchParams.set("client_id", clientId);
+    u.searchParams.set("client_secret", clientSecret);
+    url = u.toString();
+  }
+  const res = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "simkl-api-key": clientId,
+      "User-Agent": UA,
+    },
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => null)) as {
+    result?: string;
+    access_token?: string;
+    error?: string;
+    message?: string;
+  } | null;
+
+  if (res.ok && data?.access_token) {
+    takePendingLink(pollId);
+    return finishAuthorized(data.access_token, clientId);
+  }
+  // While pending, Simkl answers 401 with an error body.
+  if (res.status === 401) {
+    const errText = `${data?.error ?? ""} ${data?.message ?? ""}`.toLowerCase();
+    const definitive = errText.includes("bad_verification_code") || errText.includes("expired");
+    if (!definitive) {
+      return NextResponse.json({ status: "pending" });
+    }
+    takePendingLink(pollId);
+    return NextResponse.json({ status: errText.includes("expired") ? "expired" : "denied" });
+  }
+  return NextResponse.json({ error: data?.message ?? data?.error ?? `Simkl responded ${res.status}` }, { status: 502 });
 }

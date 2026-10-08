@@ -59,6 +59,9 @@ export type PendingLink = {
   intervalSec: number;
   nextPollAt: number; // honors slow_down
   pollIntervalMs: number;
+  /** Simkl only: which upstream OAuth flavor minted this code. Current
+   * "OAuth 2.0" Simkl apps use RFC-8628 /oauth2/*; legacy apps use /oauth/pin. */
+  flow?: "oauth2" | "pin";
 };
 
 const PENDING_TTL = 20 * 60_000;

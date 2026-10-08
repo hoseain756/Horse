@@ -32,6 +32,24 @@ export function validClientSecret(v: unknown): v is string {
   return typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v.trim());
 }
 
+/** Server env Simkl credential — client_secret is OPTIONAL (only confidential
+ * "OAuth 2.0" apps need it, at token-exchange time; the client id alone mints
+ * PINs fine). */
+export function envSimklClientSecret(): string | null {
+  const s = process.env.SIMKL_CLIENT_SECRET?.trim();
+  return s ? s : null;
+}
+
+/** Client id resolution: env var first, then the DB-backed ServerConfig row
+ * (survives .env resets — same contract as resolveTraktClientId). Async
+ * because of the DB fallback. */
+export async function resolveSimklClientId(): Promise<string | null> {
+  const env = process.env.SIMKL_CLIENT_ID?.trim();
+  if (env) return env;
+  const { getServerConfig } = await import("./server-config");
+  return getServerConfig("simkl.client_id");
+}
+
 export async function simklFetch(
   path: string,
   init: {
