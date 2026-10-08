@@ -34,7 +34,6 @@
 // and never interrupts a drag. Cleanup covers every timer/observer/animation.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import type { Meta } from "@/lib/harbor/types";
 import { tmdbDetails, tmdbHeroArt, tmdbIdFromImdb, tmdbLogoPath, tmdbOriginal } from "@/lib/harbor/tmdb";
@@ -1123,13 +1122,15 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
                 />
               </button>
             ))}
+            {/* WCAG 2.2.2 pause mechanism: visually hidden (reference design
+                has no visible control) but reachable via keyboard focus. */}
             <button
               type="button"
               aria-label={userPaused ? homeT("resumeAutoplay", lang) : homeT("pauseAutoplay", lang)}
               onClick={() => setUserPaused((p) => !p)}
-              className="md-icon-btn md-state !h-11 !w-11 !text-white/70 hover:!text-white harbor-tv-focus"
+              className="home-hero-pause-a11y harbor-tv-focus"
             >
-              {userPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4" />}
+              {userPaused ? homeT("resumeAutoplay", lang) : homeT("pauseAutoplay", lang)}
             </button>
           </div>
         )}

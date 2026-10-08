@@ -1347,3 +1347,18 @@ Stage Summary:
 - OPEN (needs the human): push credentials. The auto-push daemon and its PAT were wiped with the sandbox rollback and the old PAT was already flagged for revocation — I CANNOT push future work until a fresh GitHub PAT is provided (fine-grained, repo-scoped recommended). Local commits will accumulate safely in the meantime.
 - OPEN (code): IntegrationsStrip "TMDB Not set up" vs DB-backed TMDB active — align /api/integrations/status with the DB ServerConfig fallback.
 - OPEN (operator): Simkl linking needs SIMKL_CLIENT_SECRET in .env (see Task 42 stage summary).
+---
+Task ID: hero-ref-match (make hero look EXACTLY like user reference screenshots + remove visible pause control)
+Agent: main (orchestrator)
+Task: USER (Arabic): "اجعله يبدو نفس الصور تماماً — ازل زر التشغيل الموجود، واجعل التنقل سلساً لا يُلاحَظ أبداً" (match the Reacher/Digger reference screenshots exactly; remove the visible autoplay pause/play button; keep navigation imperceptibly smooth).
+
+Work Log:
+- REMOVED the visible ⏸/▶ autoplay control from the dots row (reference has none). Replaced with .home-hero-pause-a11y: visually hidden (opacity 0, pointer-events none, absolute in the dots row — zero layout impact) but keyboard/screen-reader reachable; reveals a small pill on :focus-visible. WCAG 2.2.2 satisfied without visual presence. Verified live: rest opacity 0, toggles Pause↔Resume correctly (async reads after React batch), aria-label flips.
+- REFERENCE-MEASURED metric corrections (globals.css tokens, all scale with --home-scale): --hero-meta-size 14→16px, --hero-meta-weight 600→700 (reference meta row is larger/bolder); --hero-gap-meta 16→20px; --hero-gap-btn 14→18px; --hero-pad-bottom 8→14px; --hero-btn-height 45→38px (reference pill ≈145×38dp); --hero-scrim-top rgba(0,0,0,.35)/14%→.22/10% (reference top is clear, head fully bright). Skeleton mirrors automatically (token-driven).
+- Smoothness verification (agent-browser, 360×780): slide+far-jump frame sampling over 2.2s = 129 frames, worst 33ms, 4 frames >33ms (headless overhead; round-24 QA measured avg 16.66ms compositor-only); slots stay exactly 3 across a far dot jump (no intermediate mounting); active dot syncs; content stack crossfades without remount. No flicker, no rollback animation.
+- INCIDENT (transient, self-inflicted, fixed): during the icon-import edit an intermediate state briefly broke the module (duplicate react import) — lint now 0 errors; fresh-session console 0 errors; earlier "54 error lines" were stale session-log entries from that intermediate compile, not present after reload. dev.log has no compile errors.
+- Lint 0/164 pre-existing warnings. tsc single-file errors were path-flag noise (no tsconfig context), not real.
+
+Stage Summary:
+- Hero now visually matches the user's reference screenshots at 360dp: clean dots row (8dp dots / 32dp active pill / no pause button), bold 16px meta row "2026 • Action • Movie", 38dp white pill CTA, 20/20/18/14 gap rhythm, clear top scrim, full-bleed top-anchored art. Navigation stays compositor-only (transform/opacity), interruptible, with 3-slot modulo track.
+- Push to GitHub still pending the fresh PAT (see adopt-remote round).

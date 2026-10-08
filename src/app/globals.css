@@ -1570,11 +1570,11 @@ html[data-kids="on"] {
      so tall phones stay sane while big screens grow with the viewport. */
   --hero-height: clamp(440px, 67svh, calc(720px * var(--home-scale)));
   --hero-fade: #000000; /* OLED black dissolve target (spec) */
-  --hero-scrim-top: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0) 14%);
+  --hero-scrim-top: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0) 10%);
   --hero-scrim-fade: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 65%, var(--hero-fade) 88%);
 
-  /* Hero content stack (round-24 measured spec: logo box 54vw × 64dp,
-     bottom-baseline aligned; gaps 20/16/14; 8dp under the dots) */
+  /* Hero content stack (reference-matched: logo box 54vw × 64dp,
+     bottom-baseline aligned; gaps 20/20/18; 14dp under the dots) */
   --hero-content-max-w: calc(640px * var(--home-scale));
   --hero-logo-max-w: min(54vw, calc(195px * var(--home-scale)));
   --hero-logo-max-h: calc(64px * var(--home-scale));
@@ -1584,16 +1584,16 @@ html[data-kids="on"] {
   --hero-title-size-s: clamp(calc(18px * var(--home-scale)), 6.5vw, calc(22px * var(--home-scale)));
   --hero-title-tracking: 0.3em;
   --hero-title-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
-  --hero-meta-size: calc(14px * min(var(--home-scale), 1.35));
-  --hero-meta-weight: 600;
+  --hero-meta-size: calc(16px * min(var(--home-scale), 1.35));
+  --hero-meta-weight: 700;
   --hero-meta-dot: calc(4px * min(var(--home-scale), 1.35));
   --hero-meta-dot-opacity: 0.6;
   --hero-meta-gap: calc(10px * min(var(--home-scale), 1.35));
   --hero-gap-logo: calc(20px * var(--home-scale));
-  --hero-gap-meta: calc(16px * var(--home-scale));
-  --hero-gap-btn: calc(14px * var(--home-scale));
-  --hero-pad-bottom: calc(8px * var(--home-scale));
-  --hero-btn-height: calc(45px * min(var(--home-scale), 1.5));
+  --hero-gap-meta: calc(20px * var(--home-scale));
+  --hero-gap-btn: calc(18px * var(--home-scale));
+  --hero-pad-bottom: calc(14px * var(--home-scale));
+  --hero-btn-height: calc(38px * min(var(--home-scale), 1.5));
   --hero-btn-min-w: calc(146px * min(var(--home-scale), 1.5));
   --hero-btn-pad-x: calc(32px * min(var(--home-scale), 1.5));
   --hero-btn-bg: #f5f6f8;
@@ -1893,6 +1893,7 @@ html[data-appearance="light"] .home-void {
      only layout+style containment — paint would clip the hit/focus areas). */
   .home-hero-dots {
     contain: layout style;
+    position: relative; /* anchors the hidden a11y pause control */
   }
   .home-hero-dot-btn {
     position: relative;
@@ -1931,6 +1932,36 @@ html[data-appearance="light"] .home-void {
   /* per-frame drag writes must not fight the CSS transition */
   .home-hero.is-dragging .home-hero-dot-bar {
     transition: none;
+  }
+
+  /* Autoplay pause control: visually hidden (the reference design has no
+     visible control) but keyboard/screen-reader reachable — satisfies
+     WCAG 2.2.2 without occupying space in the dots row. Reveals itself as
+     a small pill only on keyboard focus. */
+  .home-hero-pause-a11y {
+    position: absolute;
+    inset-inline-end: 0;
+    bottom: -34px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    padding-inline: 12px;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-hero-pause-a11y:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    outline: 2px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 2px;
   }
 
   /* ---------- Continue watching ---------- */
