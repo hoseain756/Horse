@@ -1,0 +1,693 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Floating search bar (Feature: always-available search entry)
+     4→// M3 search bar: corner-full glass pill (translucency is Harbor's identity),
+     5→// 48dp mobile / 56dp md+ idle height, on-surface-variant leading icon, .md-icon-btn
+     6→// trailing clear (28dp), dropdown = M3 search results view (surface-container,
+     7→// corner-large→extra-large, elevation-3, .md-state rows).
+     8→// Fixed top-center glassmorphism bar with instant grouped results.
+     9→//  - "/" or Ctrl/Cmd+K focus it (see app-shell), Esc closes the dropdown.
+    10→//  - Idle: compact glass pill; focus: expands smoothly (width transition).
+    11→//  - Dropdown: debounced searches (Cinemeta + installed addons; TMDB multi-search
+    12→//    and People group join automatically once tmdbEnabled), recents, trending.
+    13→//  - Full keyboard navigation (↑/↓/Enter), ARIA combobox/listbox semantics,
+    14→//    RTL-safe (logical properties + centered anchor), reduced-motion aware,
+    15→//    backdrop-filter fallback via .harbor-glass-fallback.
+    16→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+    17→import { ArrowRight, Clock, Loader2, Search, Sparkles, TrendingUp, X } from "lucide-react";
+    18→import { useNav, useSettings } from "@/lib/harbor/store";
+    19→import { installedAddons } from "@/lib/harbor/store";
+    20→import { HUB_ENTRIES, hubLabel, hubDesc, type HubEntry } from "./nav-items";
+    21→import type { Meta } from "@/lib/harbor/types";
+    22→import {
+    23→  fetchCinemetaCatalog,
+    24→  searchAddonCatalogs,
+    25→  searchCinemeta,
+    26→} from "@/lib/harbor/api";
+    27→import { tmdbEnabled, tmdbMultiSearch, type TmdbMultiHit } from "@/lib/harbor/tmdb";
+    28→import { cn } from "@/lib/utils";
+    29→import { PosterImage } from "../common/poster";
+    30→
+    31→const RECENTS_KEY = "harbor-web.search-recents";
+    32→const MAX_RECENTS = 8;
+    33→const MAX_PER_GROUP = 4;
+    34→
+    35→type Phase = "idle" | "searching" | "error";
+    36→
+    37→// Focus bridge: app-shell hotkeys dispatch this; the bar listens for it.
+    38→export function focusFloatingSearch() {
+    39→  if (typeof window === "undefined") return;
+    40→  window.dispatchEvent(new CustomEvent("harbor:focus-floating-search"));
+    41→}
+    42→
+    43→function readRecents(): string[] {
+    44→  if (typeof window === "undefined") return [];
+    45→  try {
+    46→    const arr = JSON.parse(window.localStorage.getItem(RECENTS_KEY) ?? "[]") as unknown;
+    47→    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string").slice(0, MAX_RECENTS) : [];
+    48→  } catch {
+    49→    return [];
+    50→  }
+    51→}
+    52→
+    53→function writeRecent(q: string) {
+    54→  if (typeof window === "undefined") return;
+    55→  const trimmed = q.trim();
+    56→  if (!trimmed) return;
+    57→  const next = [trimmed, ...readRecents().filter((r) => r.toLowerCase() !== trimmed.toLowerCase())].slice(0, MAX_RECENTS);
+    58→  try {
+    59→    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    60→  } catch {
+    61→    /* quota — ignore */
+    62→  }
+    63→}
+    64→
+    65→// A flattened result row (used for keyboard navigation)
+    66→type FlatRow =
+    67→  | { kind: "meta"; id: string; meta: Meta; group: string }
+    68→  | { kind: "person"; id: string; name: string; sub?: string | null; img?: string | null; url?: string }
+    69→  | { kind: "action"; id: string; action: "ai" | "see-all" }
+    70→  | { kind: "recent"; id: string; query: string }
+    71→  | { kind: "destination"; id: string; entry: HubEntry };
+    72→
+    73→/** Quick Access destinations matching the query (EN + Arabic labels/keywords).
+    74→ *  Second way to reach the pages moved from the sidebar into Settings. */
+    75→function matchingDestinations(q: string, lang: string): HubEntry[] {
+    76→  const needle = q.trim().toLowerCase();
+    77→  if (needle.length < 2) return [];
+    78→  const ar = /^ar(-|_|$)/i.test(lang);
+    79→  return HUB_ENTRIES.filter((e) => {
+    80→    const label = hubLabel(e, lang).toLowerCase();
+    81→    const words = [...e.keywordsEn, ...e.keywordsAr, label];
+    82→    return words.some((w) => w.toLowerCase().includes(needle));
+    83→  }).slice(0, ar ? 4 : 3);
+    84→}
+    85→
+    86→export function FloatingSearch() {
+    87→  const push = useNav((s) => s.push);
+    88→  const openFullSearch = useNav((s) => s.setSearchOpen);
+    89→  const uiLanguage = useSettings((s) => s.settings.uiLanguage);
+    90→
+    91→  const [expanded, setExpanded] = useState(false);
+    92→  const [hidden, setHidden] = useState(false); // scroll-direction visibility
+    93→  const [query, setQuery] = useState("");
+    94→  const [phase, setPhase] = useState<Phase>("idle");
+    95→  const [movies, setMovies] = useState<Meta[]>([]);
+    96→  const [series, setSeries] = useState<Meta[]>([]);
+    97→  const [addonHits, setAddonHits] = useState<Meta[]>([]);
+    98→  const [people, setPeople] = useState<TmdbMultiHit[]>([]);
+    99→  const [recents, setRecents] = useState<string[]>([]);
+   100→  const [trending, setTrending] = useState<Meta[]>([]);
+   101→  const [activeIdx, setActiveIdx] = useState(-1);
+   102→  const runToken = useRef(0);
+   103→  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+   104→  const wrapRef = useRef<HTMLDivElement>(null);
+   105→  const inputRef = useRef<HTMLInputElement>(null);
+   106→  const listRef = useRef<HTMLDivElement>(null);
+   107→
+   108→  // Focus bridge + outside click + Esc handled here
+   109→  useEffect(() => {
+   110→    const onFocus = () => {
+   111→      setExpanded(true);
+   112→      setHidden(false); // hotkey reveal: never focus an off-screen bar
+   113→      setRecents(readRecents());
+   114→      setTimeout(() => inputRef.current?.focus(), 20);
+   115→    };
+   116→    const onPointer = (e: MouseEvent) => {
+   117→      if (!wrapRef.current?.contains(e.target as Node)) {
+   118→        setExpanded(false);
+   119→        setActiveIdx(-1);
+   120→      }
+   121→    };
+   122→    window.addEventListener("harbor:focus-floating-search", onFocus);
+   123→    document.addEventListener("mousedown", onPointer);
+   124→    return () => {
+   125→      window.removeEventListener("harbor:focus-floating-search", onFocus);
+   126→      document.removeEventListener("mousedown", onPointer);
+   127→    };
+   128→  }, []);
+   129→
+   130→  // Scroll-direction visibility: scrolling DOWN hides the bar (content first),
+   131→  // scrolling UP (or returning near the top) reveals it again. While the bar
+   132→  // is expanded/focused it always stays visible.
+   133→  useEffect(() => {
+   134→    let lastY = window.scrollY;
+   135→    const onScroll = () => {
+   136→      const y = window.scrollY;
+   137→      const dy = y - lastY;
+   138→      lastY = y;
+   139→      if (expanded) return; // never hide while the user is searching
+   140→      if (y > 90 && dy > 4) setHidden(true);
+   141→      else if (dy < -4 || y <= 90) setHidden(false);
+   142→    };
+   143→    window.addEventListener("scroll", onScroll, { passive: true });
+   144→    return () => window.removeEventListener("scroll", onScroll);
+   145→  }, [expanded]);
+   146→
+   147→  // Trending suggestions (idle state) — fetched once per session, errors are silent
+   148→  useEffect(() => {
+   149→    let alive = true;
+   150→    (async () => {
+   151→      const [mv, sr] = await Promise.allSettled([
+   152→        fetchCinemetaCatalog("movie", "trending"),
+   153→        fetchCinemetaCatalog("series", "trending"),
+   154→      ]);
+   155→      if (!alive) return;
+   156→      const items = [
+   157→        ...(mv.status === "fulfilled" ? mv.value : []),
+   158→        ...(sr.status === "fulfilled" ? sr.value : []),
+   159→      ].slice(0, 8);
+   160→      setTrending(items);
+   161→    })();
+   162→    return () => {
+   163→      alive = false;
+   164→    };
+   165→  }, []);
+   166→
+   167→  const runInstant = useCallback(async (q: string) => {
+   168→    const token = ++runToken.current;
+   169→    setPhase("searching");
+   170→    try {
+   171→      const jobs: Promise<void>[] = [];
+   172→      jobs.push(
+   173→        searchCinemeta(q).then((r) => {
+   174→          if (token !== runToken.current) return;
+   175→          setMovies(r.movies);
+   176→          setSeries(r.series);
+   177→        }),
+   178→      );
+   179→      jobs.push(
+   180→        searchAddonCatalogs(installedAddons(), q).then((r) => {
+   181→          if (token !== runToken.current) return;
+   182→          setAddonHits(r);
+   183→        }),
+   184→      );
+   185→      if (tmdbEnabled()) {
+   186→        jobs.push(
+   187→          tmdbMultiSearch(q).then((r) => {
+   188→            if (token !== runToken.current) return;
+   189→            setPeople(r.person.slice(0, MAX_PER_GROUP));
+   190→          }),
+   191→        );
+   192→      } else {
+   193→        setPeople([]);
+   194→      }
+   195→      const res = await Promise.allSettled(jobs);
+   196→      if (token !== runToken.current) return;
+   197→      const allFailed = res.every((r) => r.status === "rejected");
+   198→      setPhase(allFailed && q.trim().length >= 2 ? "error" : "idle");
+   199→    } catch {
+   200→      if (token === runToken.current) setPhase("error");
+   201→    }
+   202→  }, []);
+   203→
+   204→  // Debounced instant search (250ms). State resets also run inside the timer
+   205→  // (never synchronously in the effect body) to satisfy the set-state lint rule.
+   206→  useEffect(() => {
+   207→    if (debounce.current) clearTimeout(debounce.current);
+   208→    const q = query.trim();
+   209→    const token = ++runToken.current; // invalidate any in-flight run
+   210→    if (q.length < 2) {
+   211→      debounce.current = setTimeout(() => {
+   212→        if (token !== runToken.current) return;
+   213→        setMovies([]);
+   214→        setSeries([]);
+   215→        setAddonHits([]);
+   216→        setPeople([]);
+   217→        setPhase("idle");
+   218→      }, 0);
+   219→    } else {
+   220→      debounce.current = setTimeout(() => void runInstant(q), 250);
+   221→    }
+   222→    return () => {
+   223→      if (debounce.current) clearTimeout(debounce.current);
+   224→    };
+   225→  }, [query, runInstant]);
+   226→
+   227→  const openMeta = useCallback(
+   228→    (m: Meta) => {
+   229→      writeRecent(query || m.name);
+   230→      setRecents(readRecents());
+   231→      setExpanded(false);
+   232→      setActiveIdx(-1);
+   233→      push({ kind: "detail", type: m.type, id: m.id });
+   234→    },
+   235→    [push, query],
+   236→  );
+   237→
+   238→  const openFull = useCallback(
+   239→    (q: string) => {
+   240→      writeRecent(q);
+   241→      setExpanded(false);
+   242→      setActiveIdx(-1);
+   243→      window.dispatchEvent(new CustomEvent("harbor:prefill-search", { detail: q }));
+   244→      openFullSearch(true);
+   245→    },
+   246→    [openFullSearch],
+   247→  );
+   248→
+   249→  // Flatten the dropdown for keyboard navigation
+   250→  const rows = useMemo<FlatRow[]>(() => {
+   251→    const out: FlatRow[] = [];
+   252→    const q = query.trim();
+   253→    if (q.length < 2) {
+   254→      for (const r of recents) out.push({ kind: "recent", id: `recent:${r}`, query: r });
+   255→      for (const m of trending) out.push({ kind: "meta", id: `trend:${m.type}:${m.id}`, meta: m, group: "Trending" });
+   256→      return out;
+   257→    }
+   258→    for (const m of movies.slice(0, MAX_PER_GROUP)) out.push({ kind: "meta", id: `m:${m.id}`, meta: m, group: "Movies" });
+   259→    for (const m of series.slice(0, MAX_PER_GROUP)) out.push({ kind: "meta", id: `s:${m.id}`, meta: m, group: "Series" });
+   260→    for (const e of matchingDestinations(q, uiLanguage)) out.push({ kind: "destination", id: `dest:${e.id}`, entry: e });
+   261→    for (const m of people) out.push({ kind: "person", id: `p:${m.id}`, name: m.name, sub: m.known_for_department, img: m.profile_path, url: m.url });
+   262→    for (const m of addonHits.slice(0, MAX_PER_GROUP)) out.push({ kind: "meta", id: `a:${m.id}`, meta: m, group: "From your addons" });
+   263→    if (q.length >= 2) out.push({ kind: "action", id: "see-all", action: "see-all" });
+   264→    return out;
+   265→  }, [query, movies, series, addonHits, people, recents, trending, uiLanguage]);
+   266→
+   267→  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+   268→    if (e.key === "ArrowDown") {
+   269→      e.preventDefault();
+   270→      e.stopPropagation();
+   271→      setActiveIdx((i) => Math.min(rows.length - 1, i + 1));
+   272→    } else if (e.key === "ArrowUp") {
+   273→      e.preventDefault();
+   274→      e.stopPropagation();
+   275→      setActiveIdx((i) => Math.max(-1, i - 1));
+   276→    } else if (e.key === "Enter") {
+   277→      e.preventDefault();
+   278→      const row = rows[activeIdx];
+   279→      if (row?.kind === "meta") openMeta(row.meta);
+   280→      else if (row?.kind === "recent") {
+   281→        setQuery(row.query);
+   282→        inputRef.current?.focus();
+   283→      } else if (row?.kind === "destination") {
+   284→        setExpanded(false);
+   285→        setActiveIdx(-1);
+   286→        push({ kind: "view", view: row.entry.view });
+   287→      } else if (row?.kind === "action" && row.action === "see-all") {
+   288→        openFull(query);
+   289→      } else if (row?.kind === "person" && row.url) {
+   290→        window.open(row.url, "_blank", "noopener");
+   291→      } else if (query.trim()) {
+   292→        openFull(query);
+   293→      }
+   294→    } else if (e.key === "Escape") {
+   295→      e.preventDefault();
+   296→      e.stopPropagation();
+   297→      if (query) {
+   298→        setQuery("");
+   299→      } else {
+   300→        setExpanded(false);
+   301→        setActiveIdx(-1);
+   302→        inputRef.current?.blur();
+   303→      }
+   304→    }
+   305→  };
+   306→
+   307→  // Keep the active option in view
+   308→  useEffect(() => {
+   309→    if (activeIdx < 0 || !listRef.current) return;
+   310→    const el = listRef.current.querySelector(`#fs-opt-${activeIdx}`);
+   311→    el?.scrollIntoView({ block: "nearest" });
+   312→  }, [activeIdx]);
+   313→
+   314→  const hasResults = movies.length + series.length + addonHits.length + people.length > 0;
+   315→  const searching = phase === "searching";
+   316→  const showDropdown = expanded;
+   317→
+   318→  return (
+   319→    <div
+   320→      ref={wrapRef}
+   321→      className={cn(
+   322→        // Fixed top-center; mobile respects safe-area inset; below modals, above content
+   323→        "fixed z-[85] top-[max(0.75rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2",
+   324→        "w-[min(calc(100vw-6rem),3rem)] md:w-60",
+   325→        // Expand on focus + hide/reveal on scroll direction (smooth; motion-reduce users get instant snap)
+   326→        "transition-[width,transform,opacity] duration-300 ease-[var(--md-sys-motion-easing-emphasized)] motion-reduce:transition-none",
+   327→        expanded && "w-[min(calc(100vw-1.5rem),40rem)] md:w-[42rem]",
+   328→        // Scrolled-down: slide the bar fully off-screen (keeps -translate-x-1/2 centering)
+   329→        hidden && "-translate-y-[160%] opacity-0 pointer-events-none",
+   330→      )}
+   331→      aria-hidden={hidden || undefined}
+   332→    >
+   333→      <div
+   334→        className={cn(
+   335→          // M3 search bar shape: corner-full. Glass translucency kept (Harbor identity).
+   336→          "harbor-glass flex items-center gap-2 rounded-full border border-edge-soft",
+   337→          "shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]",
+   338→          "transition-shadow duration-300",
+   339→          expanded && "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.75)]",
+   340→        )}
+   341→      >
+   342→        <div
+   343→          className="flex items-center gap-2 px-2.5 md:px-4 h-11 md:h-14 w-full"
+   344→          role="combobox"
+   345→          aria-expanded={showDropdown && rows.length >= 0}
+   346→          aria-controls="harbor-float-search-list"
+   347→          aria-haspopup="listbox"
+   348→        >
+   349→          <Search className="w-4 h-4 md:w-5 md:h-5 text-ink-muted shrink-0" aria-hidden />
+   350→          <input
+   351→            ref={inputRef}
+   352→            value={query}
+   353→            onChange={(e) => setQuery(e.target.value)}
+   354→            onFocus={() => {
+   355→              setExpanded(true);
+   356→              setHidden(false);
+   357→              setRecents(readRecents());
+   358→            }}
+   359→            onKeyDown={onInputKeyDown}
+   360→            placeholder="Search…"
+   361→            aria-label="Search movies, series, people and addons"
+   362→            aria-autocomplete="list"
+   363→            className={cn(
+   364→              "min-w-0 flex-1 bg-transparent text-sm md:text-base text-ink placeholder:text-ink-muted outline-none",
+   365→              !expanded && "md:opacity-100 opacity-0 md:pointer-events-auto pointer-events-none w-0 md:w-auto",
+   366→            )}
+   367→            tabIndex={expanded ? 0 : -1}
+   368→          />
+   369→          {searching && <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" aria-hidden />}
+   370→          {/* AI mode hand-off (full overlay keeps the AI flow) */}
+   371→          <button
+   372→            type="button"
+   373→            tabIndex={expanded ? 0 : -1}
+   374→            onClick={() => openFull(query)}
+   375→            className={cn(
+   376→              "hidden md:flex shrink-0 items-center gap-1 rounded-full border border-edge-soft px-2 py-1 text-[10px] font-semibold text-ink-muted hover:text-accent hover:border-accent/50 transition-colors",
+   377→              !expanded && "opacity-0 pointer-events-none",
+   378→            )}
+   379→            title="AI search: describe what you feel like watching"
+   380→          >
+   381→            <Sparkles className="w-3 h-3" /> AI
+   382→          </button>
+   383→          <kbd
+   384→            className={cn(
+   385→              "harbor-kbd shrink-0 hidden md:inline-flex",
+   386→              (expanded || query) && "hidden",
+   387→            )}
+   388→            aria-hidden
+   389→          >
+   390→            /
+   391→          </kbd>
+   392→          {(query || expanded) && (
+   393→            <button
+   394→              type="button"
+   395→              onClick={() => {
+   396→                setQuery("");
+   397→                setExpanded(false);
+   398→                setActiveIdx(-1);
+   399→              }}
+   400→              className="md-state md-icon-btn shrink-0 w-7! h-7!"
+   401→              aria-label="Clear search"
+   402→            >
+   403→              <X className="w-3.5 h-3.5" />
+   404→            </button>
+   405→          )}
+   406→        </div>
+   407→      </div>
+   408→
+   409→      {/* Dropdown */}
+   410→      {showDropdown && (
+   411→        <div
+   412→          id="harbor-float-search-list"
+   413→          role="listbox"
+   414→          aria-label="Search suggestions"
+   415→          ref={listRef}
+   416→          className={cn(
+   417→            // M3 search results view: surface-container, corner-large → extra-large on md+, elevation-3
+   418→            "absolute top-[calc(100%+8px)] inset-x-0 overflow-hidden harbor-pop-in",
+   419→            "bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-corner-large)] md:rounded-[var(--md-sys-shape-corner-extra-large)]",
+   420→            "shadow-[var(--md-sys-elevation-3)]",
+   421→          )}
+   422→        >
+   423→          <div className="max-h-[min(58vh,26rem)] overflow-y-auto harbor-scroll overscroll-contain p-1.5">
+   424→            {phase === "error" && query.trim().length >= 2 && (
+   425→              <p className="px-3 py-3 text-xs text-danger">
+   426→                Search failed — check your connection and try again.
+   427→              </p>
+   428→            )}
+   429→
+   430→            {/* Idle: recents + trending */}
+   431→            {query.trim().length < 2 && (
+   432→              <>
+   433→                {recents.length > 0 && (
+   434→                  <FloatingGroup label="Recent">
+   435→                    {recents.map((r, i) => {
+   436→                      const idx = rows.findIndex((row) => row.id === `recent:${r}`);
+   437→                      return (
+   438→                        <RowShell
+   439→                          key={`recent-${r}`}
+   440→                          id={`fs-opt-${idx}`}
+   441→                          active={activeIdx === idx}
+   442→                          onHover={() => setActiveIdx(idx)}
+   443→                          onClick={() => {
+   444→                            setQuery(r);
+   445→                            inputRef.current?.focus();
+   446→                          }}
+   447→                          className="rounded-full"
+   448→                        >
+   449→                          <Clock className="w-3.5 h-3.5 text-ink-muted shrink-0" aria-hidden />
+   450→                          <span className="truncate text-sm text-ink">{r}</span>
+   451→                        </RowShell>
+   452→                      );
+   453→                    })}
+   454→                  </FloatingGroup>
+   455→                )}
+   456→                {trending.length > 0 && (
+   457→                  <FloatingGroup label="Trending now">
+   458→                    {trending.map((m) => {
+   459→                      const idx = rows.findIndex((row) => row.id === `trend:${m.type}:${m.id}`);
+   460→                      return (
+   461→                        <RowShell
+   462→                          key={`trend-${m.type}-${m.id}`}
+   463→                          id={`fs-opt-${idx}`}
+   464→                          active={activeIdx === idx}
+   465→                          onHover={() => setActiveIdx(idx)}
+   466→                          onClick={() => openMeta(m)}
+   467→                        >
+   468→                          <TrendingUp className="w-3.5 h-3.5 text-accent shrink-0" aria-hidden />
+   469→                          <Thumb src={m.poster} alt="" />
+   470→                          <span className="min-w-0 flex-1">
+   471→                            <span className="block truncate text-sm text-ink">{m.name}</span>
+   472→                            <span className="block text-[10px] text-ink-subtle">
+   473→                              {m.type === "series" ? "Series" : "Movie"}
+   474→                              {m.releaseInfo ? ` · ${m.releaseInfo}` : ""}
+   475→                            </span>
+   476→                          </span>
+   477→                        </RowShell>
+   478→                      );
+   479→                    })}
+   480→                  </FloatingGroup>
+   481→                )}
+   482→                {recents.length === 0 && trending.length === 0 && (
+   483→                  <p className="px-3 py-4 text-xs text-ink-subtle text-center">
+   484→                    Type to search, or press <span className="harbor-kbd">/</span> anytime.
+   485→                  </p>
+   486→                )}
+   487→              </>
+   488→            )}
+   489→
+   490→            {/* Live results */}
+   491→            {query.trim().length >= 2 && (
+   492→              <>
+   493→                <ResultGroup label="Movies" metas={movies} rows={rows} activeIdx={activeIdx} setActiveIdx={setActiveIdx} onOpen={openMeta} />
+   494→                <ResultGroup label="Series" metas={series} rows={rows} activeIdx={activeIdx} setActiveIdx={setActiveIdx} onOpen={openMeta} />
+   495→                {(() => {
+   496→                  const dests = rows.filter((r): r is Extract<FlatRow, { kind: "destination" }> => r.kind === "destination");
+   497→                  if (dests.length === 0) return null;
+   498→                  const ar = /^ar(-|_|$)/i.test(uiLanguage);
+   499→                  return (
+   500→                    <FloatingGroup label={ar ? "انتقال سريع" : "Go to"}>
+   501→                      {dests.map((row) => {
+   502→                        const idx = rows.findIndex((r) => r.id === row.id);
+   503→                        const Icon = row.entry.icon;
+   504→                        return (
+   505→                          <RowShell
+   506→                            key={row.id}
+   507→                            id={`fs-opt-${idx}`}
+   508→                            active={activeIdx === idx}
+   509→                            onHover={() => setActiveIdx(idx)}
+   510→                            onClick={() => {
+   511→                              setExpanded(false);
+   512→                              setActiveIdx(-1);
+   513→                              push({ kind: "view", view: row.entry.view });
+   514→                            }}
+   515→                          >
+   516→                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft" aria-hidden>
+   517→                              <Icon className="w-4 h-4 text-accent" />
+   518→                            </span>
+   519→                            <span className="min-w-0 flex-1">
+   520→                              <span className="block truncate text-sm text-ink">{hubLabel(row.entry, uiLanguage)}</span>
+   521→                              <span className="block text-[10px] text-ink-subtle truncate">{hubDesc(row.entry, uiLanguage)}</span>
+   522→                            </span>
+   523→                            <ArrowRight className="w-3.5 h-3.5 text-ink-subtle rtl:rotate-180 shrink-0" aria-hidden />
+   524→                          </RowShell>
+   525→                        );
+   526→                      })}
+   527→                    </FloatingGroup>
+   528→                  );
+   529→                })()}
+   530→                {people.length > 0 && (
+   531→                  <FloatingGroup label="People">
+   532→                    {people.map((p) => {
+   533→                      const idx = rows.findIndex((row) => row.id === `p:${p.id}`);
+   534→                      return (
+   535→                        <RowShell
+   536→                          key={`p-${p.id}`}
+   537→                          id={`fs-opt-${idx}`}
+   538→                          active={activeIdx === idx}
+   539→                          onHover={() => setActiveIdx(idx)}
+   540→                          onClick={() => p.url && window.open(p.url, "_blank", "noopener")}
+   541→                        >
+   542→                          <Thumb src={p.profile_path} alt="" round />
+   543→                          <span className="min-w-0 flex-1">
+   544→                            <span className="block truncate text-sm text-ink">{p.name}</span>
+   545→                            <span className="block text-[10px] text-ink-subtle">{p.known_for_department ?? "Person"}</span>
+   546→                          </span>
+   547→                        </RowShell>
+   548→                      );
+   549→                    })}
+   550→                  </FloatingGroup>
+   551→                )}
+   552→                <ResultGroup label="From your addons" metas={addonHits} rows={rows} activeIdx={activeIdx} setActiveIdx={setActiveIdx} onOpen={openMeta} />
+   553→                {!hasResults && phase !== "searching" && (
+   554→                  <p className="px-3 py-4 text-xs text-ink-subtle text-center">
+   555→                    No quick matches — press Enter for full results.
+   556→                  </p>
+   557→                )}
+   558→                {/* See all results row */}
+   559→                {rows.find((r) => r.id === "see-all") && (
+   560→                  <RowShell
+   561→                    id={`fs-opt-${rows.findIndex((r) => r.id === "see-all")}`}
+   562→                    active={activeIdx === rows.findIndex((r) => r.id === "see-all")}
+   563→                    onHover={() => setActiveIdx(rows.findIndex((r) => r.id === "see-all"))}
+   564→                    onClick={() => openFull(query)}
+   565→                    className="mt-1 border-t border-edge-soft rounded-t-none"
+   566→                  >
+   567→                    <ArrowRight className="w-3.5 h-3.5 text-accent" aria-hidden />
+   568→                    <span className="text-xs font-semibold text-ink">
+   569→                      See all results for “{query.trim()}”
+   570→                    </span>
+   571→                    <span className="ms-auto text-[10px] text-ink-subtle hidden md:inline">Enter</span>
+   572→                  </RowShell>
+   573→                )}
+   574→              </>
+   575→            )}
+   576→          </div>
+   577→        </div>
+   578→      )}
+   579→    </div>
+   580→  );
+   581→}
+   582→
+   583→function FloatingGroup({ label, children }: { label: string; children: React.ReactNode }) {
+   584→  return (
+   585→    <div className="mb-1" role="group" aria-label={label}>
+   586→      <p className="md-label-medium text-ink-muted uppercase px-2.5 pt-2 pb-1">{label}</p>
+   587→      <div className="space-y-0.5">{children}</div>
+   588→    </div>
+   589→  );
+   590→}
+   591→
+   592→function ResultGroup({
+   593→  label,
+   594→  metas,
+   595→  rows,
+   596→  activeIdx,
+   597→  setActiveIdx,
+   598→  onOpen,
+   599→}: {
+   600→  label: string;
+   601→  metas: Meta[];
+   602→  rows: FlatRow[];
+   603→  activeIdx: number;
+   604→  setActiveIdx: (i: number) => void;
+   605→  onOpen: (m: Meta) => void;
+   606→}) {
+   607→  if (metas.length === 0) return null;
+   608→  return (
+   609→    <FloatingGroup label={label}>
+   610→      {metas.slice(0, MAX_PER_GROUP).map((m) => {
+   611→        const idx = rows.findIndex((r) => r.kind === "meta" && r.id === `${label === "Movies" ? "m" : label === "Series" ? "s" : "a"}:${m.id}`);
+   612→        return (
+   613→          <RowShell
+   614→            key={`${m.type}-${m.id}`}
+   615→            id={`fs-opt-${idx}`}
+   616→            active={activeIdx === idx}
+   617→            onHover={() => setActiveIdx(idx)}
+   618→            onClick={() => onOpen(m)}
+   619→          >
+   620→            <Thumb src={m.poster} alt="" />
+   621→            <span className="min-w-0 flex-1">
+   622→              <span className="block truncate text-sm text-ink">{m.name}</span>
+   623→              <span className="block text-[10px] text-ink-subtle">
+   624→                {m.type === "series" ? "Series" : "Movie"}
+   625→                {m.releaseInfo ? ` · ${m.releaseInfo}` : ""}
+   626→                {m.imdbRating ? ` · ★ ${m.imdbRating}` : ""}
+   627→              </span>
+   628→            </span>
+   629→          </RowShell>
+   630→        );
+   631→      })}
+   632→    </FloatingGroup>
+   633→  );
+   634→}
+   635→
+   636→function RowShell({
+   637→  id,
+   638→  active,
+   639→  onHover,
+   640→  onClick,
+   641→  children,
+   642→  className,
+   643→}: {
+   644→  id: string;
+   645→  active: boolean;
+   646→  onHover: () => void;
+   647→  onClick: () => void;
+   648→  children: React.ReactNode;
+   649→  className?: string;
+   650→}) {
+   651→  return (
+   652→    <div
+   653→      id={id}
+   654→      role="option"
+   655→      aria-selected={active}
+   656→      tabIndex={-1}
+   657→      onMouseEnter={onHover}
+   658→      onMouseDown={(e) => e.preventDefault()} // keep input focus for keyboard flow
+   659→      onClick={onClick}
+   660→      className={cn(
+   661→        // .md-state paints the M3 hover/focus/press state layer (8/10/16% of currentColor)
+   662→        "md-state harbor-tv-focus flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 cursor-pointer transition-colors",
+   663→        active ? "bg-accent-soft" : "",
+   664→        className,
+   665→      )}
+   666→    >
+   667→      {children}
+   668→    </div>
+   669→  );
+   670→}
+   671→
+   672→function Thumb({ src, alt, round }: { src?: string | null; alt: string; round?: boolean }) {
+   673→  return (
+   674→    <span
+   675→      className={cn(
+   676→        "relative w-8 h-11 shrink-0 overflow-hidden bg-raised border border-edge-soft block",
+   677→        round ? "rounded-full w-9 h-9" : "rounded-md",
+   678→      )}
+   679→      aria-hidden
+   680→    >
+   681→      {src ? (
+   682→        <PosterImage src={src} alt={alt} className="absolute inset-0" />
+   683→      ) : round ? (
+   684→        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-ink-subtle">?</span>
+   685→      ) : (
+   686→        <span className="absolute inset-0 flex items-center justify-center">
+   687→          <Search className="w-3.5 h-3.5 text-ink-subtle" />
+   688→        </span>
+   689→      )}
+   690→    </span>
+   691→  );
+   692→}
+   693→

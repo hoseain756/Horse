@@ -1,0 +1,983 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Player overlay (port of Harbor player.tsx + transport)
+     4→// HTML5 video + hls.js, subtitle engine (SRT/VTT/ASS via proxy), full keyboard shortcuts,
+     5→// continue-watching persistence, auto-next episode, stream switcher integration.
+     6→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     7→import Hls from "hls.js";
+     8→import {
+     9→  X, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Subtitles, Settings2,
+    10→  Loader2, AlertTriangle, ChevronLeft, SkipForward, RotateCcw, ArrowLeftRight, PictureInPicture2, Gauge,
+    11→} from "lucide-react";
+    12→import type { PlayerPayload } from "@/lib/harbor/store";
+    13→import { useNav, useSettings } from "@/lib/harbor/store";
+    14→import type { LoadedSubtitle, SubCue } from "@/lib/harbor/subtitles";
+    15→import { fetchAndParseSubtitle, findActiveCue, cuesToVTT } from "@/lib/harbor/subtitles";
+    16→import { fetchStreams, fetchSubtitles } from "@/lib/harbor/api";
+    17→import { runPipeline } from "@/lib/harbor/scoring";
+    18→import { fetchMeta } from "@/lib/harbor/api";
+    19→import type { MetaVideo, RawSubtitle, SubtitleResult, Stream } from "@/lib/harbor/types";
+    20→import { upsertCw, pushHistory, resumeMsFor } from "@/lib/harbor/cw";
+    21→import { cn } from "@/lib/utils";
+    22→import { PickerOverlay } from "../views/picker-overlay";
+    23→
+    24→type Phase = "resolving" | "loading" | "playing" | "error";
+    25→
+    26→export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
+    27→  const pop = useNav((s) => s.pop);
+    28→  const replace = useNav((s) => s.replace);
+    29→  const settings = useSettings((s) => s.settings);
+    30→  const [current, setCurrent] = useState<PlayerPayload>(payload);
+    31→  const [phase, setPhase] = useState<Phase>(payload.url ? "loading" : "resolving");
+    32→  const [error, setError] = useState<string | null>(null);
+    33→  const [switcherOpen, setSwitcherOpen] = useState(false);
+    34→
+    35→  // Stable callbacks — identity must never change, otherwise VideoStage re-attaches HLS every render
+    36→  const handlePhase = useCallback((p: "loading" | "playing") => setPhase(p), []);
+    37→  const handleError = useCallback((msg: string) => {
+    38→    setPhase("error");
+    39→    setError(msg);
+    40→  }, []);
+    41→
+    42→  // Resolve stream via addons when payload.url is empty (instant play path)
+    43→  useEffect(() => {
+    44→    if (current.url || phase !== "resolving") return;
+    45→    let alive = true;
+    46→    (async () => {
+    47→      const { addons } = await import("@/lib/harbor/store");
+    48→      try {
+    49→        const targetId = current.videoId ?? current.metaId;
+    50→        const results = await fetchStreams(addons.getState().addons, current.type, targetId);
+    51→        if (!alive) return;
+    52→        const ranked = runPipeline(results);
+    53→        const best = ranked.find((s) => s.url) ?? ranked[0];
+    54→        if (!best || !best.url) {
+    55→          setPhase("error");
+    56→          setError(
+    57→            ranked.length > 0
+    58→              ? "No browser-playable stream found. Open the stream picker to choose manually (torrent streams require a debrid-cached source)."
+    59→              : "No streams found from your addons.",
+    60→          );
+    61→          return;
+    62→        }
+    63→        setCurrent((c) => ({
+    64→          ...c,
+    65→          url: best.url!,
+    66→          streamTitle: best.title ?? c.streamTitle,
+    67→          streamDescription: best.description,
+    68→        }));
+    69→        setPhase("loading");
+    70→      } catch (e) {
+    71→        if (!alive) return;
+    72→        setPhase("error");
+    73→        setError(e instanceof Error ? e.message : "Failed to resolve streams");
+    74→      }
+    75→    })();
+    76→    return () => {
+    77→      alive = false;
+    78→    };
+    79→  }, [current.url, current.type, current.videoId, current.metaId, phase]);
+    80→
+    81→  const setPayload = useCallback((p: PlayerPayload) => {
+    82→    setCurrent(p);
+    83→    setPhase(p.url ? "loading" : "resolving");
+    84→    setError(null);
+    85→  }, []);
+    86→
+    87→  return (
+    88→    <div className="fixed inset-0 z-[180] bg-black" role="dialog" aria-modal="true" aria-label={`Playing ${current.title}`}>
+    89→      {phase === "resolving" && (
+    90→        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+    91→          <div className="relative">
+    92→            <Loader2 className="w-12 h-12 text-accent animate-spin" />
+    93→          </div>
+    94→          <p className="text-sm text-ink-muted">Finding the best stream…</p>
+    95→        </div>
+    96→      )}
+    97→      {phase === "error" ? (
+    98→        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+    99→          <AlertTriangle className="w-12 h-12 text-danger" />
+   100→          <p className="text-sm text-ink-muted max-w-md">{error}</p>
+   101→          <div className="flex gap-3">
+   102→            <button
+   103→              type="button"
+   104→              onClick={() => setSwitcherOpen(true)}
+   105→              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-black hover:brightness-110"
+   106→            >
+   107→              Open stream picker
+   108→            </button>
+   109→            <button
+   110→              type="button"
+   111→              onClick={pop}
+   112→              className="rounded-xl bg-raised px-5 py-2.5 text-sm font-semibold text-ink hover:bg-raised/70"
+   113→            >
+   114→              Back
+   115→            </button>
+   116→          </div>
+   117→        </div>
+   118→      ) : (
+   119→        current.url && (
+   120→          <VideoStage
+   121→            key={current.url}
+   122→            payload={current}
+   123→            settings={settings}
+   124→            onPhase={handlePhase}
+   125→            onError={handleError}
+   126→          />
+   127→        )
+   128→      )}
+   129→
+   130→      {/* Top bar */}
+   131→      {phase !== "error" && (
+   132→        <div className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent px-4 py-3 pb-10 transition-opacity">
+   133→          <button
+   134→            type="button"
+   135→            onClick={() => {
+   136→              if (settings.playerConfirmLeave && !window.confirm("Leave playback?")) return;
+   137→              pop();
+   138→            }}
+   139→            className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-ink hover:bg-black/70"
+   140→            aria-label="Close player (Esc)"
+   141→          >
+   142→            <X className="w-5 h-5" />
+   143→          </button>
+   144→          <div className="min-w-0">
+   145→            <p className="harbor-clamp-1 text-sm font-semibold text-ink">{current.title}</p>
+   146→            {current.episode && (
+   147→              <p className="text-xs text-ink-muted">
+   148→                S{current.season}:E{current.episode}
+   149→                {current.episodeName ? ` · ${current.episodeName}` : ""}
+   150→              </p>
+   151→            )}
+   152→          </div>
+   153→          <button
+   154→            type="button"
+   155→            onClick={() => setSwitcherOpen(true)}
+   156→            className="ml-auto flex items-center gap-1.5 rounded-full bg-black/50 hover:bg-black/70 px-3 py-1.5 text-xs font-medium text-ink"
+   157→            title="Switch stream (W)"
+   158→          >
+   159→            <ArrowLeftRight className="w-3.5 h-3.5" /> Streams
+   160→          </button>
+   161→        </div>
+   162→      )}
+   163→
+   164→      {switcherOpen && (
+   165→        <PickerOverlay
+   166→          type={current.type}
+   167→          id={current.deepLink?.id ?? current.metaId}
+   168→          videoId={current.videoId ?? current.deepLink?.videoId}
+   169→          season={current.season}
+   170→          episode={current.episode}
+   171→        />
+   172→      )}
+   173→    </div>
+   174→  );
+   175→}
+   176→
+   177→// ---------------- Video stage ----------------
+   178→function VideoStage({
+   179→  payload,
+   180→  settings,
+   181→  onPhase,
+   182→  onError,
+   183→}: {
+   184→  payload: PlayerPayload;
+   185→  settings: ReturnType<typeof useSettings.getState>["settings"];
+   186→  onPhase: (p: "loading" | "playing") => void;
+   187→  onError: (msg: string) => void;
+   188→}) {
+   189→  const videoRef = useRef<HTMLVideoElement>(null);
+   190→  const containerRef = useRef<HTMLDivElement>(null);
+   191→  const hlsRef = useRef<Hls | null>(null);
+   192→  const [ready, setReady] = useState(false);
+   193→  const [playing, setPlaying] = useState(false);
+   194→  const [muted, setMuted] = useState(false);
+   195→  const [volume, setVolume] = useState(1);
+   196→  const [time, setTime] = useState(0);
+   197→  const [duration, setDuration] = useState(0);
+   198→  const [buffering, setBuffering] = useState(true);
+   199→  const [fullscreen, setFullscreen] = useState(false);
+   200→  const [speed, setSpeed] = useState(1);
+   201→  const [controlsVisible, setControlsVisible] = useState(true);
+   202→  const [volumeHudVisible, setVolumeHudVisible] = useState(false);
+   203→  const volumeHudTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   204→  const [subMenuOpen, setSubMenuOpen] = useState(false);
+   205→  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+   206→  const [subtitles, setSubtitles] = useState<LoadedSubtitle[]>([]);
+   207→  const [activeSub, setActiveSub] = useState<number>(-1); // -1 = off
+   208→  const [subCue, setSubCue] = useState<SubCue | null>(null);
+   209→  const [availableTracks, setAvailableTracks] = useState<{ label: string }[]>([]);
+   210→  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   211→  const seekHandled = useRef(false);
+   212→
+   213→  const resumeAt = useRef(
+   214→    payload.resumeAt ??
+   215→      (settings.resumePlayback && payload.metaId
+   216→        ? resumeMsFor(payload.metaId, payload.videoId) / 1000
+   217→        : 0),
+   218→  );
+   219→
+   220→  // ---- Attach source (HLS or native) ----
+   221→  useEffect(() => {
+   222→    const video = videoRef.current;
+   223→    if (!video || !payload.url) return;
+   224→    let cancelled = false;
+   225→    const isHls = /\.m3u8(\?|$)/i.test(payload.url) || payload.url.includes("m3u8");
+   226→
+   227→    const tryPlay = () => {
+   228→      video.play().catch(() => {
+   229→        /* autoplay blocked; user gesture needed */
+   230→      });
+   231→    };
+   232→
+   233→    if (isHls && !video.canPlayType("application/vnd.apple.mpegurl")) {
+   234→      const hls = new Hls({ enableWorker: true, maxBufferLength: 30 });
+   235→      hlsRef.current = hls;
+   236→      hls.loadSource(payload.url);
+   237→      hls.attachMedia(video);
+   238→      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+   239→        if (cancelled) return;
+   240→        onPhase("loading");
+   241→        tryPlay();
+   242→      });
+   243→      hls.on(Hls.Events.ERROR, (_evt, data) => {
+   244→        if (cancelled || !data.fatal) return;
+   245→        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+   246→          hls.startLoad();
+   247→        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+   248→          hls.recoverMediaError();
+   249→        } else {
+   250→          onError("Stream failed to load. It may be offline or blocked by CORS.");
+   251→        }
+   252→      });
+   253→    } else {
+   254→      video.src = payload.url;
+   255→      onPhase("loading");
+   256→      tryPlay();
+   257→    }
+   258→
+   259→    return () => {
+   260→      cancelled = true;
+   261→      if (hlsRef.current) {
+   262→        hlsRef.current.destroy();
+   263→        hlsRef.current = null;
+   264→      }
+   265→    };
+   266→  }, [payload.url, onPhase, onError]);
+   267→
+   268→  // ---- Resume ----
+   269→  useEffect(() => {
+   270→    const video = videoRef.current;
+   271→    if (!video) return;
+   272→    if (resumeAt.current > 1 && !seekHandled.current) {
+   273→      const seek = () => {
+   274→        if (!seekHandled.current && video.duration > 0 && resumeAt.current < video.duration - 5) {
+   275→          video.currentTime = resumeAt.current;
+   276→        }
+   277→        seekHandled.current = true;
+   278→      };
+   279→      if (video.readyState >= 1) seek();
+   280→      else video.addEventListener("loadedmetadata", seek, { once: true });
+   281→    }
+   282→  }, [ready]);
+   283→
+   284→  // ---- Media event handlers ----
+   285→  useEffect(() => {
+   286→    const video = videoRef.current;
+   287→    if (!video) return;
+   288→    const onTime = () => {
+   289→      setTime(video.currentTime);
+   290→      if (video.duration > 0) {
+   291→        setDuration(video.duration);
+   292→        // persist CW every 5s
+   293→        saveProgressThrottled(payload, video.currentTime, video.duration, settings);
+   294→      }
+   295→    };
+   296→    const onLoaded = () => {
+   297→      setDuration(video.duration);
+   298→      setReady(true);
+   299→      setBuffering(false);
+   300→      // populate audio tracks
+   301→      updateTrackList(video, setAvailableTracks);
+   302→    };
+   303→    const onPlay = () => setPlaying(true);
+   304→    const onPause = () => setPlaying(false);
+   305→    const onWaiting = () => setBuffering(true);
+   306→    const onPlaying = () => {
+   307→      setBuffering(false);
+   308→      onPhase("playing");
+   309→    };
+   310→    const onError = () => {
+   311→      onError("This stream can't be played in the browser (codec or CORS). Try another stream via the stream picker.");
+   312→    };
+   313→    const onVolume = () => {
+   314→      setMuted(video.muted);
+   315→      setVolume(video.volume);
+   316→      setVolumeHudVisible(true);
+   317→      if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current);
+   318→      volumeHudTimer.current = setTimeout(() => setVolumeHudVisible(false), 1400);
+   319→    };
+   320→    video.addEventListener("timeupdate", onTime);
+   321→    video.addEventListener("loadedmetadata", onLoaded);
+   322→    video.addEventListener("play", onPlay);
+   323→    video.addEventListener("pause", onPause);
+   324→    video.addEventListener("waiting", onWaiting);
+   325→    video.addEventListener("playing", onPlaying);
+   326→    video.addEventListener("error", onError);
+   327→    video.addEventListener("volumechange", onVolume);
+   328→    return () => {
+   329→      video.removeEventListener("timeupdate", onTime);
+   330→      video.removeEventListener("loadedmetadata", onLoaded);
+   331→      video.removeEventListener("play", onPlay);
+   332→      video.removeEventListener("pause", onPause);
+   333→      video.removeEventListener("waiting", onWaiting);
+   334→      video.removeEventListener("playing", onPlaying);
+   335→      video.removeEventListener("error", onError);
+   336→      video.removeEventListener("volumechange", onVolume);
+   337→    };
+   338→  }, [payload, settings, onPhase, onError]);
+   339→
+   340→  // ---- Finalize watch progress on unmount + when tab is hidden/closed (Harbor flush parity) ----
+   341→  useEffect(() => {
+   342→    const flush = () => {
+   343→      const video = videoRef.current;
+   344→      if (video && video.duration > 0) {
+   345→        saveProgress(payload, video.currentTime, video.duration, settings, true);
+   346→      }
+   347→    };
+   348→    const onVisibility = () => {
+   349→      if (document.visibilityState === "hidden") flush();
+   350→    };
+   351→    document.addEventListener("visibilitychange", onVisibility);
+   352→    window.addEventListener("pagehide", flush);
+   353→    return () => {
+   354→      document.removeEventListener("visibilitychange", onVisibility);
+   355→      window.removeEventListener("pagehide", flush);
+   356→      flush();
+   357→    };
+   358→  }, []);
+   359→
+   360→  // ---- Subtitle cue rendering ----
+   361→  useEffect(() => {
+   362→    const video = videoRef.current;
+   363→    if (!video) return;
+   364→    const onTime = () => {
+   365→      if (activeSub < 0 || subtitles[activeSub] === undefined) {
+   366→        setSubCue(null);
+   367→        return;
+   368→      }
+   369→      setSubCue(findActiveCue(subtitles[activeSub].cues, video.currentTime));
+   370→    };
+   371→    video.addEventListener("timeupdate", onTime);
+   372→    return () => video.removeEventListener("timeupdate", onTime);
+   373→  }, [activeSub, subtitles]);
+   374→
+   375→  // ---- Auto-load preferred subtitles ----
+   376→  useEffect(() => {
+   377→    if (payload.type === "movie" || payload.type === "series") {
+   378→      let alive = true;
+   379→      (async () => {
+   380→        try {
+   381→          const { addons } = await import("@/lib/harbor/store");
+   382→          const subs = await fetchSubtitles(
+   383→            addons.getState().addons,
+   384→            payload.type,
+   385→            payload.metaId,
+   386→            payload.videoId ?? payload.deepLink?.videoId,
+   387→          );
+   388→          if (!alive || subs.length === 0) return;
+   389→          const preferred = settings.preferredSubLangs;
+   390→          // score: preferred language first
+   391→          const sorted = [...subs].sort((a, b) => subScore(b, preferred) - subScore(a, preferred));
+   392→          const top = sorted.slice(0, 8);
+   393→          const loaded: LoadedSubtitle[] = [];
+   394→          for (const s of top) {
+   395→            try {
+   396→              const res = await fetchAndParseSubtitle(s.url, s.m ?? s.lang ?? "Subtitle", s.lang);
+   397→              loaded.push(res);
+   398→            } catch {
+   399→              /* skip bad sub */
+   400→            }
+   401→          }
+   402→          if (!alive || loaded.length === 0) return;
+   403→          setSubtitles(loaded);
+   404→          if (!settings.subtitlesOffByDefault) setActiveSub(0);
+   405→        } catch {
+   406→          /* subtitles optional */
+   407→        }
+   408→      })();
+   409→      return () => {
+   410→        alive = false;
+   411→      };
+   412→    }
+   413→     
+   414→  }, [payload.metaId, payload.videoId]);
+   415→
+   416→  // ---- Fullscreen tracking ----
+   417→  useEffect(() => {
+   418→    const onFs = () => setFullscreen(!!document.fullscreenElement);
+   419→    document.addEventListener("fullscreenchange", onFs);
+   420→    return () => document.removeEventListener("fullscreenchange", onFs);
+   421→  }, []);
+   422→
+   423→  // ---- Controls auto-hide ----
+   424→  const bumpControls = useCallback(() => {
+   425→    setControlsVisible(true);
+   426→    if (controlsTimer.current) clearTimeout(controlsTimer.current);
+   427→    controlsTimer.current = setTimeout(() => {
+   428→      if (videoRef.current && !videoRef.current.paused) {
+   429→        setControlsVisible(false);
+   430→        setSubMenuOpen(false);
+   431→        setSettingsMenuOpen(false);
+   432→      }
+   433→    }, 3200);
+   434→  }, []);
+   435→
+   436→  useEffect(() => {
+   437→    bumpControls();
+   438→    return () => {
+   439→      if (controlsTimer.current) clearTimeout(controlsTimer.current);
+   440→    };
+   441→  }, [bumpControls]);
+   442→
+   443→  // ---- Keyboard shortcuts (ported from Harbor hotkeys.ts) ----
+   444→  useEffect(() => {
+   445→    const onKey = (e: KeyboardEvent) => {
+   446→      const video = videoRef.current;
+   447→      if (!video) return;
+   448→      const target = e.target as HTMLElement;
+   449→      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+   450→      bumpControls();
+   451→      switch (e.key) {
+   452→        case " ":
+   453→          e.preventDefault();
+   454→          if (video.paused) video.play();
+   455→          else video.pause();
+   456→          break;
+   457→        case "f":
+   458→          toggleFullscreen();
+   459→          break;
+   460→        case "u":
+   461→          togglePip();
+   462→          break;
+   463→        case "m":
+   464→          video.muted = !video.muted;
+   465→          break;
+   466→        case "ArrowLeft":
+   467→          e.preventDefault();
+   468→          video.currentTime = Math.max(0, video.currentTime - settings.seekBackStepSec);
+   469→          break;
+   470→        case "ArrowRight":
+   471→          e.preventDefault();
+   472→          video.currentTime = Math.min(video.duration || Infinity, video.currentTime + settings.seekForwardStepSec);
+   473→          break;
+   474→        case "ArrowUp":
+   475→          e.preventDefault();
+   476→          video.muted = false;
+   477→          video.volume = Math.min(1, video.volume + 0.1);
+   478→          break;
+   479→        case "ArrowDown":
+   480→          e.preventDefault();
+   481→          video.volume = Math.max(0, video.volume - 0.1);
+   482→          break;
+   483→        case "s":
+   484→        case "c":
+   485→          setActiveSub((i) => (i + 1 < subtitles.length ? i + 1 : -1));
+   486→          break;
+   487→        case "Escape":
+   488→          if (document.fullscreenElement) {
+   489→            document.exitFullscreen();
+   490→          } else {
+   491→            useNav.getState().pop();
+   492→          }
+   493→          break;
+   494→        case "Home":
+   495→          video.currentTime = 0;
+   496→          break;
+   497→        case "End":
+   498→          video.currentTime = video.duration || 0;
+   499→          break;
+   500→        default:
+   501→          if (/^[0-9]$/.test(e.key) && video.duration > 0) {
+   502→            video.currentTime = video.duration * (parseInt(e.key, 10) / 10);
+   503→          }
+   504→      }
+   505→    };
+   506→    window.addEventListener("keydown", onKey);
+   507→    return () => window.removeEventListener("keydown", onKey);
+   508→  }, [settings.seekBackStepSec, settings.seekForwardStepSec, subtitles.length, bumpControls]);
+   509→
+   510→  const toggleFullscreen = () => {
+   511→    const el = containerRef.current;
+   512→    if (!el) return;
+   513→    if (document.fullscreenElement) document.exitFullscreen();
+   514→    else el.requestFullscreen().catch(() => {});
+   515→  };
+   516→
+   517→  const togglePip = async () => {
+   518→    const video = videoRef.current;
+   519→    if (!video) return;
+   520→    try {
+   521→      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+   522→      else await video.requestPictureInPicture();
+   523→    } catch {
+   524→      /* pip unsupported */
+   525→    }
+   526→  };
+   527→
+   528→  const fillClass =
+   529→    settings.videoFill === "fill"
+   530→      ? "object-cover"
+   531→      : settings.videoFill === "zoom"
+   532→        ? "object-cover scale-105"
+   533→        : "object-contain";
+   534→
+   535→  const stremioChrome = settings.playerTheme === "stremio" || (settings.playerTheme === "auto" && document.documentElement.dataset.themeLayout === "stremio");
+   536→
+   537→  return (
+   538→    <div
+   539→      ref={containerRef}
+   540→      className="absolute inset-0 bg-black flex items-center justify-center"
+   541→      onMouseMove={bumpControls}
+   542→      onDoubleClick={(e) => {
+   543→        // Double-click video surface = fullscreen (HTML5 convention, Harbor parity)
+   544→        if (e.target === videoRef.current || e.target === e.currentTarget) {
+   545→          const el = containerRef.current;
+   546→          if (!el) return;
+   547→          if (document.fullscreenElement) document.exitFullscreen();
+   548→          else el.requestFullscreen().catch(() => {});
+   549→        }
+   550→      }}
+   551→      onClick={(e) => {
+   552→        if (e.target === videoRef.current || e.target === e.currentTarget) {
+   553→          const video = videoRef.current;
+   554→          if (video) {
+   555→            if (video.paused) video.play();
+   556→            else video.pause();
+   557→          }
+   558→        }
+   559→      }}
+   560→    >
+   561→      <video
+   562→        ref={videoRef}
+   563→        className={cn("w-full h-full", fillClass)}
+   564→        playsInline
+   565→        crossOrigin="anonymous"
+   566→        // native text tracks unused; custom renderer below
+   567→      >
+   568→        {subtitles[activeSub] && (
+   569→          <track
+   570→            kind="subtitles"
+   571→            label={subtitles[activeSub].label}
+   572→            src={URL.createObjectURL(new Blob([cuesToVTT(subtitles[activeSub].cues)], { type: "text/vtt" }))}
+   573→            default
+   574→          />
+   575→        )}
+   576→      </video>
+   577→
+   578→      {subtitles[activeSub] && subCue && (
+   579→        <div
+   580→          className={cn(
+   581→            "absolute inset-x-0 flex justify-center pointer-events-none px-6",
+   582→            stremioChrome ? "bottom-24" : "bottom-20",
+   583→          )}
+   584→          style={{ zIndex: 15 }}
+   585→        >
+   586→          <p
+   587→            className="harbor-subtitle max-w-3xl whitespace-pre-line"
+   588→            style={{
+   589→              fontSize: `${settings.subFontSize}px`,
+   590→              color: settings.subFontColor,
+   591→              WebkitTextStroke: settings.subBorderSize > 0 ? `${settings.subBorderSize}px ${settings.subBorderColor}` : undefined,
+   592→              paintOrder: "stroke fill",
+   593→              background:
+   594→                settings.subStyle === "box"
+   595→                  ? `rgba(0,0,0,${settings.subBackgroundOpacity})`
+   596→                  : undefined,
+   597→              borderRadius: settings.subStyle === "box" ? "8px" : undefined,
+   598→              padding: settings.subStyle === "box" ? "4px 12px" : undefined,
+   599→              textShadow:
+   600→                settings.subStyle === "shadow"
+   601→                  ? "0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.8)"
+   602→                  : settings.subStyle === "outline"
+   603→                    ? "0 0 2px #000"
+   604→                    : undefined,
+   605→            }}
+   606→          >
+   607→            {subCue.text}
+   608→          </p>
+   609→        </div>
+   610→      )}
+   611→
+   612→      {/* Buffering */}
+   613→      {buffering && (
+   614→        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+   615→          <Loader2 className="w-12 h-12 text-accent animate-spin" />
+   616→        </div>
+   617→      )}
+   618→
+   619→      {/* Volume HUD (Harbor parity) */}
+   620→      <VolumeHud show={volumeHudVisible} muted={muted} volume={volume} />
+   621→
+   622→      {/* Bottom transport */}
+   623→      <div
+   624→        className={cn(
+   625→          "absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pb-4 pt-12 transition-opacity duration-300",
+   626→          controlsVisible ? "opacity-100" : "opacity-0",
+   627→        )}
+   628→      >
+   629→        {/* Seek bar */}
+   630→        <div className="group/seek relative mb-2.5" onClick={(e) => e.stopPropagation()}>
+   631→          <div className="relative h-4 flex items-center">
+   632→            <input
+   633→              type="range"
+   634→              min={0}
+   635→              max={duration || 100}
+   636→              step={0.1}
+   637→              value={time}
+   638→              onChange={(e) => {
+   639→                const video = videoRef.current;
+   640→                if (video) video.currentTime = Number(e.target.value);
+   641→              }}
+   642→              className="harbor-seek w-full appearance-none bg-transparent cursor-pointer [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:-mt-1"
+   643→              aria-label="Seek"
+   644→              style={{
+   645→                background: `linear-gradient(to right, var(--color-accent-var) ${(time / (duration || 1)) * 100}%, rgba(255,255,255,0.2) ${(time / (duration || 1)) * 100}%)`,
+   646→                height: "6px",
+   647→                borderRadius: "999px",
+   648→                WebkitAppearance: "none",
+   649→              }}
+   650→            />
+   651→          </div>
+   652→        </div>
+   653→
+   654→        <div className="flex items-center gap-2.5 flex-wrap">
+   655→          <button
+   656→            type="button"
+   657→            onClick={() => {
+   658→              const video = videoRef.current;
+   659→              if (video) {
+   660→                if (video.paused) video.play();
+   661→                else video.pause();
+   662→              }
+   663→            }}
+   664→            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-ink"
+   665→            aria-label={playing ? "Pause (Space)" : "Play (Space)"}
+   666→          >
+   667→            {playing ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+   668→          </button>
+   669→          <button
+   670→            type="button"
+   671→            onClick={() => {
+   672→              const video = videoRef.current;
+   673→              if (video) video.currentTime = Math.max(0, video.currentTime - settings.seekBackStepSec);
+   674→            }}
+   675→            className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-ink-muted hover:text-ink"
+   676→            aria-label={`Back ${settings.seekBackStepSec}s`}
+   677→          >
+   678→            <RotateCcw className="w-4.5 h-4.5" />
+   679→          </button>
+   680→          <button
+   681→            type="button"
+   682→            onClick={() => {
+   683→              const video = videoRef.current;
+   684→              if (video) video.currentTime = Math.min(video.duration, video.currentTime + settings.seekForwardStepSec);
+   685→            }}
+   686→            className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-ink-muted hover:text-ink"
+   687→            aria-label={`Forward ${settings.seekForwardStepSec}s`}
+   688→          >
+   689→            <SkipForward className="w-4.5 h-4.5" />
+   690→          </button>
+   691→
+   692→          {/* Volume */}
+   693→          <div className="flex items-center gap-1.5 group/vol">
+   694→            <button
+   695→              type="button"
+   696→              onClick={() => {
+   697→                const video = videoRef.current;
+   698→                if (video) video.muted = !video.muted;
+   699→              }}
+   700→              className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-ink-muted hover:text-ink"
+   701→              aria-label={muted ? "Unmute (M)" : "Mute (M)"}
+   702→            >
+   703→              {muted || volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume2 className="w-4.5 h-4.5" />}
+   704→            </button>
+   705→            <input
+   706→              type="range"
+   707→              min={0}
+   708→              max={1}
+   709→              step={0.05}
+   710→              value={muted ? 0 : volume}
+   711→              onChange={(e) => {
+   712→                const video = videoRef.current;
+   713→                if (video) {
+   714→                  video.volume = Number(e.target.value);
+   715→                  video.muted = Number(e.target.value) === 0;
+   716→                }
+   717→              }}
+   718→              className="w-16 md:w-24 h-1.5 rounded-full appearance-none bg-white/20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+   719→              aria-label="Volume"
+   720→            />
+   721→          </div>
+   722→
+   723→          <span className="text-xs text-ink-muted tabular-nums ml-1" aria-label="Time">
+   724→            {fmtTime(time)} / {fmtTime(duration)}
+   725→          </span>
+   726→
+   727→          <div className="ml-auto flex items-center gap-1">
+   728→            {/* Subtitles */}
+   729→            <div className="relative">
+   730→              <button
+   731→                type="button"
+   732→                onClick={() => {
+   733→                  setSubMenuOpen((v) => !v);
+   734→                  setSettingsMenuOpen(false);
+   735→                }}
+   736→                className={cn(
+   737→                  "w-9 h-9 rounded-full flex items-center justify-center",
+   738→                  subMenuOpen || activeSub >= 0 ? "text-accent" : "text-ink-muted hover:text-ink",
+   739→                  "hover:bg-white/10",
+   740→                )}
+   741→                aria-label="Subtitles (S)"
+   742→              >
+   743→                <Subtitles className="w-4.5 h-4.5" />
+   744→              </button>
+   745→              {subMenuOpen && (
+   746→                <div className="absolute bottom-12 right-0 w-64 rounded-2xl bg-elevated/95 backdrop-blur-xl border border-edge p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+   747→                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Subtitles</p>
+   748→                  <button
+   749→                    type="button"
+   750→                    onClick={() => setActiveSub(-1)}
+   751→                    className={cn("w-full text-left rounded-lg px-3 py-2 text-sm", activeSub === -1 ? "bg-accent-soft text-accent" : "text-ink-muted hover:bg-raised")}
+   752→                  >
+   753→                    Off
+   754→                  </button>
+   755→                  {subtitles.map((s, i) => (
+   756→                    <button
+   757→                      key={i}
+   758→                      type="button"
+   759→                      onClick={() => setActiveSub(i)}
+   760→                      className={cn("w-full text-left rounded-lg px-3 py-2 text-sm harbor-clamp-1", activeSub === i ? "bg-accent-soft text-accent" : "text-ink-muted hover:bg-raised")}
+   761→                    >
+   762→                      {s.label}
+   763→                    </button>
+   764→                  ))}
+   765→                  {subtitles.length === 0 && (
+   766→                    <p className="text-xs text-ink-subtle px-3 py-2">No subtitles found for this title.</p>
+   767→                  )}
+   768→                  <label className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-dashed border-edge px-3 py-2 text-xs text-ink-muted hover:text-ink cursor-pointer">
+   769→                    Load local file (.srt / .vtt)
+   770→                    <input
+   771→                      type="file"
+   772→                      accept=".srt,.vtt,.ass,.ssa"
+   773→                      className="hidden"
+   774→                      onChange={async (e) => {
+   775→                        const file = e.target.files?.[0];
+   776→                        if (!file) return;
+   777→                        const text = await file.text();
+   778→                        const { parseSubtitle } = await import("@/lib/harbor/subtitles");
+   779→                        const cues = parseSubtitle(text);
+   780→                        setSubtitles((prev) => [...prev, { label: file.name, url: "", cues }]);
+   781→                        setActiveSub(subtitles.length);
+   782→                        setSubMenuOpen(false);
+   783→                      }}
+   784→                    />
+   785→                  </label>
+   786→                </div>
+   787→              )}
+   788→            </div>
+   789→
+   790→            {/* Settings / speed */}
+   791→            <div className="relative">
+   792→              <button
+   793→                type="button"
+   794→                onClick={() => {
+   795→                  setSettingsMenuOpen((v) => !v);
+   796→                  setSubMenuOpen(false);
+   797→                }}
+   798→                className={cn(
+   799→                  "w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10",
+   800→                  settingsMenuOpen ? "text-accent" : "text-ink-muted hover:text-ink",
+   801→                )}
+   802→                aria-label="Playback settings"
+   803→              >
+   804→                <Settings2 className="w-4.5 h-4.5" />
+   805→              </button>
+   806→              {settingsMenuOpen && (
+   807→                <div className="absolute bottom-12 right-0 w-52 rounded-2xl bg-elevated/95 backdrop-blur-xl border border-edge p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+   808→                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
+   809→                    <Gauge className="w-3.5 h-3.5" /> Speed
+   810→                  </p>
+   811→                  <div className="grid grid-cols-3 gap-1.5">
+   812→                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+   813→                      <button
+   814→                        key={spd}
+   815→                        type="button"
+   816→                        onClick={() => {
+   817→                          setSpeed(spd);
+   818→                          if (videoRef.current) videoRef.current.playbackRate = spd;
+   819→                        }}
+   820→                        className={cn(
+   821→                          "rounded-lg px-2 py-1.5 text-xs font-medium",
+   822→                          speed === spd ? "bg-accent text-black" : "bg-raised text-ink-muted hover:text-ink",
+   823→                        )}
+   824→                      >
+   825→                        {spd}×
+   826→                      </button>
+   827→                    ))}
+   828→                  </div>
+   829→                  {availableTracks.length > 1 && (
+   830→                    <>
+   831→                      <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mt-3 mb-2">Audio</p>
+   832→                      {availableTracks.map((t, i) => (
+   833→                        <p key={i} className="text-xs text-ink-muted px-1 py-0.5">
+   834→                          {t.label}
+   835→                        </p>
+   836→                      ))}
+   837→                    </>
+   838→                  )}
+   839→                </div>
+   840→              )}
+   841→            </div>
+   842→
+   843→            <button
+   844→              type="button"
+   845→              onClick={togglePip}
+   846→              className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/10"
+   847→              aria-label="Picture in picture (U)"
+   848→            >
+   849→              <PictureInPicture2 className="w-4.5 h-4.5" />
+   850→            </button>
+   851→            <button
+   852→              type="button"
+   853→              onClick={toggleFullscreen}
+   854→              className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/10"
+   855→              aria-label={fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+   856→            >
+   857→              {fullscreen ? <Minimize className="w-4.5 h-4.5" /> : <Maximize className="w-4.5 h-4.5" />}
+   858→            </button>
+   859→          </div>
+   860→        </div>
+   861→      </div>
+   862→    </div>
+   863→  );
+   864→}
+   865→
+   866→// ---------------- Helpers ----------------
+   867→function VolumeHud({ show, muted, volume }: { show: boolean; muted: boolean; volume: number }) {
+   868→  const pct = Math.round((muted ? 0 : volume) * 100);
+   869→  return (
+   870→    <div
+   871→      className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none transition-all duration-300 ${
+   872→        show ? "opacity-100 scale-100" : "opacity-0 scale-90"
+   873→      }`}
+   874→      aria-hidden
+   875→    >
+   876→      <div className="rounded-2xl bg-black/70 backdrop-blur-md px-5 py-4 flex flex-col items-center gap-2.5 min-w-[120px]">
+   877→        {muted || volume === 0 ? (
+   878→          <VolumeX className="w-7 h-7 text-ink" />
+   879→        ) : (
+   880→          <Volume2 className="w-7 h-7 text-ink" />
+   881→        )}
+   882→        <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden">
+   883→          <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }} />
+   884→        </div>
+   885→        <span className="text-xs text-ink-muted tabular-nums">{pct}%</span>
+   886→      </div>
+   887→    </div>
+   888→  );
+   889→}
+   890→
+   891→function fmtTime(t: number): string {
+   892→  if (!Number.isFinite(t) || t < 0) return "0:00";
+   893→  const h = Math.floor(t / 3600);
+   894→  const m = Math.floor((t % 3600) / 60);
+   895→  const s = Math.floor(t % 60);
+   896→  return h > 0
+   897→    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+   898→    : `${m}:${String(s).padStart(2, "0")}`;
+   899→}
+   900→
+   901→function subScore(s: RawSubtitle, preferred: string[]): number {
+   902→  let score = 0;
+   903→  const lang = (s.lang ?? "").toLowerCase();
+   904→  preferred.forEach((p, i) => {
+   905→    if (lang.includes(p.toLowerCase().split(" ")[0])) score += 100 - i * 10;
+   906→  });
+   907→  return score;
+   908→}
+   909→
+   910→let lastSave = 0;
+   911→let lastHistorySave = 0;
+   912→function saveProgressThrottled(
+   913→  payload: PlayerPayload,
+   914→  position: number,
+   915→  duration: number,
+   916→  settings: ReturnType<typeof useSettings.getState>["settings"],
+   917→) {
+   918→  const now = Date.now();
+   919→  if (now - lastSave < 5000) return;
+   920→  lastSave = now;
+   921→  saveProgress(payload, position, duration, settings, false);
+   922→  // Record into history every 30s of progress so stats survive reloads/crashes
+   923→  if (now - lastHistorySave >= 30_000) {
+   924→    lastHistorySave = now;
+   925→    pushHistory({
+   926→      id: payload.metaId,
+   927→      type: payload.type === "series" ? "series" : "movie",
+   928→      name: payload.title,
+   929→      poster: payload.poster,
+   930→      videoId: payload.videoId,
+   931→      season: payload.season,
+   932→      episode: payload.episode,
+   933→      episodeName: payload.episodeName,
+   934→      positionMs: Math.round(position * 1000),
+   935→      durationMs: Math.round(duration * 1000),
+   936→    });
+   937→  }
+   938→}
+   939→
+   940→function saveProgress(
+   941→  payload: PlayerPayload,
+   942→  position: number,
+   943→  duration: number,
+   944→  settings: ReturnType<typeof useSettings.getState>["settings"],
+   945→  final: boolean,
+   946→) {
+   947→  if (duration <= 0) return;
+   948→  const entry = {
+   949→    id: payload.metaId,
+   950→    type: payload.type === "series" ? ("series" as const) : ("movie" as const),
+   951→    name: payload.title,
+   952→    poster: payload.poster,
+   953→    season: payload.season,
+   954→    episode: payload.episode,
+   955→    videoId: payload.videoId,
+   956→    episodeName: payload.episodeName,
+   957→    positionMs: Math.round(position * 1000),
+   958→    durationMs: Math.round(duration * 1000),
+   959→  };
+   960→  const progress = position / duration;
+   961→  if (!final || progress < 0.92) {
+   962→    upsertCw(entry);
+   963→  }
+   964→  if (final) {
+   965→    pushHistory(entry);
+   966→  }
+   967→}
+   968→
+   969→function updateTrackList(
+   970→  video: HTMLVideoElement,
+   971→  setTracks: (t: { label: string }[]) => void,
+   972→) {
+   973→  const el = video as HTMLVideoElement & { audioTracks?: { length: number; [i: number]: { label?: string; language?: string } } };
+   974→  if (el.audioTracks && el.audioTracks.length > 1) {
+   975→    const list: { label: string }[] = [];
+   976→    for (let i = 0; i < el.audioTracks.length; i++) {
+   977→      const t = el.audioTracks[i];
+   978→      list.push({ label: t.label || t.language || `Track ${i + 1}` });
+   979→    }
+   980→    setTracks(list);
+   981→  }
+   982→}
+   983→

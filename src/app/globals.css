@@ -1,0 +1,2147 @@
+/* R21-MARKER-CHECK */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* =====================================================================
+   MATERIAL DESIGN 3 — SYSTEM TOKENS (md.sys.*)
+   Static fallback layer: the exact M3 baseline scheme for Harbor's default
+   "cool-grey" seed. At runtime src/lib/harbor/md3/apply.ts REGENERATES every
+   --md-sys-color-* role from the active theme's seed (Material Color
+   Utilities) and re-derives the legacy Harbor vars from these roles.
+   ===================================================================== */
+
+:root {
+  /* ---- md.sys.color — dark scheme fallback (engine overrides at runtime) ---- */
+  --md-sys-color-primary: #ffb77d;
+  --md-sys-color-on-primary: #4d2600;
+  --md-sys-color-primary-container: #6e3900;
+  --md-sys-color-on-primary-container: #e1e7b0;
+  --md-sys-color-secondary: #d8c2a9;
+  --md-sys-color-on-secondary: #392e1e;
+  --md-sys-color-secondary-container: #514433;
+  --md-sys-color-on-secondary-container: #f5dfc3;
+  --md-sys-color-tertiary: #b0ccb1;
+  --md-sys-color-on-tertiary: #1c3120;
+  --md-sys-color-tertiary-container: #324834;
+  --md-sys-color-on-tertiary-container: #cce8ca;
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+  --md-sys-color-surface: #111416;
+  --md-sys-color-surface-dim: #111416;
+  --md-sys-color-surface-bright: #37393b;
+  --md-sys-color-surface-container-lowest: #0c0e10;
+  --md-sys-color-surface-container-low: #191b1e;
+  --md-sys-color-surface-container: #1d2022;
+  --md-sys-color-surface-container-high: #282a2c;
+  --md-sys-color-surface-container-highest: #333537;
+  --md-sys-color-on-surface: #e2e2e5;
+  --md-sys-color-on-surface-variant: #c3c7cb;
+  --md-sys-color-outline: #8d9196;
+  --md-sys-color-outline-variant: #43474b;
+  --md-sys-color-inverse-surface: #e2e2e5;
+  --md-sys-color-inverse-on-surface: #2e3132;
+  --md-sys-color-inverse-primary: #834f00;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-shadow: #000000;
+
+  /* ---- md.sys.type — full M3 type scale (consumed via md- classes) ---- */
+  --md-sys-typescale-display-large-size: 57px;
+  --md-sys-typescale-display-large-line-height: 64px;
+  --md-sys-typescale-display-large-weight: 500;
+  --md-sys-typescale-display-medium-size: 45px;
+  --md-sys-typescale-display-medium-line-height: 52px;
+  --md-sys-typescale-display-medium-weight: 500;
+  --md-sys-typescale-display-small-size: 36px;
+  --md-sys-typescale-display-small-line-height: 44px;
+  --md-sys-typescale-display-small-weight: 500;
+  --md-sys-typescale-headline-large-size: 32px;
+  --md-sys-typescale-headline-large-line-height: 40px;
+  --md-sys-typescale-headline-large-weight: 500;
+  --md-sys-typescale-headline-medium-size: 28px;
+  --md-sys-typescale-headline-medium-line-height: 36px;
+  --md-sys-typescale-headline-medium-weight: 500;
+  --md-sys-typescale-headline-small-size: 24px;
+  --md-sys-typescale-headline-small-line-height: 32px;
+  --md-sys-typescale-headline-small-weight: 500;
+  --md-sys-typescale-title-large-size: 22px;
+  --md-sys-typescale-title-large-line-height: 28px;
+  --md-sys-typescale-title-large-weight: 500;
+  --md-sys-typescale-title-medium-size: 16px;
+  --md-sys-typescale-title-medium-line-height: 24px;
+  --md-sys-typescale-title-medium-weight: 600;
+  --md-sys-typescale-title-medium-tracking: 0.15px;
+  --md-sys-typescale-title-small-size: 14px;
+  --md-sys-typescale-title-small-line-height: 20px;
+  --md-sys-typescale-title-small-weight: 600;
+  --md-sys-typescale-title-small-tracking: 0.1px;
+  --md-sys-typescale-body-large-size: 16px;
+  --md-sys-typescale-body-large-line-height: 24px;
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-large-tracking: 0.25px;
+  --md-sys-typescale-body-medium-size: 14px;
+  --md-sys-typescale-body-medium-line-height: 20px;
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-medium-tracking: 0.25px;
+  --md-sys-typescale-body-small-size: 12px;
+  --md-sys-typescale-body-small-line-height: 16px;
+  --md-sys-typescale-body-small-weight: 400;
+  --md-sys-typescale-body-small-tracking: 0.4px;
+  --md-sys-typescale-label-large-size: 14px;
+  --md-sys-typescale-label-large-line-height: 20px;
+  --md-sys-typescale-label-large-weight: 600;
+  --md-sys-typescale-label-large-tracking: 0.1px;
+  --md-sys-typescale-label-medium-size: 12px;
+  --md-sys-typescale-label-medium-line-height: 16px;
+  --md-sys-typescale-label-medium-weight: 600;
+  --md-sys-typescale-label-medium-tracking: 0.5px;
+  --md-sys-typescale-label-small-size: 11px;
+  --md-sys-typescale-label-small-line-height: 16px;
+  --md-sys-typescale-label-small-weight: 600;
+  --md-sys-typescale-label-small-tracking: 0.5px;
+
+  /* ---- md.sys.shape — M3 corner scale ---- */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* ---- md.sys.elevation — M3 shadow stacks (level 0–5) ---- */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-4: 0 2px 3px rgba(0, 0, 0, 0.3), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-5: 0 4px 4px rgba(0, 0, 0, 0.3), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+
+  /* ---- md.sys.motion — M3 easing + durations ---- */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-easing-decelerate: cubic-bezier(0, 0, 0, 1);
+  --md-sys-motion-easing-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-duration-short1: 50ms;
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short3: 150ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium1: 250ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium3: 350ms;
+  --md-sys-motion-duration-medium4: 400ms;
+  --md-sys-motion-duration-long1: 450ms;
+  --md-sys-motion-duration-long2: 500ms;
+  --md-sys-motion-duration-long3: 550ms;
+  --md-sys-motion-duration-long4: 600ms;
+
+  /* ---- shadcn/ui tokens → retargeted to M3 roles (dialogs, selects, toasts) ---- */
+  --radius: 0.75rem; /* M3 corner-medium */
+  --background: var(--md-sys-color-surface);
+  --foreground: var(--md-sys-color-on-surface);
+  --card: var(--md-sys-color-surface-container-low);
+  --card-foreground: var(--md-sys-color-on-surface);
+  --popover: var(--md-sys-color-surface-container-high);
+  --popover-foreground: var(--md-sys-color-on-surface);
+  --primary: var(--md-sys-color-primary);
+  --primary-foreground: var(--md-sys-color-on-primary);
+  --secondary: var(--md-sys-color-secondary-container);
+  --secondary-foreground: var(--md-sys-color-on-secondary-container);
+  --muted: var(--md-sys-color-surface-container-high);
+  --muted-foreground: var(--md-sys-color-on-surface-variant);
+  --accent: var(--md-sys-color-surface-container-highest);
+  --accent-foreground: var(--md-sys-color-on-surface);
+  --destructive: var(--md-sys-color-error);
+  --border: var(--md-sys-color-outline-variant);
+  --input: var(--md-sys-color-outline-variant);
+  --ring: var(--md-sys-color-primary);
+  --chart-1: var(--md-sys-color-primary);
+  --chart-2: var(--md-sys-color-tertiary);
+  --chart-3: var(--md-sys-color-secondary);
+  --chart-4: var(--md-sys-color-inverse-primary);
+  --chart-5: var(--md-sys-color-error);
+  --sidebar: var(--md-sys-color-surface-container-low);
+  --sidebar-foreground: var(--md-sys-color-on-surface);
+  --sidebar-primary: var(--md-sys-color-primary);
+  --sidebar-primary-foreground: var(--md-sys-color-on-primary);
+  --sidebar-accent: var(--md-sys-color-secondary-container);
+  --sidebar-accent-foreground: var(--md-sys-color-on-secondary-container);
+  --sidebar-border: var(--md-sys-color-outline-variant);
+  --sidebar-ring: var(--md-sys-color-primary);
+
+  /* ---- Harbor semantic layer → defaults derive from M3 roles.
+         (apply.ts rewrites these inline per theme at runtime) ---- */
+  --color-canvas-var: var(--md-sys-color-surface);
+  --color-surface-var: var(--md-sys-color-surface-container-low);
+  --color-elevated-var: var(--md-sys-color-surface-container);
+  --color-raised-var: var(--md-sys-color-surface-container-high);
+  --color-ink-var: var(--md-sys-color-on-surface);
+  --color-ink-muted-var: var(--md-sys-color-on-surface-variant);
+  --color-ink-subtle-var: var(--md-sys-color-outline);
+  --color-edge-var: var(--md-sys-color-outline-variant);
+  --color-edge-soft-var: color-mix(in srgb, var(--md-sys-color-outline-variant) 55%, transparent);
+  --color-accent-var: var(--md-sys-color-primary);
+  --color-accent-soft-var: var(--md-sys-color-primary-container);
+  --color-danger-var: var(--md-sys-color-error);
+  --font-display-var: "Sentient", Georgia, serif;
+  --font-sans-var: "Switzer", "Inter", system-ui, sans-serif;
+  --poster-radius: var(--md-sys-shape-corner-medium);
+  --theme-bg-image: none;
+  --theme-bg-dim: 0.65;
+}
+
+/* Light-scheme static fallback (engine regenerates per seed at runtime) */
+html[data-appearance="light"] {
+  color-scheme: light;
+  --md-sys-color-surface: #fcf9f4;
+  --md-sys-color-surface-dim: #ded8ce;
+  --md-sys-color-surface-bright: #fcf9f4;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f3ec;
+  --md-sys-color-surface-container: #f1ede5;
+  --md-sys-color-surface-container-high: #ebe8e0;
+  --md-sys-color-surface-container-highest: #e6e2da;
+  --md-sys-color-on-surface: #1d1c19;
+  --md-sys-color-on-surface-variant: #4c4639;
+  --md-sys-color-outline: #7e7667;
+  --md-sys-color-outline-variant: #cfc6b4;
+  --md-sys-color-inverse-surface: #32302c;
+  --md-sys-color-inverse-on-surface: #f5f1ea;
+  --md-sys-color-scrim: #000000;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============ Harbor Web Design System (M3-bridged) ============ */
+/* The Harbor semantic vocabulary (bg-canvas / text-ink / bg-accent …) is kept
+   as the app's component-facing language — it now maps onto md.sys roles via
+   the -var indirection above and the runtime engine in src/lib/harbor/md3/. */
+
+@theme inline {
+  --color-canvas: var(--color-canvas-var);
+  --color-surface: var(--color-surface-var);
+  --color-elevated: var(--color-elevated-var);
+  --color-raised: var(--color-raised-var);
+  --color-ink: var(--color-ink-var);
+  --color-ink-muted: var(--color-ink-muted-var);
+  --color-ink-subtle: var(--color-ink-subtle-var);
+  --color-edge: var(--color-edge-var);
+  --color-edge-soft: var(--color-edge-soft-var);
+  --color-accent: var(--color-accent-var);
+  --color-accent-soft: var(--color-accent-soft-var);
+  --color-danger: var(--color-danger-var);
+  --font-display: var(--font-display-var);
+  --font-sans: var(--font-sans-var);
+  /* Harbor radii now alias the M3 shape scale */
+  --radius-harbor-sm: var(--md-sys-shape-corner-small);
+  --radius-harbor: var(--md-sys-shape-corner-medium);
+  --radius-harbor-lg: var(--md-sys-shape-corner-large);
+  --radius-harbor-xl: var(--md-sys-shape-corner-extra-large);
+}
+
+html {
+  background: var(--color-canvas-var);
+}
+html[data-appearance="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-canvas-var);
+  color: var(--color-ink-var);
+  font-family: var(--font-sans-var);
+}
+
+/* ============ M3 COMPONENT PRIMITIVES (state layers + building blocks) ============ */
+/* State layers per spec: hover 8% / focus 10% / pressed 10% / dragged 16%,
+   painted with currentColor so they inherit the component's content color.
+   NOTE: these live in @layer components so Tailwind utilities (later layer)
+   can override them — e.g. .absolute on a .md-state element, or after:-inset-1
+   expanded hit targets. Unlayered rules would silently beat ALL utilities. */
+@layer components {
+  .md-state {
+    position: relative;
+    overflow: hidden;
+  }
+  .md-state::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+    pointer-events: none;
+  }
+  @media (hover: hover) {
+    .md-state:hover::after {
+      opacity: 0.08;
+    }
+  }
+  .md-state:focus-visible::after {
+    opacity: 0.1;
+  }
+  .md-state:active::after {
+    opacity: 0.1;
+  }
+  .md-state[data-dragged="true"]::after {
+    opacity: 0.16;
+  }
+  .md-state:disabled::after {
+    opacity: 0;
+  }
+  .md-state:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+}
+
+/* Common buttons (corner-full, label-large, 40dp, state layers).
+   BUGFIX (shared): every variant class below ALSO carries the base layout
+   declarations. Historically variants only painted colors, so any button that
+   used `md-btn-filled` without `md-btn` rendered as a square UA rectangle with
+   the icon pinned to the corner (Settings → Integrations link buttons).
+   Making variants self-sufficient fixes every instance app-wide. */
+.md-btn,
+.md-btn-filled,
+.md-btn-tonal,
+.md-btn-elevated,
+.md-btn-outlined,
+.md-btn-text,
+.md-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1.5rem;
+  border-radius: var(--md-sys-shape-corner-full);
+  font-family: var(--font-sans-var);
+  font-size: var(--md-sys-typescale-label-large-size);
+  line-height: var(--md-sys-typescale-label-large-line-height);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.md-btn-filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+.md-btn-filled:hover {
+  box-shadow: var(--md-sys-elevation-1);
+}
+.md-btn-tonal {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.md-btn-elevated {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-1);
+}
+.md-btn-elevated:hover {
+  box-shadow: var(--md-sys-elevation-2);
+}
+.md-btn-outlined {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline);
+}
+.md-btn-text {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  padding: 0 0.75rem;
+}
+/* Text buttons keep their compact padding even standalone (no base class). */
+button.md-btn-text:not(.md-btn) {
+  height: 2.25rem;
+}
+.md-btn-danger {
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+}
+.md-btn .md-btn-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Icon buttons (40dp pill hit area ≥48 with padding by callers) */
+.md-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--md-sys-shape-corner-full);
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+}
+.md-icon-btn-filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+.md-icon-btn-tonal {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.md-icon-btn-outlined {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-primary);
+  background: transparent;
+}
+
+/* FAB (56dp, corner-large, primary-container) + extended FAB */
+.md-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-width: 3.5rem;
+  height: 3.5rem;
+  padding: 0 1rem;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  box-shadow: var(--md-sys-elevation-3);
+  border: none;
+  cursor: pointer;
+  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.md-fab:hover {
+  box-shadow: var(--md-sys-elevation-4);
+}
+
+/* Chips (assist/filter/suggestion — 32dp pill, outline, label-large) */
+.md-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: var(--font-sans-var);
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.md-chip-selected {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border-color: transparent;
+}
+
+/* Cards: filled / elevated / outlined (corner-medium) */
+.md-card-filled {
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+.md-card-elevated {
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-1);
+}
+.md-card-outlined {
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/* Dialogs / sheets / snackbars / tooltips per M3 shape+color spec */
+.md-dialog {
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-3);
+}
+.md-sheet {
+  border-radius: var(--md-sys-shape-corner-extra-large) var(--md-sys-shape-corner-extra-large) 0 0;
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+}
+.md-snackbar {
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  box-shadow: var(--md-sys-elevation-3);
+}
+.md-tooltip {
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+}
+
+/* Text fields (outlined: 4dp corners, focus primary 2px; filled: top-rounded) */
+.md-field-outlined {
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  border: 1px solid var(--md-sys-color-outline);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  transition: border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.md-field-outlined:focus-within,
+.md-field-outlined:focus {
+  border-color: var(--md-sys-color-primary);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+}
+.md-field-filled {
+  border-radius: var(--md-sys-shape-corner-extra-small) var(--md-sys-shape-corner-extra-small) 0 0;
+  border: none;
+  border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  transition: border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.md-field-filled:focus-within,
+.md-field-filled:focus {
+  border-bottom: 2px solid var(--md-sys-color-primary);
+  outline: none;
+}
+
+/* Navigation active pill (M3 nav indicator: 56x32 rounded-full container) */
+.md-nav-pill {
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.md-nav-item {
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* M3 type-scale helper classes */
+.md-display-large,
+.md-display-medium,
+.md-display-small,
+.md-headline-large,
+.md-headline-medium,
+.md-headline-small,
+.md-title-large,
+.md-title-medium,
+.md-title-small,
+.md-body-large,
+.md-body-medium,
+.md-body-small,
+.md-label-large,
+.md-label-medium,
+.md-label-small {
+  font-family: var(--font-sans-var);
+}
+.md-display-large { font-size: var(--md-sys-typescale-display-large-size); line-height: var(--md-sys-typescale-display-large-line-height); font-weight: var(--md-sys-typescale-display-large-weight); }
+.md-display-medium { font-size: var(--md-sys-typescale-display-medium-size); line-height: var(--md-sys-typescale-display-medium-line-height); font-weight: var(--md-sys-typescale-display-medium-weight); }
+.md-display-small { font-size: var(--md-sys-typescale-display-small-size); line-height: var(--md-sys-typescale-display-small-line-height); font-weight: var(--md-sys-typescale-display-small-weight); }
+.md-headline-large { font-size: var(--md-sys-typescale-headline-large-size); line-height: var(--md-sys-typescale-headline-large-line-height); font-weight: var(--md-sys-typescale-headline-large-weight); }
+.md-headline-medium { font-size: var(--md-sys-typescale-headline-medium-size); line-height: var(--md-sys-typescale-headline-medium-line-height); font-weight: var(--md-sys-typescale-headline-medium-weight); }
+.md-headline-small { font-size: var(--md-sys-typescale-headline-small-size); line-height: var(--md-sys-typescale-headline-small-line-height); font-weight: var(--md-sys-typescale-headline-small-weight); }
+.md-title-large { font-size: var(--md-sys-typescale-title-large-size); line-height: var(--md-sys-typescale-title-large-line-height); font-weight: var(--md-sys-typescale-title-large-weight); }
+.md-title-medium { font-size: var(--md-sys-typescale-title-medium-size); line-height: var(--md-sys-typescale-title-medium-line-height); font-weight: var(--md-sys-typescale-title-medium-weight); letter-spacing: var(--md-sys-typescale-title-medium-tracking); }
+.md-title-small { font-size: var(--md-sys-typescale-title-small-size); line-height: var(--md-sys-typescale-title-small-line-height); font-weight: var(--md-sys-typescale-title-small-weight); letter-spacing: var(--md-sys-typescale-title-small-tracking); }
+.md-body-large { font-size: var(--md-sys-typescale-body-large-size); line-height: var(--md-sys-typescale-body-large-line-height); font-weight: var(--md-sys-typescale-body-large-weight); letter-spacing: var(--md-sys-typescale-body-large-tracking); }
+.md-body-medium { font-size: var(--md-sys-typescale-body-medium-size); line-height: var(--md-sys-typescale-body-medium-line-height); font-weight: var(--md-sys-typescale-body-medium-weight); letter-spacing: var(--md-sys-typescale-body-medium-tracking); }
+.md-body-small { font-size: var(--md-sys-typescale-body-small-size); line-height: var(--md-sys-typescale-body-small-line-height); font-weight: var(--md-sys-typescale-body-small-weight); letter-spacing: var(--md-sys-typescale-body-small-tracking); }
+.md-label-large { font-size: var(--md-sys-typescale-label-large-size); line-height: var(--md-sys-typescale-label-large-line-height); font-weight: var(--md-sys-typescale-label-large-weight); letter-spacing: var(--md-sys-typescale-label-large-tracking); }
+.md-label-medium { font-size: var(--md-sys-typescale-label-medium-size); line-height: var(--md-sys-typescale-label-medium-line-height); font-weight: var(--md-sys-typescale-label-medium-weight); letter-spacing: var(--md-sys-typescale-label-medium-tracking); }
+.md-label-small { font-size: var(--md-sys-typescale-label-small-size); line-height: var(--md-sys-typescale-label-small-line-height); font-weight: var(--md-sys-typescale-label-small-weight); letter-spacing: var(--md-sys-typescale-label-small-tracking); }
+
+/* M3 emphasized easing for interactive transforms (Expressive-lite) */
+.md-expressive {
+  transition-timing-function: var(--md-sys-motion-easing-emphasized);
+}
+
+/* ============ Existing Harbor sections — unchanged, now M3-colored ============ */
+
+/* Theme backdrop layer */
+.harbor-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--theme-bg-image);
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+.harbor-bg-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-canvas-var) 100%, transparent);
+  opacity: var(--theme-bg-dim);
+}
+
+/* Bokeh aurora backdrop (featured themes) */
+.harbor-bokeh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.harbor-bokeh::before,
+.harbor-bokeh::after {
+  content: "";
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.16;
+  animation: harbor-float 26s ease-in-out infinite alternate;
+}
+.harbor-bokeh::before {
+  background: var(--color-accent-var);
+  top: -20vh;
+  left: -10vw;
+}
+.harbor-bokeh::after {
+  background: color-mix(in oklab, var(--color-accent-var) 60%, #6ea8fe);
+  bottom: -25vh;
+  right: -15vw;
+  animation-delay: -12s;
+}
+@keyframes harbor-float {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6vw, 8vh, 0) scale(1.15); }
+}
+
+/* Scrollbars */
+.harbor-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.harbor-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.harbor-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-outline) 55%, transparent);
+  border-radius: 999px;
+}
+.harbor-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--md-sys-color-outline) 80%, transparent);
+}
+.harbor-scroll-x {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.harbor-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* Layout variants */
+html[data-theme-layout="stremio"] .harbor-nav-item.active {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-accent-var) 30%, transparent), transparent);
+  border-left: 3px solid var(--color-accent-var);
+}
+html[data-theme-card="stremio"] .harbor-card {
+  background: linear-gradient(180deg, var(--color-elevated-var), var(--color-surface-var));
+  border: 1px solid var(--color-edge-var);
+  box-shadow: var(--md-sys-elevation-2);
+}
+html[data-theme-card="glass"] .harbor-card,
+html[data-theme-card="glass"] .harbor-panel {
+  background: color-mix(in oklab, var(--color-elevated-var) 65%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+html[data-theme-card="crunch"] .harbor-card {
+  border: 1px solid color-mix(in srgb, var(--color-accent-var) 25%, transparent);
+}
+html[data-theme-card="noir"] .harbor-card {
+  background: color-mix(in srgb, var(--color-canvas-var) 92%, #ffffff);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Kids mode visual — the M3 engine re-seeds the WHOLE scheme pink when
+   settings.kidsMode is on; these legacy overrides remain as first-paint
+   fallback before hydration. */
+html[data-kids="on"] {
+  --color-accent-var: #f472b6;
+  --color-accent-soft-var: rgba(244, 114, 182, 0.22);
+}
+/* Kids Corner decorative blobs — styled ALWAYS (positioned + blurred), not
+   just in Kids Mode: unstyled static blocks used to push the whole page down
+   ~1000px when Kids Mode was off. */
+.harbor-kids-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+html[data-kids="on"] .harbor-kids-blob {
+  opacity: 0.35;
+}
+
+/* Poster hover lift — M3 emphasized easing + elevation tokens */
+.harbor-poster {
+  border-radius: var(--poster-radius);
+  overflow: hidden;
+  transition: transform 0.22s var(--md-sys-motion-easing-emphasized), box-shadow 0.22s var(--md-sys-motion-easing-emphasized), outline-color 0.22s;
+  outline: 2px solid transparent;
+  outline-offset: -1px;
+}
+.harbor-poster:hover {
+  transform: translateY(-4px) scale(1.03);
+  box-shadow:
+    var(--md-sys-elevation-3),
+    0 0 0 1px color-mix(in oklab, var(--color-accent-var) 55%, transparent),
+    0 6px 24px -6px color-mix(in oklab, var(--color-accent-var) 35%, transparent);
+  z-index: 5;
+}
+.harbor-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--color-raised-var);
+}
+
+/* Hero ken-burns drift (Harbor-style cinematic background motion) */
+.harbor-kenburns {
+  animation: harbor-kenburns 14s ease-out forwards;
+  will-change: transform;
+}
+@keyframes harbor-kenburns {
+  from { transform: scale(1.02) translateY(0); }
+  to { transform: scale(1.12) translateY(-1.5%); }
+}
+
+/* Hero content rise-in on slide change */
+.harbor-hero-rise {
+  animation: harbor-hero-rise 0.65s var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+@keyframes harbor-hero-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pop-in for dialogs / menus / banners */
+.harbor-pop-in {
+  animation: harbor-pop-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes harbor-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sidebar active accent bar */
+.harbor-nav-item {
+  position: relative;
+}
+.harbor-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-accent-var);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--color-accent-var) 80%, transparent);
+}
+/* stremio layout variant already paints a left border — avoid double bar */
+html[data-theme-layout="stremio"] .harbor-nav-item.active::before {
+  display: none;
+}
+
+/* Skeleton shimmer */
+.harbor-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--color-elevated-var) 40%,
+    var(--color-raised-var) 50%,
+    var(--color-elevated-var) 60%
+  );
+  background-size: 200% 100%;
+  animation: harbor-shimmer 1.4s ease infinite;
+}
+@keyframes harbor-shimmer {
+  to { background-position: -200% 0; }
+}
+
+/* Seek bar styles */
+.harbor-seek-rainbow {
+  background: linear-gradient(90deg, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #8b5cf6);
+}
+
+/* Unknown-duration seek bar: honest indeterminate shimmer (no % claim).
+   Reduced-motion users get a static dim block instead. */
+@keyframes harbor-seek-indet {
+  0% { transform: translateX(-10%); opacity: 0.55; }
+  50% { transform: translateX(260%); opacity: 0.9; }
+  100% { transform: translateX(-10%); opacity: 0.55; }
+}
+.harbor-seek-indeterminate {
+  animation: harbor-seek-indet 2.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .harbor-seek-indeterminate {
+    animation: none;
+    transform: none;
+    opacity: 0.35;
+  }
+}
+
+/* Subtitle rendering — PROTECTED: single subtitle layer; do not tokenize the
+   white fill/shadow (readability on video is not theme-dependent). */
+.harbor-subtitle {
+  font-size: calc(var(--sub-font-size, 28) * 1px);
+  color: #ffffff;
+  text-align: center;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 2px 6px rgba(0, 0, 0, 0.7);
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+/* Focus rings for TV navigation */
+.harbor-tv-focus:focus-visible {
+  outline: 3px solid var(--color-accent-var);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* TV mode active (arrow-key navigation) — universal visible focus ring */
+html[data-tv="on"] :is(button, a[href], [role="button"], [role="tab"], input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-accent-var);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+/* TV mode: focused cards lift slightly so the selection reads from a couch distance */
+html[data-tv="on"] button:focus-visible,
+html[data-tv="on"] [role="button"]:focus-visible {
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent-var) 22%, transparent);
+}
+
+/* Line clamp helpers */
+.harbor-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.harbor-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.harbor-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Hide scrollbar for Chrome-like sidebars in rail modes */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ============ Round 6 polish ============ */
+
+/* Rail sections rise in the first time they scroll into view (see section-rails.tsx) */
+.harbor-rise-in {
+  animation: harbor-rise-in 500ms var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+@keyframes harbor-rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered children: the container gets .harbor-stagger and --stagger-i (rail index mod 8);
+   the per-rail delay is capped at 480ms so deep rows never feel sluggish */
+.harbor-stagger > * {
+  animation: harbor-rise-in 500ms var(--md-sys-motion-easing-emphasized-decelerate) both;
+  animation-delay: min(calc(var(--stagger-i, 0) * 60ms), 480ms);
+}
+
+/* Shared card hover affordance: border + accent-tinted glow consistent with .harbor-poster.
+   (Lift/translate stays in Tailwind utilities so callers tune the distance.) */
+.harbor-lift-card {
+  transition: translate 0.25s var(--md-sys-motion-easing-emphasized), transform 0.25s var(--md-sys-motion-easing-emphasized),
+    border-color 0.25s, box-shadow 0.25s;
+}
+.harbor-lift-card:hover,
+.harbor-lift-card:focus-within {
+  border-color: color-mix(in oklab, var(--color-accent-var) 45%, transparent);
+  box-shadow:
+    var(--md-sys-elevation-2),
+    0 0 0 1px color-mix(in oklab, var(--color-accent-var) 35%, transparent),
+    0 10px 30px -12px color-mix(in oklab, var(--color-accent-var) 32%, transparent);
+}
+
+/* Reduced motion: entrance animations resolve instantly, no travel or fade.
+   Round 7: also stills the skeleton shimmer, pop-ins, ken-burns and hero rises.
+   M3: every md-* transition class also resolves instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .harbor-rise-in,
+  .harbor-stagger > *,
+  .harbor-pop-in,
+  .harbor-skeleton,
+  .harbor-kenburns,
+  .harbor-hero-rise {
+    animation: none;
+  }
+  .md-state::after,
+  .md-btn,
+  .md-fab,
+  .md-chip,
+  .md-card-elevated,
+  .md-field-outlined,
+  .md-field-filled,
+  .md-expressive {
+    transition: none !important;
+  }
+}
+
+/* ============ Round 7 polish ============ */
+
+/* Text selection picks up the theme accent (subtle tint, ink stays readable) */
+::selection {
+  background: color-mix(in oklab, var(--color-accent-var) 30%, transparent);
+  color: var(--color-ink-var);
+}
+
+/* App-wide keyboard-focus fallback: subtle accent ring for elements that provide
+   no ring of their own (plain buttons, role=button rows, native controls).
+   Mouse users never see it; components that opt out via outline utilities
+   (shadcn ring style) keep their own treatment. Lower specificity than
+   .harbor-tv-focus / html[data-tv="on"] rules, so those always win. */
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-accent-var) 65%, transparent);
+  outline-offset: 2px;
+}
+:where([class~="outline-none"], [class~="outline-hidden"]):focus-visible {
+  outline-style: none;
+}
+
+/* Stream picker rows: keyboard scrollIntoView should not clip rows under the
+   picker's fixed header/filter band, and keyboard focus gets a soft accent glow */
+.harbor-picker-row {
+  scroll-margin-top: 96px;
+  scroll-margin-bottom: 24px;
+}
+.harbor-picker-row:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-accent-var) 85%, transparent);
+  outline-offset: 2px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--color-accent-var) 55%, transparent),
+    0 0 20px -4px color-mix(in oklab, var(--color-accent-var) 45%, transparent);
+}
+/* Inside the picker, non-row controls (close/refresh/unlock/filter) get a slightly
+   stronger glow than the app default so focus reads at couch distance */
+.harbor-picker-body .harbor-tv-focus:focus-visible:not(.harbor-picker-row) {
+  outline-width: 3px;
+  box-shadow: 0 0 22px -4px color-mix(in oklab, var(--color-accent-var) 45%, transparent);
+}
+html[data-tv="on"] .harbor-picker-row:focus-visible {
+  outline-offset: 3px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--color-accent-var) 70%, transparent),
+    0 0 26px -2px color-mix(in oklab, var(--color-accent-var) 55%, transparent);
+}
+
+/* Generic stat card + accent icon chip (Wrapped empty state today, reusable later) */
+.harbor-stat-card {
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--color-edge-soft-var);
+  background: color-mix(in oklab, var(--color-elevated-var) 60%, transparent);
+  padding: 1rem;
+}
+.harbor-stat-card.is-placeholder {
+  border-style: dashed;
+  background: color-mix(in oklab, var(--color-elevated-var) 30%, transparent);
+}
+.harbor-stat-chip {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--color-accent-soft-var);
+  color: var(--color-accent-var);
+  border: 1px solid color-mix(in oklab, var(--color-accent-var) 30%, transparent);
+}
+
+/* ============ Floating search glass (Feature: floating search bar) ============ */
+/* Theme-aware glassmorphism: translucent canvas + blur + saturation boost.
+   @supports fallback: without backdrop-filter we raise the fill opacity so
+   text contrast never depends on blur support. */
+.harbor-glass {
+  background: color-mix(in oklab, var(--color-canvas-var) 78%, transparent);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .harbor-glass {
+    background: color-mix(in oklab, var(--color-canvas-var) 96%, transparent);
+  }
+}
+/* Subtle top-edge highlight for the glass surface */
+.harbor-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  pointer-events: none;
+}
+
+/* ============ Round 8 polish ============ */
+/* Additive-only: command palette (chrome/command-palette.tsx) helpers. */
+
+/* Palette results area: caps height so long command lists scroll internally.
+   Apply alongside .harbor-scroll in JSX for the themed scrollbar styling. */
+.harbor-palette-scroll {
+  max-height: min(420px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Keyboard-hint chip: palette input row + footer (and reusable elsewhere).
+   Round 7 glass-chip language: raised surface, soft edge, mono, tiny caps. */
+.harbor-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-edge-soft-var);
+  background: color-mix(in oklab, var(--color-raised-var) 85%, transparent);
+  color: var(--color-ink-subtle-var);
+  padding: 0.05rem 0.375rem;
+  font-size: 10px;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Reduced motion: the palette reuses .harbor-pop-in only (already stilled by the
+   guard above); Round 8 introduces no new animations, so no extra rules needed. */
+
+/* ============ Floating glass dock (nav redesign: sidebar → bottom glass bar) ============ */
+/* RESPONSIVE SIZE SYSTEM (round-22). One token set per WINDOW SIZE CLASS
+   (media queries below = the window classes); every value multiplies by
+   --nav-zoom (app UI zoom hook, clamped ≤110%) and --nav-kids (kids mode,
+   ≤8% larger). The old bug: the Figma web-spec values (420×73, icons 26)
+   were applied statically to every viewport — phones got a desktop-sized bar.
+   Capsule width is fluid inside the phone classes (100vw-based) and capped by
+   --nav-max (never wider than 100vw - 16px). Tune any value here — components
+   never hardcode them. */
+:root {
+  /* Zoom hooks: --ui-zoom is the (future) global UI zoom setting; --nav-zoom
+     clamps it so the bar never grows beyond 110% of its base size. */
+  --nav-zoom: min(var(--ui-zoom, 1), 1.1);
+  --nav-kids: 1; /* kids mode → 1.08 (max +8%) */
+
+  /* --- Window class: compact phone (360–599) = base --- */
+  --nav-height: calc(64px * var(--nav-zoom) * var(--nav-kids));
+  --nav-tab-height: calc(48px * var(--nav-zoom) * var(--nav-kids));
+  --nav-icon-size: calc(24px * var(--nav-zoom) * var(--nav-kids));
+  --nav-width: min(calc(100vw - 32px), calc(340px * var(--nav-zoom) * var(--nav-kids)));
+  --nav-max: calc(100vw - 16px); /* hard viewport guard (requirement 4) */
+  --nav-side-margin: calc(16px * var(--nav-zoom));
+  --nav-bottom-offset: calc(16px * var(--nav-zoom));
+  --nav-padding: calc(8px * var(--nav-zoom));
+  --nav-radius: 9999px;
+  --nav-glass-fill: rgba(255, 255, 255, 0.07);
+  --nav-glass-border: rgba(191, 230, 242, 0.35);
+  --nav-blur: 12px;
+  --nav-shadow: none;
+  --nav-active-fill: rgba(255, 255, 255, 0.16);
+  --nav-icon-active: #f5f5f5;
+  --nav-icon-inactive: rgba(255, 255, 255, 0.75);
+  /* Derived helpers (implementation support) */
+  --nav-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --nav-glass-fallback: var(--md-sys-color-surface-container-high);
+  /* Content clearance = nav height + bottom offset + safe area + 16px
+     (requirement 7) — consumed by app-shell's main bottom padding. */
+  --nav-clearance: calc(var(--nav-height) + var(--nav-bottom-offset) + env(safe-area-inset-bottom) + 16px);
+
+  /* --- z-index token map (round-22 documentation) ---
+     content(auto) < hero overlays(2, --hero-*) < --z-nav < --z-banner
+     < --z-search-bar < --z-search-overlay < --z-picker < --z-player
+     < --z-shortcuts < --z-palette. The full-screen search sits ABOVE the
+     nav/hero/floating bar and BELOW the picker/player/palette. */
+  --z-nav: 40;
+  --z-banner: 50;
+  --z-search-bar: 85;
+  --z-search-overlay: 120;
+  --z-picker: 150;
+  --z-player: 180;
+  --z-shortcuts: 290;
+  --z-palette: 300;
+}
+
+/* Window-class ladder. Same specificity as the base block → source order wins;
+   each class only re-declares SIZE tokens (glass colors stay shared). */
+/* Small phone (<360): tighter capsule + 6px inner padding */
+@media (max-width: 359.98px) {
+  :root {
+    --nav-height: calc(58px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(42px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: min(calc(100vw - 24px), calc(300px * var(--nav-zoom) * var(--nav-kids)));
+    --nav-side-margin: calc(12px * var(--nav-zoom));
+    --nav-bottom-offset: calc(12px * var(--nav-zoom));
+    --nav-padding: calc(6px * var(--nav-zoom));
+  }
+}
+/* Tablet portrait / medium (600–839) */
+@media (min-width: 600px) {
+  :root {
+    --nav-height: calc(68px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(24px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(380px * var(--nav-zoom) * var(--nav-kids));
+    --nav-bottom-offset: calc(20px * var(--nav-zoom));
+  }
+}
+/* Tablet landscape / small desktop (840–1199) */
+@media (min-width: 840px) {
+  :root {
+    --nav-height: calc(72px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(56px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(26px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(420px * var(--nav-zoom) * var(--nav-kids));
+    --nav-bottom-offset: calc(24px * var(--nav-zoom));
+  }
+}
+/* Desktop / large (1200–1599): same chrome size, wider capsule */
+@media (min-width: 1200px) {
+  :root {
+    --nav-width: calc(440px * var(--nav-zoom) * var(--nav-kids));
+  }
+}
+/* TV / extra-large (≥1600) */
+@media (min-width: 1600px) {
+  :root {
+    --nav-height: calc(88px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(68px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(32px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(520px * var(--nav-zoom) * var(--nav-kids));
+    --nav-bottom-offset: calc(32px * var(--nav-zoom));
+  }
+}
+/* Landscape phone (height ≤ 480, any width) — LAST so it wins when a width
+   class also matches (e.g. 915×412). */
+@media (max-height: 480px) {
+  :root {
+    --nav-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(40px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: min(70vw, calc(360px * var(--nav-zoom) * var(--nav-kids)));
+    --nav-bottom-offset: calc(8px * var(--nav-zoom));
+    --nav-padding: calc(6px * var(--nav-zoom));
+  }
+}
+
+/* Light themes: derive fill/border/icons from the theme so contrast stays
+   readable over bright posters (same shape and proportions). */
+html[data-appearance="light"] {
+  --nav-glass-fill: rgba(255, 255, 255, 0.6);
+  --nav-glass-border: rgba(9, 42, 54, 0.16);
+  --nav-active-fill: rgba(9, 42, 54, 0.09);
+  --nav-icon-active: #17262e;
+  --nav-icon-inactive: rgba(15, 34, 43, 0.64);
+  --nav-glass-fallback: var(--md-sys-color-surface-container-high);
+}
+
+/* Kids Mode: friendlier tonal colors + a capped size bump (≤8%, round-22 —
+   was +15% via hardcoded 84px). Only Home and Kids tabs render (see
+   glass-dock.tsx); restrictions are untouched. */
+html[data-kids="on"] {
+  --nav-kids: 1.08;
+  --nav-glass-fill: rgba(255, 255, 255, 0.12);
+  --nav-active-fill: rgba(255, 255, 255, 0.24);
+  --nav-glass-border: rgba(255, 214, 235, 0.4);
+}
+html[data-kids="on"][data-appearance="light"] {
+  --nav-glass-fill: rgba(255, 255, 255, 0.78);
+  --nav-active-fill: rgba(244, 114, 182, 0.18);
+  --nav-glass-border: rgba(244, 114, 182, 0.35);
+}
+
+/* The capsule: stadium shape, flat translucent fill, inner stroke, background
+   blur, NO drop shadow (per spec). Fixed, centered, safe-area aware; size
+   comes entirely from the window-class tokens above. */
+.glass-dock {
+  position: fixed;
+  bottom: calc(var(--nav-bottom-offset) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-nav); /* content < hero overlays < nav < search (see --z-* map) */
+  height: var(--nav-height);
+  /* --nav-width per class, ALWAYS capped so it can never exceed the viewport
+     (notch safe-area insets included in the cap for landscape phones). */
+  width: min(var(--nav-width), var(--nav-max), calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  padding: var(--nav-padding);
+  border-radius: var(--nav-radius);
+  background: var(--nav-glass-fill);
+  border: 1px solid var(--nav-glass-border);
+  -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--nav-blur)) saturate(1.35);
+  box-shadow: var(--nav-shadow);
+  transition: transform 350ms var(--nav-motion-ease), opacity 250ms var(--nav-motion-ease);
+}
+/* Fallback: no backdrop-filter support → opaque surface-container, same shape */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-dock {
+    background: var(--nav-glass-fallback);
+  }
+}
+/* Auto-hide on scroll down (dock-auto-hide setting) */
+.glass-dock[data-hidden="true"] {
+  transform: translateX(-50%) translateY(calc(var(--nav-height) + 1.75rem));
+  opacity: 0;
+  pointer-events: none;
+  /* a11y: aria-hidden + focusable is a violation — visibility removes the
+     subtree from the a11y tree AND from tab order while keeping layout */
+  visibility: hidden;
+  transition-property: transform, opacity, visibility;
+}
+
+/* Track: equal slots, tabs vertically CENTERED inside the capsule so the
+   explicit --nav-tab-height and the pill align (RTL mirrors via dir=rtl). */
+.dock-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+}
+
+/* Shared sliding highlight pill — one element moved between slots. Sized to
+   the tab height (not the whole capsule) so it matches the visual slot. */
+.dock-pill {
+  position: absolute;
+  top: calc((100% - var(--nav-tab-height)) / 2);
+  height: var(--nav-tab-height);
+  left: 0;
+  border-radius: var(--nav-radius);
+  background: var(--nav-active-fill);
+  transition: transform 350ms var(--nav-motion-ease), width 350ms var(--nav-motion-ease);
+  will-change: transform, width;
+  pointer-events: none;
+}
+
+/* Tab: equal flex slot sized by tokens; ≥48px TOUCH target is guaranteed by
+   the ::before hit extender (never by inflating the bar). Pressed scale + M3
+   state layer (.md-state paints ::after — do not add ::after here). */
+.dock-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--nav-tab-height);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--nav-radius);
+  color: var(--nav-icon-inactive);
+  transition: color 150ms ease, transform 150ms var(--nav-motion-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.dock-tab::before {
+  content: "";
+  position: absolute;
+  /* +8px vertical reach: keeps a 50px touch target even when the visual tab
+     is 42px (small phones); horizontal reach stays inside the slot. */
+  inset: -4px 0;
+  border-radius: inherit;
+}
+.dock-tab:active {
+  transform: scale(0.96);
+}
+.dock-tab[aria-current="page"] {
+  color: var(--nav-icon-active);
+}
+
+/* Icon frame: consistent 26px box; outline→filled cross-fade in 150ms. */
+.dock-icon-frame {
+  position: relative;
+  width: var(--nav-icon-size);
+  height: var(--nav-icon-size);
+}
+.dock-icon-frame svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 150ms ease;
+}
+.dock-icon-filled {
+  opacity: 0;
+}
+.dock-tab[aria-current="page"] .dock-icon-outline {
+  opacity: 0;
+}
+.dock-tab[aria-current="page"] .dock-icon-filled {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-dock,
+  .dock-pill,
+  .dock-tab,
+  .dock-icon-frame svg {
+    transition: none;
+  }
+}
+
+/* ============ Home rebuild: full-bleed hero + continue watching (round-21/21b) ============ */
+/* Single source of truth for every visual value of the Home top. The 360dp
+   mobile reference values are the 1× base; every size token derives from the
+   --home-scale driver below, so the design scales proportionally on tablets,
+   laptops, desktops and large monitors (round-21b). Text-ish tokens cap at
+   1.35–1.5× so nothing turns cartoonish on huge screens. Dark reference
+   values are the default; light appearance derives the fade/page from the
+   theme canvas so the "no visible seam" rule holds in every theme. Tune any
+   value here — the components never hardcode them. */
+:root {
+  /* Responsive scale driver (round-21b). Ladder lives right after this block. */
+  --home-scale: 1;
+
+  /* Hero container — 67svh is intrinsically proportional; the ceiling scales
+     so tall phones stay sane while big screens grow with the viewport. */
+  --hero-height: clamp(440px, 67svh, calc(720px * var(--home-scale)));
+  --hero-fade: #000000; /* OLED black dissolve target (spec) */
+  --hero-scrim-top: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0) 14%);
+  --hero-scrim-fade: linear-gradient(to bottom, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.55) 68%, var(--hero-fade) 97%);
+
+  /* Hero content stack */
+  --hero-content-max-w: calc(640px * var(--home-scale));
+  --hero-logo-max-w: min(66vw, calc(320px * var(--home-scale)));
+  --hero-logo-max-h: calc(68px * var(--home-scale)); /* round-21b: 56 → 68 (user: logo too small) */
+  --hero-logo-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --hero-title-size: calc(40px * var(--home-scale));
+  --hero-title-size-m: clamp(calc(24px * var(--home-scale)), 8.5vw, calc(30px * var(--home-scale)));
+  --hero-title-size-s: clamp(calc(18px * var(--home-scale)), 6.5vw, calc(22px * var(--home-scale)));
+  --hero-title-tracking: 0.3em;
+  --hero-title-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --hero-meta-size: calc(14px * min(var(--home-scale), 1.35));
+  --hero-meta-weight: 600;
+  --hero-meta-dot: calc(4px * min(var(--home-scale), 1.35));
+  --hero-meta-dot-opacity: 0.6;
+  --hero-meta-gap: calc(10px * min(var(--home-scale), 1.35));
+  --hero-gap-logo: calc(24px * var(--home-scale));
+  --hero-gap-meta: calc(16px * var(--home-scale));
+  --hero-gap-btn: calc(12px * var(--home-scale));
+  --hero-pad-bottom: calc(6px * var(--home-scale));
+  --hero-btn-height: calc(45px * min(var(--home-scale), 1.5));
+  --hero-btn-min-w: calc(146px * min(var(--home-scale), 1.5));
+  --hero-btn-pad-x: calc(32px * min(var(--home-scale), 1.5));
+  --hero-btn-bg: #f5f6f8;
+  --hero-btn-ink: #0b0b0b;
+  --hero-btn-size: calc(15px * min(var(--home-scale), 1.35));
+
+  /* Carousel indicator + motion */
+  --hero-ind-dot: calc(8px * min(var(--home-scale), 1.5));
+  --hero-ind-active-w: calc(32px * min(var(--home-scale), 1.5));
+  --hero-ind-gap: calc(8px * min(var(--home-scale), 1.5));
+  --hero-crossfade-ms: 300ms;
+  --hero-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Continue watching row */
+  --cw-gap: calc(16px * min(var(--home-scale), 1.5));
+  --cw-pad: calc(16px * min(var(--home-scale), 1.5));
+  --cw-card-w: min(69vw, calc(320px * var(--home-scale)));
+  --cw-card-radius: calc(16px * min(var(--home-scale), 1.35));
+  --cw-card-border: rgba(255, 255, 255, 0.22);
+  --cw-card-bg: #1a1a1a;
+  --cw-card-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0) 75%);
+  --cw-text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  --cw-text-pad-x: calc(10px * var(--home-scale));
+  --cw-text-pad-b: calc(12px * var(--home-scale));
+  --cw-ep-size: calc(11px * min(var(--home-scale), 1.35));
+  --cw-title-size: calc(15px * min(var(--home-scale), 1.35));
+  --cw-sub-size: calc(12px * min(var(--home-scale), 1.35));
+  --cw-progress: #e53935;
+  --cw-progress-h: calc(3px * min(var(--home-scale), 1.5));
+  --cw-progress-bottom: calc(4px * var(--home-scale));
+  --cw-progress-inset: calc(8px * var(--home-scale));
+  --cw-badge-bg: rgba(0, 0, 0, 0.7);
+  --cw-badge-h: calc(22px * min(var(--home-scale), 1.35));
+  --cw-badge-radius: calc(8px * min(var(--home-scale), 1.35));
+  --cw-badge-size: calc(12px * min(var(--home-scale), 1.35));
+  --cw-badge-pad-x: calc(7px * min(var(--home-scale), 1.35));
+  --cw-badge-inset: calc(8px * var(--home-scale));
+  --cw-fresh-dot: #f5b301;
+  --cw-fresh-dot-size: calc(5px * min(var(--home-scale), 1.35));
+  --cw-fresh-dot-bottom: calc(12px * var(--home-scale));
+  --cw-header-size: calc(18px * min(var(--home-scale), 1.4));
+  --cw-header-mt: calc(20px * var(--home-scale));
+  --cw-header-mb: calc(16px * var(--home-scale));
+}
+
+/* Proportional scale ladder (round-21b): phones 1× → small tablets 1.15× →
+   large tablets / iPad landscape 1.25× → laptops 1.35× → desktops 1.5× →
+   large monitors 1.65× → extra-large screens 1.8×. Must stay AFTER the base
+   block (same specificity, source order wins). */
+@media (min-width: 600px) {
+  :root { --home-scale: 1.15; }
+}
+@media (min-width: 840px) {
+  :root { --home-scale: 1.25; }
+}
+@media (min-width: 1024px) {
+  :root { --home-scale: 1.35; }
+}
+@media (min-width: 1440px) {
+  :root { --home-scale: 1.5; }
+}
+@media (min-width: 1920px) {
+  :root { --home-scale: 1.65; }
+}
+@media (min-width: 2560px) {
+  :root { --home-scale: 1.8; }
+}
+
+/* Light appearance: dissolve into the themed canvas (never into black — the
+   seam rule wins) and derive the card loading surface from the theme. */
+html[data-appearance="light"] {
+  --hero-fade: var(--color-canvas-var);
+  --cw-card-bg: var(--color-raised-var);
+}
+
+/* Pure-black page for the Home route in dark appearance (OLED, spec); the
+   theme canvas takes over again in light appearance. */
+.home-void {
+  background: var(--hero-fade);
+}
+html[data-appearance="light"] .home-void {
+  background: transparent;
+}
+
+@layer components {
+  /* ---------- Hero ---------- */
+  .home-hero {
+    position: relative;
+    height: var(--hero-height);
+    overflow: hidden;
+    background: var(--hero-fade);
+  }
+  .home-hero-track {
+    position: relative;
+    display: flex;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .home-hero-track::-webkit-scrollbar {
+    display: none;
+  }
+  .home-hero-slide {
+    position: relative;
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    overflow: hidden;
+  }
+  .home-hero-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Phones: portrait artwork anchored to the top (spec). md+ swaps to the
+     landscape backdrop (see media query below). */
+  .home-hero-art-portrait {
+    object-position: center top;
+  }
+  .home-hero-art-landscape {
+    display: none;
+    object-position: center;
+  }
+  .home-hero-scrim-top {
+    position: absolute;
+    inset: 0;
+    background: var(--hero-scrim-top);
+    pointer-events: none;
+  }
+  .home-hero-scrim-fade {
+    position: absolute;
+    inset: 0;
+    background: var(--hero-scrim-fade);
+    pointer-events: none;
+  }
+  .home-hero-content {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    /* Centered column capped on wide screens (round-21b) — inset-inline: 0 +
+       margin-inline: auto keeps it centered without touching phones (640px
+       max > every phone viewport). */
+    max-width: var(--hero-content-max-w);
+    margin-inline: auto;
+    padding-bottom: var(--hero-pad-bottom);
+    pointer-events: none; /* the track keeps receiving swipes */
+  }
+  .home-hero-content > * {
+    pointer-events: auto;
+  }
+  /* Logo row: reserves the scaled logo box even before the logo arrives
+     (no layout shift), min-height grows with --home-scale. */
+  .home-hero-logo-row {
+    display: flex;
+    min-height: var(--hero-logo-max-h);
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--hero-gap-logo);
+  }
+  .home-hero-logo {
+    /* Forced height (round-21b): the logo always renders at its maximum size
+       (user feedback — it previously rendered small). object-fit: contain
+       keeps the aspect inside the box; max-width clamps ultra-wide logos. */
+    height: var(--hero-logo-max-h);
+    width: auto;
+    max-width: var(--hero-logo-max-w);
+    object-fit: contain;
+    filter: drop-shadow(var(--hero-logo-shadow));
+  }
+  .home-hero-title {
+    color: #fff;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: var(--hero-title-tracking);
+    font-size: var(--hero-title-size);
+    line-height: 1.15;
+    white-space: nowrap;
+    max-width: 92%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: var(--hero-title-shadow);
+  }
+  /* Long-title fallbacks (length-chosen in home-hero.tsx) — both scale with
+     --home-scale and keep the 8.5vw / 6.5vw fluid middles. */
+  .home-hero-title-m {
+    font-size: var(--hero-title-size-m);
+  }
+  .home-hero-title-s {
+    font-size: var(--hero-title-size-s);
+  }
+  .home-hero-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--hero-meta-gap);
+    color: #fff;
+    font-size: var(--hero-meta-size);
+    font-weight: var(--hero-meta-weight);
+    line-height: 1.3;
+    max-width: 92%;
+    white-space: nowrap;
+  }
+  .home-hero-meta .hero-meta-dot {
+    width: var(--hero-meta-dot);
+    height: var(--hero-meta-dot);
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, var(--hero-meta-dot-opacity));
+    flex: 0 0 auto;
+  }
+  .home-hero-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--hero-btn-height);
+    min-width: var(--hero-btn-min-w);
+    padding-inline: var(--hero-btn-pad-x);
+    border-radius: 9999px;
+    background: var(--hero-btn-bg);
+    color: var(--hero-btn-ink);
+    font-size: var(--hero-btn-size);
+    font-weight: 700;
+    line-height: 1;
+    transition: transform 150ms var(--hero-ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-hero-btn:active {
+    transform: scale(0.97);
+  }
+  /* Content crossfade between items (re-triggered via React key). */
+  .home-hero-content-in {
+    animation: home-hero-content-in var(--hero-crossfade-ms) var(--hero-ease) both;
+  }
+  @keyframes home-hero-content-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Indicator: the BUTTON is the real 48dp touch target (transparent, no
+     pseudo hit-area tricks); the visible dot is the inner span. */
+  .home-hero-dot-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    min-width: 48px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 9999px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-hero-dot-btn > span {
+    display: block;
+    height: calc(var(--hero-ind-dot) / 2);
+    width: calc(var(--hero-ind-dot) / 2);
+    border-radius: 9999px;
+    background: #fff;
+    opacity: 0.55;
+    transition: width 300ms var(--hero-ease), opacity 150ms ease;
+  }
+  .home-hero-dot-btn[aria-current="true"] > span {
+    width: var(--hero-ind-active-w);
+    opacity: 1;
+  }
+
+  /* ---------- Continue watching ---------- */
+  /* padding-top (not margin-top): the section sits inside a Tailwind
+     space-y-* parent whose utility zeroes every non-last child's
+     margin-block-start — components-layer margins can never win there. */
+  .cw-section {
+    padding-top: var(--cw-header-mt);
+  }
+  .cw-header {
+    font-size: var(--cw-header-size);
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: var(--cw-header-mb);
+    padding-inline: var(--cw-pad);
+  }
+  .cw-row {
+    display: flex;
+    gap: var(--cw-gap);
+    padding-inline: var(--cw-pad);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--cw-pad);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cw-row::-webkit-scrollbar {
+    display: none;
+  }
+  .cw-card {
+    position: relative;
+    flex: 0 0 var(--cw-card-w);
+    width: var(--cw-card-w);
+    aspect-ratio: 16 / 9;
+    border-radius: var(--cw-card-radius);
+    overflow: hidden;
+    border: 1px solid var(--cw-card-border);
+    background: var(--cw-card-bg);
+    transition: transform 180ms var(--hero-ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cw-card:active {
+    transform: scale(0.98);
+  }
+  .cw-card-scrim {
+    position: absolute;
+    inset: 0;
+    background: var(--cw-card-scrim);
+    pointer-events: none;
+  }
+  .cw-art-fallback {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 120% at 85% 0%, color-mix(in oklab, var(--color-accent-var) 26%, transparent), transparent 60%),
+      linear-gradient(160deg, var(--color-raised-var), var(--color-canvas-var));
+  }
+  .cw-text {
+    position: absolute;
+    bottom: 0;
+    inset-inline: 0;
+    padding-inline: var(--cw-text-pad-x);
+    padding-bottom: var(--cw-text-pad-b);
+    text-align: start;
+    pointer-events: none;
+  }
+  .cw-text > * {
+    text-shadow: var(--cw-text-shadow);
+  }
+  .cw-ep-tag {
+    font-size: var(--cw-ep-size);
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    direction: ltr;
+    unicode-bidi: isolate;
+    line-height: 1.3;
+  }
+  .cw-title {
+    font-size: var(--cw-title-size);
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+  }
+  .cw-sub {
+    font-size: var(--cw-sub-size);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.35;
+  }
+  .cw-badge {
+    position: absolute;
+    top: var(--cw-badge-inset);
+    inset-inline-end: var(--cw-badge-inset);
+    display: inline-flex;
+    align-items: center;
+    height: var(--cw-badge-h);
+    padding-inline: var(--cw-badge-pad-x);
+    border-radius: var(--cw-badge-radius);
+    background: var(--cw-badge-bg);
+    color: #fff;
+    font-size: var(--cw-badge-size);
+    font-weight: 500;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .cw-progress {
+    position: absolute;
+    bottom: var(--cw-progress-bottom);
+    inset-inline: var(--cw-progress-inset);
+    height: var(--cw-progress-h);
+    border-radius: 9999px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .cw-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--cw-progress);
+  }
+  .cw-fresh {
+    position: absolute;
+    bottom: var(--cw-fresh-dot-bottom);
+    inset-inline-start: var(--cw-badge-inset);
+    width: var(--cw-fresh-dot-size);
+    height: var(--cw-fresh-dot-size);
+    border-radius: 9999px;
+    background: var(--cw-fresh-dot);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* ---------- M3 menu (long-press / context) ---------- */
+  .cw-menu {
+    position: fixed;
+    z-index: 60;
+    min-width: 220px;
+    padding: 8px;
+    border-radius: 16px;
+    background: var(--md-sys-color-surface-container-high, var(--color-elevated-var));
+    box-shadow: var(--md-sys-elevation-3, 0 8px 28px rgba(0, 0, 0, 0.45));
+    border: 1px solid var(--color-edge-soft-var);
+  }
+  .cw-menu [role="menuitem"] {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding-inline: 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-ink-var);
+    text-align: start;
+  }
+  .cw-menu [role="menuitem"][data-danger="true"] {
+    color: var(--md-sys-color-error, #f2b8b5);
+  }
+
+  /* ---------- md+ adaptations (spec: medium/expanded) ---------- */
+  @media (min-width: 600px) {
+    .home-hero-art-portrait {
+      display: none;
+    }
+    .home-hero-art-landscape {
+      display: block;
+    }
+  }
+}
+
+/* Reduced motion: no content crossfade, no dot width animation, no card press
+   scale travel; autoplay/jump behavior is additionally gated in JS. */
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-content-in,
+  .home-hero-dot-btn,
+  .cw-card {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ============ Detail view (title page): hero content offset ============ */
+/* Pushes the hero content block (title logo → meta/ratings → description →
+   action buttons) down by a small, tunable amount so more of the backdrop /
+   poster stays visible above it. The block is bottom-anchored (justify-end
+   over an overflow-hidden hero with a 2rem bottom-padding budget), so keep
+   the value ≤ 24px: the action buttons then keep an 8px gap above the hero
+   edge (2rem padding − offset), and the title never clips at the top on the
+   smallest supported phones (hero min-height 420px). Vertical-only
+   transform: identical in RTL and LTR, no reflow, gradient untouched.
+   Need a different desktop value? Re-add:
+   @media (min-width: 768px) { :root { --details-content-offset: Xpx; } } */
+:root {
+  --details-content-offset: 24px; /* single token, all breakpoints */
+}
+.harbor-details-offset {
+  transform: translateY(var(--details-content-offset, 0px));
+}
+
+/* ============ Arabic UI font — Tajawal (self-hosted, was Google Fonts v12) ============ */
+/* Loaded only when the interface language is Arabic (html[lang^="ar"]) — the
+   override swaps the sans stack for Tajawal, which covers Arabic AND Latin so
+   embedded titles/numbers render consistently. font-display: swap + small
+   files (~10KB each, unicode-range split) keep the switch flash-free. */
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/tajawal-400-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/tajawal-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/tajawal-500-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/tajawal-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/tajawal-700-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/tajawal-700-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/tajawal-800-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "Tajawal";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/tajawal-800-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+html[lang^="ar"] {
+  /* !important is required: themes.ts writes an inline --font-sans-var on
+     <html> at boot (author-inline beats normal author rules), so the Arabic
+     override must be author-important to win the cascade. */
+  --font-sans-var: "Tajawal", "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* ==========================================================================
+   ROUND 32 — shared UI fixes (defects A–G): container-query setting rows,
+   M3 slider touch heights, floating-search clearance, bidi helpers.
+   ========================================================================== */
+
+/* ---- C: SettingRow container queries -------------------------------------
+   The CARD is the inline-size container (@container queries ancestors, an
+   element cannot query itself). Narrower than 520px → rows STACK (title +
+   description full width, control below at full width); wider → label
+   flex:1 min-width:0, control capped at 45%. Never a column narrower than
+   ~14 characters per line. */
+.harbor-cq {
+  container-type: inline-size;
+}
+.harbor-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+.harbor-setting-row > .harbor-setting-row-label {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.harbor-setting-row > .harbor-setting-row-control {
+  flex: 0 0 auto;
+  max-width: 45%;
+}
+/* 150% font scale: widths grow, containers don't — stack earlier too. */
+@container (max-width: 519px) {
+  .harbor-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+  }
+  .harbor-setting-row > .harbor-setting-row-control {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* C: SegmentedControl — equal full-width segments in a stacked row, labels
+   never wrap; if they still cannot fit (320px or 150% font scale) the
+   component degrades to a dropdown (overflow check in settings-view). */
+.harbor-segmented {
+  display: inline-flex;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-secondary-container);
+  padding: 0.25rem;
+}
+@container (max-width: 519px) {
+  .harbor-segmented {
+    display: flex;
+    width: 100%;
+  }
+  .harbor-segmented > * {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    white-space: nowrap;
+  }
+}
+
+/* C: slider row — full-width slider below the title/value line, 48dp touch. */
+.harbor-slider-row {
+  container-type: inline-size;
+}
+.harbor-slider-touch {
+  /* Radix root: keep the visual track thin but the hit area 48dp tall */
+  display: flex;
+  align-items: center;
+  height: 48px;
+  touch-action: none;
+}
+.harbor-slider-touch [data-slot="slider-track"] {
+  height: 8px;
+}
+
+/* ---- F: floating-search clearance ----------------------------------------
+   Phone floating-search trigger is a fixed 48×48 button at the inline-END top
+   corner (w 48 + end offset 12 = 60px). Scrollable top rows (settings tabs,
+   chip rows) reserve that zone so the LAST tab can always scroll fully past
+   the button and every tab stays tappable. md+: the search docks centered,
+   no corner conflict. */
+.harbor-fs-clear {
+  padding-inline-end: 3.75rem;
+}
+@media (min-width: 768px) {
+  .harbor-fs-clear {
+    padding-inline-end: 0;
+  }
+}
+
+/* ---- B: M3 switch (logical, RTL-safe) -------------------------------------
+   Root = 48dp touch target (the button itself), visual track 52×32dp drawn by
+   an inner span, thumb 16dp off / 24dp on positioned with logical inset
+   (inset-inline-start) so RTL mirrors without transforms. Focus ring visible,
+   disabled dimmed per M3 state spec. */
+.md-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 48px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.md-switch .md-switch-track {
+  position: absolute;
+  inset-block: 8px; /* 32dp visual track centered in the 48dp target */
+  inset-inline: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 2px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container-highest);
+  transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.md-switch[data-state="checked"] .md-switch-track {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+}
+.md-switch[data-state="checked"]:hover .md-switch-track {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+}
+.md-switch[data-state="unchecked"]:hover .md-switch-track {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+}
+.md-switch:focus-visible {
+  outline: none;
+  border-radius: var(--md-sys-shape-corner-full);
+  box-shadow: 0 0 0 2px var(--md-sys-color-canvas, #000), 0 0 0 5px var(--md-sys-color-primary);
+}
+.md-switch:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.md-switch .md-switch-thumb {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-outline);
+  transform: translateY(-50%);
+  transition: inset-inline-start var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    width var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.md-switch[data-state="checked"] .md-switch-thumb {
+  inset-inline-start: calc(100% - 28px);
+  width: 24px;
+  height: 24px;
+  background: var(--md-sys-color-on-primary);
+}
+.md-switch:disabled .md-switch-thumb {
+  background: var(--md-sys-color-on-surface);
+}
+.md-switch[data-state="checked"]:disabled .md-switch-thumb {
+  background: var(--md-sys-color-surface);
+}
+
+/* ---- B: animated disclosure (Advanced) ------------------------------------ */
+.harbor-disclosure-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.harbor-disclosure-content[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.harbor-disclosure-content > div {
+  overflow: hidden;
+  min-height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .harbor-disclosure-content {
+    transition: none;
+  }
+}
+
+/* ---- B: bidi-rich text helper -------------------------------------------- */
+/* Latin segments inside Arabic strings are wrapped by <bdi dir="ltr"> in JSX;
+   for text produced by the DOM translation layer we rely on FSI/PDI isolation
+   characters (see ar-text.ts isolateBidiRuns). */
+.harbor-bdi {
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+
+/* ---- D: footer ------------------------------------------------------------- */
+.harbor-footer-logo {
+  width: auto;
+  height: 64px;
+}
+.harbor-footer-wordmark {
+  font-size: clamp(1.75rem, 5vw, 2rem); /* 28–32dp */
+  line-height: 1.1;
+}

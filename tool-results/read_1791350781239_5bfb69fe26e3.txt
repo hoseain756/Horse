@@ -1,0 +1,782 @@
+     1→     1→mod anime4k;
+     2→     2→mod binary_lookup;
+     3→     3→mod browser;
+     4→     4→mod cast;
+     5→     5→mod cast_hls;
+     6→     6→mod cast_server;
+     7→     7→mod cast_subs;
+     8→     8→mod crash_report;
+     9→     9→mod cf_relay;
+    10→    10→mod discord_rp;
+    11→    11→mod dlna;
+    12→    12→mod download;
+    13→    13→mod dvr;
+    14→    14→mod fonts;
+    15→    15→mod fullscreen;
+    16→    16→mod hdr_overlay;
+    17→    17→mod http_fetch;
+    18→    18→mod local_lib;
+    19→    19→mod modal_overlay;
+    20→    20→mod mpv;
+    21→    21→mod multiview;
+    22→    22→mod proc_mem;
+    23→    23→mod roku;
+    24→    24→#[cfg(target_os = "macos")]
+    25→    25→mod mpv_render_mac;
+    26→    26→#[cfg(target_os = "linux")]
+    27→    27→mod mpv_render_linux;
+    28→    28→mod pip;
+    29→    29→#[cfg(target_os = "macos")]
+    30→    30→mod pip_mac;
+    31→    31→mod power;
+    32→    32→mod process;
+    33→    33→mod airplay;
+    34→    34→mod settings_store;
+    35→    35→mod song_id;
+    36→    36→mod stream_proxy;
+    37→    37→mod streams;
+    38→    38→mod stremio_auth;
+    39→    39→mod sub_extract;
+    40→    40→mod subsync;
+    41→    41→mod svp;
+    42→    42→mod thumbs;
+    43→    43→mod torrent_engine;
+    44→    44→mod trailer;
+    45→    45→mod transcode;
+    46→    46→mod tray;
+    47→    47→mod web_server;
+    48→    48→mod webview_helpers;
+    49→    49→
+    50→    50→pub(crate) fn shutdown_services(app: &tauri::AppHandle) {
+    51→    51→    thumbs::shutdown(app);
+    52→    52→    stream_proxy::shutdown(app);
+    53→    53→    cast_server::stop();
+    54→    54→    torrent_engine::stop();
+    55→    55→    discord_rp::shutdown(app);
+    56→    56→    crash_report::mark_clean_exit();
+    57→    57→}
+    58→    58→
+    59→    59→pub static CLOSE_FLUSH_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    60→    60→static CLOSE_IN_PROGRESS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    61→    61→/// Tracks WebView2 TrySuspend / SetIsVisible(false) so we can recover on focus.
+    62→    62→#[cfg(windows)]
+    63→    63→static WEBVIEW_SUSPENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    64→    64→
+    65→    65→#[tauri::command]
+    66→    66→fn harbor_flush_done() {
+    67→    67→    CLOSE_FLUSH_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
+    68→    68→}
+    69→    69→
+    70→    70→#[tauri::command]
+    71→    71→fn harbor_startup_ready(window: tauri::WebviewWindow) {
+    72→    72→    if window.label() == "main" {
+    73→    73→        let _ = window.set_focus();
+    74→    74→    }
+    75→    75→}
+    76→    76→
+    77→    77→#[tauri::command]
+    78→    78→fn close_aux_windows(app: tauri::AppHandle) {
+    79→    79→    use tauri::Manager;
+    80→    80→    for (label, window) in app.webview_windows() {
+    81→    81→        if label != "main" {
+    82→    82→            let _ = window.close();
+    83→    83→        }
+    84→    84→    }
+    85→    85→}
+    86→    86→
+    87→    87→#[tauri::command]
+    88→    88→async fn deeplink_set_stremio(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    89→    89→    use tauri_plugin_deep_link::DeepLinkExt;
+    90→    90→    if enabled {
+    91→    91→        app.deep_link()
+    92→    92→            .register("stremio")
+    93→    93→            .map_err(|e| format!("register stremio: {}", e))?;
+    94→    94→    } else {
+    95→    95→        let _ = app.deep_link().unregister("stremio");
+    96→    96→    }
+    97→    97→    Ok(())
+    98→    98→}
+    99→    99→
+   100→   100→#[tauri::command]
+   101→   101→async fn deeplink_is_stremio_registered(app: tauri::AppHandle) -> Result<bool, String> {
+   102→   102→    use tauri_plugin_deep_link::DeepLinkExt;
+   103→   103→    app.deep_link()
+   104→   104→        .is_registered("stremio")
+   105→   105→        .map_err(|e| e.to_string())
+   106→   106→}
+   107→   107→
+   108→   108→#[tauri::command]
+   109→   109→async fn save_text_file(path: String, contents: String) -> Result<(), String> {
+   110→   110→    let target = std::path::PathBuf::from(&path);
+   111→   111→    if let Some(parent) = target.parent() {
+   112→   112→        if !parent.as_os_str().is_empty() {
+   113→   113→            std::fs::create_dir_all(parent).map_err(|e| format!("create folder: {}", e))?;
+   114→   114→        }
+   115→   115→    }
+   116→   116→    std::fs::write(&target, contents.as_bytes()).map_err(|e| format!("write file: {}", e))
+   117→   117→}
+   118→   118→
+   119→   119→/// Resume WebView2 after TrySuspend / SetIsVisible(false). Safe no-op if not suspended.
+   120→   120→#[cfg(windows)]
+   121→   121→fn resume_webview_if_needed(app: &tauri::AppHandle) {
+   122→   122→    use tauri::Manager;
+   123→   123→    if !WEBVIEW_SUSPENDED.load(std::sync::atomic::Ordering::SeqCst) {
+   124→   124→        return;
+   125→   125→    }
+   126→   126→    let Some(window) = app.get_webview_window("main") else {
+   127→   127→        return;
+   128→   128→    };
+   129→   129→    let res = window.with_webview(|webview| unsafe {
+   130→   130→        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+   131→   131→        use windows::core::Interface;
+   132→   132→        let controller = webview.controller();
+   133→   133→        if let Ok(core) = controller.CoreWebView2() {
+   134→   134→            if let Ok(c3) = core.cast::<ICoreWebView2_3>() {
+   135→   135→                let _ = c3.Resume();
+   136→   136→            }
+   137→   137→        }
+   138→   138→        let _ = controller.SetIsVisible(true);
+   139→   139→    });
+   140→   140→    if res.is_ok() {
+   141→   141→        WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
+   142→   142→        eprintln!("[harbor::webview] auto-resumed after suspend");
+   143→   143→    }
+   144→   144→}
+   145→   145→
+   146→   146→#[cfg(not(windows))]
+   147→   147→fn resume_webview_if_needed(_app: &tauri::AppHandle) {}
+   148→   148→
+   149→   149→#[cfg(windows)]
+   150→   150→pub(crate) fn force_show_foreground(window: &tauri::WebviewWindow) {
+   151→   151→    use windows::Win32::UI::WindowsAndMessaging::{
+   152→   152→        IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+   153→   153→    };
+   154→   154→    let Ok(hwnd) = window.hwnd() else {
+   155→   155→        return;
+   156→   156→    };
+   157→   157→    unsafe {
+   158→   158→        if IsIconic(hwnd).as_bool() {
+   159→   159→            let _ = ShowWindow(hwnd, SW_RESTORE);
+   160→   160→        } else {
+   161→   161→            let _ = ShowWindow(hwnd, SW_SHOW);
+   162→   162→        }
+   163→   163→        let _ = SetForegroundWindow(hwnd);
+   164→   164→    }
+   165→   165→}
+   166→   166→
+   167→   167→#[cfg(windows)]
+   168→   168→const HARBOR_MAXGUARD_SUBCLASS_ID: usize = 0x4842_4D47;
+   169→   169→
+   170→   170→#[cfg(windows)]
+   171→   171→unsafe extern "system" fn maxguard_subclass_proc(
+   172→   172→    hwnd: windows::Win32::Foundation::HWND,
+   173→   173→    msg: u32,
+   174→   174→    wparam: windows::Win32::Foundation::WPARAM,
+   175→   175→    lparam: windows::Win32::Foundation::LPARAM,
+   176→   176→    _id: usize,
+   177→   177→    _data: usize,
+   178→   178→) -> windows::Win32::Foundation::LRESULT {
+   179→   179→    use windows::Win32::Graphics::Gdi::{
+   180→   180→        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+   181→   181→    };
+   182→   182→    use windows::Win32::UI::Shell::DefSubclassProc;
+   183→   183→    use windows::Win32::UI::WindowsAndMessaging::{MINMAXINFO, WM_GETMINMAXINFO};
+   184→   184→    let res = DefSubclassProc(hwnd, msg, wparam, lparam);
+   185→   185→    if msg == WM_GETMINMAXINFO {
+   186→   186→        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+   187→   187→        let mut mi = MONITORINFO {
+   188→   188→            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+   189→   189→            ..Default::default()
+   190→   190→        };
+   191→   191→        if GetMonitorInfoW(monitor, &mut mi).as_bool() {
+   192→   192→            let mmi = &mut *(lparam.0 as *mut MINMAXINFO);
+   193→   193→            mmi.ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+   194→   194→            mmi.ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
+   195→   195→            mmi.ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
+   196→   196→            mmi.ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
+   197→   197→        }
+   198→   198→    }
+   199→   199→    res
+   200→   200→}
+   201→   201→
+   202→   202→#[cfg(windows)]
+   203→   203→fn install_maximize_guard(app: &tauri::AppHandle) {
+   204→   204→    use tauri::Manager;
+   205→   205→    use windows::Win32::UI::Shell::SetWindowSubclass;
+   206→   206→    let Some(window) = app.get_webview_window("main") else {
+   207→   207→        eprintln!("[harbor::maxguard] main window missing");
+   208→   208→        return;
+   209→   209→    };
+   210→   210→    let Ok(hwnd) = window.hwnd() else {
+   211→   211→        eprintln!("[harbor::maxguard] hwnd unavailable");
+   212→   212→        return;
+   213→   213→    };
+   214→   214→    unsafe {
+   215→   215→        let _ = SetWindowSubclass(hwnd, Some(maxguard_subclass_proc), HARBOR_MAXGUARD_SUBCLASS_ID, 0);
+   216→   216→    }
+   217→   217→    eprintln!("[harbor::maxguard] WM_GETMINMAXINFO work-area guard installed");
+   218→   218→}
+   219→   219→
+   220→   220→#[tauri::command]
+   221→   221→fn harbor_set_webview_memory_low(app: tauri::AppHandle, low: bool) {
+   222→   222→    #[cfg(windows)]
+   223→   223→    {
+   224→   224→        use tauri::Manager;
+   225→   225→        let Some(window) = app.get_webview_window("main") else {
+   226→   226→            return;
+   227→   227→        };
+   228→   228→        let _ = window.with_webview(move |webview| unsafe {
+   229→   229→            use webview2_com::Microsoft::Web::WebView2::Win32::{
+   230→   230→                ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+   231→   231→                COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+   232→   232→            };
+   233→   233→            use windows::core::Interface;
+   234→   234→            let controller = webview.controller();
+   235→   235→            if let Ok(core) = controller.CoreWebView2() {
+   236→   236→                if let Ok(w3) = core.cast::<ICoreWebView2_19>() {
+   237→   237→                    let level = if low {
+   238→   238→                        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+   239→   239→                    } else {
+   240→   240→                        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+   241→   241→                    };
+   242→   242→                    let _ = w3.SetMemoryUsageTargetLevel(level);
+   243→   243→                }
+   244→   244→            }
+   245→   245→        });
+   246→   246→    }
+   247→   247→    #[cfg(not(windows))]
+   248→   248→    {
+   249→   249→        let _ = (&app, low);
+   250→   250→    }
+   251→   251→}
+   252→   252→
+   253→   253→#[tauri::command]
+   254→   254→fn harbor_set_webview_visible(app: tauri::AppHandle, visible: bool) {
+   255→   255→    #[cfg(windows)]
+   256→   256→    {
+   257→   257→        use tauri::Manager;
+   258→   258→        let Some(window) = app.get_webview_window("main") else {
+   259→   259→            return;
+   260→   260→        };
+   261→   261→        if visible {
+   262→   262→            // Visibility true must always recover from a prior suspend.
+   263→   263→            resume_webview_if_needed(&app);
+   264→   264→        }
+   265→   265→        let _ = window.with_webview(move |webview| unsafe {
+   266→   266→            let _ = webview.controller().SetIsVisible(visible);
+   267→   267→        });
+   268→   268→        if !visible {
+   269→   269→            WEBVIEW_SUSPENDED.store(true, std::sync::atomic::Ordering::SeqCst);
+   270→   270→        } else {
+   271→   271→            WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
+   272→   272→        }
+   273→   273→    }
+   274→   274→    #[cfg(not(windows))]
+   275→   275→    {
+   276→   276→        let _ = (&app, visible);
+   277→   277→    }
+   278→   278→}
+   279→   279→
+   280→   280→#[tauri::command]
+   281→   281→fn harbor_try_suspend_webview(app: tauri::AppHandle) {
+   282→   282→    #[cfg(windows)]
+   283→   283→    {
+   284→   284→        use tauri::Manager;
+   285→   285→        let Some(window) = app.get_webview_window("main") else {
+   286→   286→            return;
+   287→   287→        };
+   288→   288→        let _ = window.with_webview(move |webview| unsafe {
+   289→   289→            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+   290→   290→            use webview2_com::TrySuspendCompletedHandler;
+   291→   291→            use windows::core::Interface;
+   292→   292→            let controller = webview.controller();
+   293→   293→            let _ = controller.SetIsVisible(false);
+   294→   294→            if let Ok(core) = controller.CoreWebView2() {
+   295→   295→                if let Ok(c3) = core.cast::<ICoreWebView2_3>() {
+   296→   296→                    let handler = TrySuspendCompletedHandler::create(Box::new(|_hr, _ok| Ok(())));
+   297→   297→                    let _ = c3.TrySuspend(&handler);
+   298→   298→                }
+   299→   299→            }
+   300→   300→        });
+   301→   301→        WEBVIEW_SUSPENDED.store(true, std::sync::atomic::Ordering::SeqCst);
+   302→   302→    }
+   303→   303→    #[cfg(not(windows))]
+   304→   304→    {
+   305→   305→        let _ = &app;
+   306→   306→    }
+   307→   307→}
+   308→   308→
+   309→   309→#[tauri::command]
+   310→   310→fn harbor_resume_webview(app: tauri::AppHandle) {
+   311→   311→    #[cfg(windows)]
+   312→   312→    {
+   313→   313→        use tauri::Manager;
+   314→   314→        let Some(window) = app.get_webview_window("main") else {
+   315→   315→            return;
+   316→   316→        };
+   317→   317→        let _ = window.with_webview(move |webview| unsafe {
+   318→   318→            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+   319→   319→            use windows::core::Interface;
+   320→   320→            let controller = webview.controller();
+   321→   321→            if let Ok(core) = controller.CoreWebView2() {
+   322→   322→                if let Ok(c3) = core.cast::<ICoreWebView2_3>() {
+   323→   323→                    let _ = c3.Resume();
+   324→   324→                }
+   325→   325→            }
+   326→   326→            let _ = controller.SetIsVisible(true);
+   327→   327→        });
+   328→   328→        WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
+   329→   329→    }
+   330→   330→    #[cfg(not(windows))]
+   331→   331→    {
+   332→   332→        let _ = &app;
+   333→   333→    }
+   334→   334→}
+   335→   335→
+   336→   336→fn ensure_window_on_screen(app: &tauri::AppHandle) {
+   337→   337→    use tauri::Manager;
+   338→   338→    let Some(window) = app.get_webview_window("main") else {
+   339→   339→        return;
+   340→   340→    };
+   341→   341→    let (pos, size) = match (window.outer_position(), window.outer_size()) {
+   342→   342→        (Ok(p), Ok(s)) => (p, s),
+   343→   343→        _ => return,
+   344→   344→    };
+   345→   345→    let monitors = match window.available_monitors() {
+   346→   346→        Ok(m) if !m.is_empty() => m,
+   347→   347→        _ => return,
+   348→   348→    };
+   349→   349→    let ww = size.width as i32;
+   350→   350→    let wh = size.height as i32;
+   351→   351→    let on_screen = monitors.iter().any(|m| {
+   352→   352→        let mp = m.position();
+   353→   353→        let ms = m.size();
+   354→   354→        pos.x < mp.x + ms.width as i32
+   355→   355→            && pos.x + ww > mp.x
+   356→   356→            && pos.y < mp.y + ms.height as i32
+   357→   357→            && pos.y + wh > mp.y
+   358→   358→    });
+   359→   359→    if on_screen {
+   360→   360→        return;
+   361→   361→    }
+   362→   362→    let target = window
+   363→   363→        .primary_monitor()
+   364→   364→        .ok()
+   365→   365→        .flatten()
+   366→   366→        .or_else(|| monitors.into_iter().next());
+   367→   367→    let Some(mon) = target else {
+   368→   368→        return;
+   369→   369→    };
+   370→   370→    let mp = mon.position();
+   371→   371→    let ms = mon.size();
+   372→   372→    let cx = mp.x + (ms.width as i32 - ww).max(0) / 2;
+   373→   373→    let cy = mp.y + (ms.height as i32 - wh).max(0) / 2;
+   374→   374→    let _ = window.set_position(tauri::PhysicalPosition::new(cx, cy));
+   375→   375→    eprintln!("[harbor::window] launched off-screen; recentered to {},{}", cx, cy);
+   376→   376→}
+   377→   377→
+   378→   378→const MEDIA_EXTS: &[&str] = &[
+   379→   379→    "mkv", "mp4", "avi", "mov", "webm", "m4v", "ts", "m2ts", "mpg", "mpeg", "wmv", "flv", "ogv", "3gp",
+   380→   380→];
+   381→   381→
+   382→   382→fn media_file_from_args(args: &[String]) -> Option<String> {
+   383→   383→    for a in args {
+   384→   384→        let lower = a.to_lowercase();
+   385→   385→        if MEDIA_EXTS.iter().any(|e| lower.ends_with(&format!(".{e}")))
+   386→   386→            && std::path::Path::new(a).is_file()
+   387→   387→        {
+   388→   388→            return Some(a.clone());
+   389→   389→        }
+   390→   390→    }
+   391→   391→    None
+   392→   392→}
+   393→   393→
+   394→   394→static PENDING_OPEN_FILE: std::sync::OnceLock<std::sync::Mutex<Option<String>>> =
+   395→   395→    std::sync::OnceLock::new();
+   396→   396→
+   397→   397→fn pending_open_file() -> &'static std::sync::Mutex<Option<String>> {
+   398→   398→    PENDING_OPEN_FILE.get_or_init(|| std::sync::Mutex::new(None))
+   399→   399→}
+   400→   400→
+   401→   401→#[tauri::command]
+   402→   402→fn harbor_take_pending_file() -> Option<String> {
+   403→   403→    pending_open_file().lock().ok().and_then(|mut g| g.take())
+   404→   404→}
+   405→   405→
+   406→   406→#[cfg_attr(mobile, tauri::mobile_entry_point)]
+   407→   407→pub fn run() {
+   408→   408→    {
+   409→   409→        let args: Vec<String> = std::env::args().skip(1).collect();
+   410→   410→        if let Some(p) = media_file_from_args(&args) {
+   411→   411→            if let Ok(mut g) = pending_open_file().lock() {
+   412→   412→                *g = Some(p);
+   413→   413→            }
+   414→   414→        }
+   415→   415→    }
+   416→   416→    #[cfg(any(windows, target_os = "linux"))]
+   417→   417→    svp::prime_svp_env();
+   418→   418→    #[cfg(target_os = "linux")]
+   419→   419→    mpv_render_linux::configure_nvidia_graphics();
+   420→   420→    let _ = rustls::crypto::ring::default_provider().install_default();
+   421→   421→    trailer::sweep_cache();
+   422→   422→    let proxy_state = tauri::async_runtime::block_on(stream_proxy::ProxyState::start())
+   423→   423→        .unwrap_or_else(|e| {
+   424→   424→            eprintln!("[stream-proxy] failed to start: {}", e);
+   425→   425→            stream_proxy::ProxyState::placeholder()
+   426→   426→        });
+   427→   427→    let mpv_state = mpv::MpvState::new();
+   428→   428→    let pip_state = pip::PipState::new();
+   429→   429→    let fullscreen_state = fullscreen::FullscreenState::new();
+   430→   430→    let thumbs_state = thumbs::ThumbsState::new();
+   431→   431→    let dvr_state = dvr::DvrState::new();
+   432→   432→    let multiview_state = multiview::MultiviewState::new();
+   433→   433→    let modal_overlay_state = modal_overlay::ModalOverlayState::new();
+   434→   434→    let app_builder = tauri::Builder::default();
+   435→   435→    // Let a Linux development build run alongside the installed Harbor app.
+   436→   436→    // Packaged builds keep the normal single-instance behavior.
+   437→   437→    #[cfg(not(all(target_os = "linux", debug_assertions)))]
+   438→   438→    let app_builder = app_builder
+   439→   439→        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+   440→   440→            use tauri::{Emitter, Manager};
+   441→   441→            if let Some(w) = app.get_webview_window("main") {
+   442→   442→                let _ = w.show();
+   443→   443→                let _ = w.unminimize();
+   444→   444→                let _ = w.set_focus();
+   445→   445→                #[cfg(windows)]
+   446→   446→                force_show_foreground(&w);
+   447→   447→            }
+   448→   448→            if let Some(url) = args.iter().find(|a| a.starts_with("harbor://")) {
+   449→   449→                let _ = app.emit("harbor:stremio-deeplink", url.clone());
+   450→   450→            }
+   451→   451→            if let Some(path) = media_file_from_args(&args) {
+   452→   452→                let _ = app.emit("harbor:open-file", path);
+   453→   453→            }
+   454→   454→        }));
+   455→   455→    let app_builder = app_builder
+   456→   456→        .plugin(tauri_plugin_opener::init())
+   457→   457→        .plugin(tauri_plugin_os::init())
+   458→   458→        .plugin(tauri_plugin_shell::init())
+   459→   459→        .plugin(tauri_plugin_http::init())
+   460→   460→        .plugin(tauri_plugin_dialog::init())
+   461→   461→        .plugin(tauri_plugin_fs::init())
+   462→   462→        .plugin(tauri_plugin_deep_link::init())
+   463→   463→        .plugin(tauri_plugin_updater::Builder::new().build())
+   464→   464→        .plugin(tauri_plugin_process::init())
+   465→   465→        .plugin(
+   466→   466→            tauri_plugin_window_state::Builder::default()
+   467→   467→                .with_state_flags(
+   468→   468→                    tauri_plugin_window_state::StateFlags::SIZE
+   469→   469→                        | tauri_plugin_window_state::StateFlags::POSITION
+   470→   470→                        | tauri_plugin_window_state::StateFlags::MAXIMIZED
+   471→   471→                        | tauri_plugin_window_state::StateFlags::FULLSCREEN,
+   472→   472→                )
+   473→   473→                .build(),
+   474→   474→        )
+   475→   475→        .manage(proxy_state)
+   476→   476→        .manage(mpv_state)
+   477→   477→        .manage(pip_state)
+   478→   478→        .manage(fullscreen_state)
+   479→   479→        .manage(thumbs_state)
+   480→   480→        .manage(dvr_state)
+   481→   481→        .manage(multiview_state)
+   482→   482→        .manage(modal_overlay_state)
+   483→   483→        .manage(discord_rp::DiscordState::new())
+   484→   484→        .manage(download::DownloadState::new());
+   485→   485→
+   486→   486→    #[cfg(target_os = "macos")]
+   487→   487→    let app_builder = app_builder.register_uri_scheme_protocol("stremio", |ctx, request| {
+   488→   488→        use tauri::Emitter;
+   489→   489→        let url = request.uri().to_string();
+   490→   490→        let _ = ctx.app_handle().emit("harbor:stremio-deeplink", url);
+   491→   491→        tauri::http::Response::builder()
+   492→   492→            .status(200)
+   493→   493→            .header("content-type", "text/html; charset=utf-8")
+   494→   494→            .body(b"<!doctype html><meta charset=\"utf-8\"><title>Harbor</title>".to_vec())
+   495→   495→            .unwrap()
+   496→   496→    });
+   497→   497→
+   498→   498→    app_builder
+   499→   499→        .on_page_load(|webview, payload| {
+   500→   500→            if webview.label() == "main"
+   501→   501→                && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+   502→   502→            {
+   503→   503→                use tauri::Manager;
+   504→   504→                let _ = webview.window().show();
+   505→   505→                // Recover if a prior suspend left the controller invisible.
+   506→   506→                resume_webview_if_needed(webview.window().app_handle());
+   507→   507→            }
+   508→   508→        })
+   509→   509→        .setup(move |app| {
+   510→   510→            if let Err(error) = crash_report::initialize(app.handle()) {
+   511→   511→                eprintln!("[harbor::crash-report] initialization failed: {error}");
+   512→   512→            }
+   513→   513→            #[cfg(windows)]
+   514→   514→            {
+   515→   515→                use tauri_plugin_deep_link::DeepLinkExt;
+   516→   516→                if let Err(e) = app.deep_link().register_all() {
+   517→   517→                    eprintln!("[harbor::deep-link] register_all failed: {:?}", e);
+   518→   518→                }
+   519→   519→            }
+   520→   520→            #[cfg(target_os = "linux")]
+   521→   521→            {
+   522→   522→                // Flatpak registers the URI handlers from the exported desktop
+   523→   523→                // entry. Runtime registration attempts to write host integration
+   524→   524→                // files and is not permitted inside the sandbox.
+   525→   525→                if std::env::var_os("FLATPAK_ID").is_none() {
+   526→   526→                    use tauri_plugin_deep_link::DeepLinkExt;
+   527→   527→                    if let Err(e) = app.deep_link().register_all() {
+   528→   528→                        eprintln!("[harbor::deep-link] register_all failed: {:?}", e);
+   529→   529→                    }
+   530→   530→                }
+   531→   531→            }
+   532→   532→            // Browse with an opaque WebView2 background. Transparent (alpha=0)
+   533→   533→            // is applied only while embedded mpv is active (see use-mpv-embed /
+   534→   534→            // webview_reapply_transparency). Always-on transparency + black HWND
+   535→   535→            // can present as a stuck black window when composition fails.
+   536→   536→            #[cfg(windows)]
+   537→   537→            webview_helpers::apply_opaque(&app.handle(), "main");
+   538→   538→            // Recover from WebView2 render-process death by reloading in place,
+   539→   539→            // instead of leaving a blank window until app restart.
+   540→   540→            webview_helpers::install_process_failure_watchdog(&app.handle(), "main");
+   541→   541→            #[cfg(windows)]
+   542→   542→            install_maximize_guard(&app.handle());
+   543→   543→            ensure_window_on_screen(&app.handle());
+   544→   544→            // Fail-open: if PageLoadEvent::Finished never arrives (WebView hang),
+   545→   545→            // still show the main window so the user is not stuck on a blank frame.
+   546→   546→            {
+   547→   547→                use tauri::Manager;
+   548→   548→                let handle = app.handle().clone();
+   549→   549→                std::thread::spawn(move || {
+   550→   550→                    std::thread::sleep(std::time::Duration::from_millis(2500));
+   551→   551→                    if let Some(window) = handle.get_webview_window("main") {
+   552→   552→                        let visible = window.is_visible().unwrap_or(false);
+   553→   553→                        if !visible {
+   554→   554→                            eprintln!(
+   555→   555→                                "[harbor::window] fail-open: showing main after page-load timeout"
+   556→   556→                            );
+   557→   557→                            let _ = window.show();
+   558→   558→                        }
+   559→   559→                        resume_webview_if_needed(&handle);
+   560→   560→                    }
+   561→   561→                });
+   562→   562→            }
+   563→   563→            #[cfg(target_os = "macos")]
+   564→   564→            {
+   565→   565→                use tauri::Manager;
+   566→   566→                if let Some(window) = app.handle().get_webview_window("main") {
+   567→   567→                    if let Ok(ns_window) = window.ns_window() {
+   568→   568→                        let ns_window_ptr = ns_window as i64;
+   569→   569→                        if let Err(e) = mpv_render_mac::install_window_rounding(ns_window_ptr) {
+   570→   570→                            eprintln!("[harbor::mac] rounding failed: {}", e);
+   571→   571→                        }
+   572→   572→                        if let Err(e) = mpv_render_mac::make_resizable(ns_window_ptr) {
+   573→   573→                            eprintln!("[harbor::mac] resizable failed: {}", e);
+   574→   574→                        }
+   575→   575→                    }
+   576→   576→                }
+   577→   577→            }
+   578→   578→            cast_server::ensure_started_on_setup(&app.handle());
+   579→   579→            torrent_engine::ensure_started_on_setup(&app.handle());
+   580→   580→            {
+   581→   581→                let handle = app.handle().clone();
+   582→   582→                std::thread::spawn(move || discord_rp::run_loop(handle));
+   583→   583→            }
+   584→   584→            #[cfg(desktop)]
+   585→   585→            if let Err(e) = tray::build(&app.handle()) {
+   586→   586→                eprintln!("[harbor::tray] build failed: {:?}", e);
+   587→   587→            }
+   588→   588→            Ok(())
+   589→   589→        })
+   590→   590→        .on_window_event(|window, event| {
+   591→   591→            if window.label() != "main" {
+   592→   592→                return;
+   593→   593→            }
+   594→   594→            use tauri::Manager;
+   595→   595→            match event {
+   596→   596→                tauri::WindowEvent::CloseRequested { api, .. } => {
+   597→   597→                    if tray::close_to_tray() {
+   598→   598→                        api.prevent_close();
+   599→   599→                        let _ = window.hide();
+   600→   600→                    } else if !CLOSE_IN_PROGRESS.swap(true, std::sync::atomic::Ordering::SeqCst) {
+   601→   601→                        use tauri::Emitter;
+   602→   602→                        api.prevent_close();
+   603→   603→                        CLOSE_FLUSH_DONE.store(false, std::sync::atomic::Ordering::SeqCst);
+   604→   604→                        let _ = window.emit("harbor://app-closing", ());
+   605→   605→                        let w = window.clone();
+   606→   606→                        std::thread::spawn(move || {
+   607→   607→                            for _ in 0..24 {
+   608→   608→                                if CLOSE_FLUSH_DONE.load(std::sync::atomic::Ordering::SeqCst) {
+   609→   609→                                    break;
+   610→   610→                                }
+   611→   611→                                std::thread::sleep(std::time::Duration::from_millis(50));
+   612→   612→                            }
+   613→   613→                            let _ = w.destroy();
+   614→   614→                        });
+   615→   615→                    }
+   616→   616→                }
+   617→   617→                tauri::WindowEvent::Focused(focused) => {
+   618→   618→                    use tauri::Emitter;
+   619→   619→                    if *focused {
+   620→   620→                        // Recover stuck-black after TrySuspend / SetIsVisible(false)
+   621→   621→                        // if the frontend never called resume.
+   622→   622→                        resume_webview_if_needed(window.app_handle());
+   623→   623→                    }
+   624→   624→                    let minimized = if *focused {
+   625→   625→                        false
+   626→   626→                    } else {
+   627→   627→                        window.is_minimized().unwrap_or(false)
+   628→   628→                            || !window.is_visible().unwrap_or(true)
+   629→   629→                    };
+   630→   630→                    let _ = window.emit(
+   631→   631→                        "harbor://window-activity",
+   632→   632→                        serde_json::json!({ "focused": *focused, "minimized": minimized }),
+   633→   633→                    );
+   634→   634→                }
+   635→   635→                tauri::WindowEvent::Destroyed => {
+   636→   636→                    shutdown_services(window.app_handle());
+   637→   637→                }
+   638→   638→                _ => {}
+   639→   639→            }
+   640→   640→        })
+   641→   641→        .invoke_handler(tauri::generate_handler![
+   642→   642→            crash_report::take_startup_crash_report,
+   643→   643→            harbor_flush_done,
+   644→   644→            harbor_startup_ready,
+   645→   645→            close_aux_windows,
+   646→   646→            power::power_inhibit,
+   647→   647→            harbor_set_webview_memory_low,
+   648→   648→            harbor_set_webview_visible,
+   649→   649→            harbor_try_suspend_webview,
+   650→   650→            harbor_resume_webview,
+   651→   651→            save_text_file,
+   652→   652→            subsync::moviehash::compute_moviehash,
+   653→   653→            subsync::sync_subtitle,
+   654→   654→            sub_extract::subtitle_extract,
+   655→   655→            cast_server::stop_stremio_sidecar,
+   656→   656→            cast_server::cast_server_stop,
+   657→   657→            web_server::web_serve_start,
+   658→   658→            web_server::web_serve_stop,
+   659→   659→            web_server::web_serve_status,
+   660→   660→            web_server::remote_ws_broadcast,
+   661→   661→            web_server::remote_ws_client_count,
+   662→   662→            anime4k::anime4k_download,
+   663→   663→            anime4k::anime4k_dir,
+   664→   664→            svp::svp_status,
+   665→   665→            svp::svp_launch,
+   666→   666→            svp::svp_ensure_running,
+   667→   667→            svp::svp_apply,
+   668→   668→            settings_store::settings_read,
+   669→   669→            settings_store::settings_write,
+   670→   670→            proc_mem::harbor_process_memory,
+   671→   671→            trailer::fetch_trailer,
+   672→   672→            download::download_start,
+   673→   673→            download::download_cancel,
+   674→   674→            stream_proxy::proxy_register,
+   675→   675→            stream_proxy::proxy_unregister,
+   676→   676→            stream_proxy::proxy_gc_idle,
+   677→   677→            cf_relay::cf_list_accounts,
+   678→   678→            cf_relay::cf_deploy_relay,
+   679→   679→            cf_relay::cf_delete_relay,
+   680→   680→            cf_relay::cf_relay_status,
+   681→   681→            mpv::mpv_probe,
+   682→   682→            mpv::mpv_start,
+   683→   683→            mpv::mpv_command,
+   684→   684→            mpv::mpv_set_property,
+   685→   685→            mpv::mpv_get_property,
+   686→   686→            mpv::mpv_audio_devices,
+   687→   687→            mpv::mpv_set_geometry,
+   688→   688→            mpv::mpv_force_below,
+   689→   689→            mpv::mpv_export_log,
+   690→   690→            mpv::mpv_set_hdr_stage,
+   691→   691→            mpv::display_hdr_active,
+   692→   692→            webview_helpers::webview_reapply_transparency,
+   693→   693→            webview_helpers::webview_set_opaque,
+   694→   694→            mpv::mpv_on_pip_changed,
+   695→   695→            mpv::mpv_screenshot_data_url,
+   696→   696→            mpv::mpv_save_screenshot,
+   697→   697→            mpv::mpv_gif_start,
+   698→   698→            mpv::mpv_gif_stop,
+   699→   699→            mpv::mpv_gif_abort,
+   700→   700→            mpv::mpv_clip_save,
+   701→   701→            modal_overlay::modal_overlay_open,
+   702→   702→            modal_overlay::modal_overlay_close,
+   703→   703→            modal_overlay::modal_overlay_emit_state,
+   704→   704→            modal_overlay::modal_overlay_emit_action,
+   705→   705→            modal_overlay::modal_overlay_sync,
+   706→   706→            modal_overlay::modal_overlay_get_pending,
+   707→   707→            hdr_overlay::hdr_overlay_open,
+   708→   708→            hdr_overlay::hdr_overlay_close,
+   709→   709→            hdr_overlay::hdr_overlay_hide,
+   710→   710→            hdr_overlay::hdr_overlay_sync,
+   711→   711→            hdr_overlay::hdr_overlay_emit_props,
+   712→   712→            hdr_overlay::hdr_overlay_emit_action,
+   713→   713→            mpv::mpv_sub_add,
+   714→   714→            mpv::sub_download,
+   715→   715→            mpv::mpv_stop,
+   716→   716→            pip::pip_open,
+   717→   717→            pip::pip_get_session,
+   718→   718→            pip::pip_close,
+   719→   719→            pip::pip_publish_state,
+   720→   720→            pip::window_pip_enter,
+   721→   721→            pip::window_pip_exit,
+   722→   722→            fullscreen::window_fullscreen_enter,
+   723→   723→            fullscreen::window_fullscreen_exit,
+   724→   724→            browser::browser_open,
+   725→   725→            browser::browser_close,
+   726→   726→            thumbs::thumbs_set_url,
+   727→   727→            thumbs::thumbs_spawn_eager,
+   728→   728→            thumbs::thumbs_get,
+   729→   729→            thumbs::thumbs_stop,
+   730→   730→            dvr::dvr_start,
+   731→   731→            dvr::dvr_stop,
+   732→   732→            dvr::dvr_list,
+   733→   733→            dvr::dvr_default_dir,
+   734→   734→            dvr::dvr_reveal,
+   735→   735→            multiview::multiview_open,
+   736→   736→            multiview::multiview_prespawn,
+   737→   737→            multiview::multiview_geometry,
+   738→   738→            multiview::multiview_audio_focus,
+   739→   739→            multiview::multiview_close,
+   740→   740→            multiview::multiview_visibility,
+   741→   741→            multiview::multiview_stop_all,
+   742→   742→            http_fetch::harbor_fetch,
+   743→   743→            http_fetch::harbor_fetch_cancel,
+   744→   744→            discord_rp::discord_set_presence,
+   745→   745→            discord_rp::discord_clear,
+   746→   746→            discord_rp::discord_set_enabled,
+   747→   747→            cast::cast_discover,
+   748→   748→            dlna::lan_ip,
+   749→   749→            cast::cast_load,
+   750→   750→            cast::cast_play,
+   751→   751→            cast::cast_pause,
+   752→   752→            cast::cast_seek,
+   753→   753→            cast::cast_stop,
+   754→   754→            cast::cast_status,
+   755→   755→            cast_server::cast_server_status,
+   756→   756→            cast_server::cast_server_restart,
+   757→   757→            torrent_engine::torrent_engine_status,
+   758→   758→            torrent_engine::torrent_engine_add,
+   759→   759→            torrent_engine::torrent_engine_select,
+   760→   760→            torrent_engine::torrent_engine_stats,
+   761→   761→            torrent_engine::torrent_engine_remove,
+   762→   762→            torrent_engine::torrent_engine_selftest,
+   763→   763→            torrent_engine::torrent_engine_restart,
+   764→   764→            torrent_engine::torrent_engine_hard_reset,
+   765→   765→            torrent_engine::torrent_engine_set_options,
+   766→   766→            transcode::cast_ffmpeg_present,
+   767→   767→            streams::streams_run_pipeline,
+   768→   768→            streams::streams_parse,
+   769→   769→            streams::streams_core_version,
+   770→   770→            local_lib::harbor_scan_folder,
+   771→   771→            tray::tray_set_prefs,
+   772→   772→            tray::tray_set_custom_themes,
+   773→   773→            stremio_auth::stremio_auth_start,
+   774→   774→            song_id::recognize_now_playing,
+   775→   775→            deeplink_set_stremio,
+   776→   776→            deeplink_is_stremio_registered,
+   777→   777→            harbor_take_pending_file,
+   778→   778→        ])
+   779→   779→        .run(tauri::generate_context!())
+   780→   780→        .expect("error while running tauri application");
+   781→   781→}
+   782→   782→

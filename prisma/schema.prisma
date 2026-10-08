@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:/home/z/my-project/db/harbor.db"
+}
+
+// Multi-profile support (mirrors Harbor's profiles system)
+model Profile {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#7dd3fc")
+  avatar    String?
+  isKid     Boolean  @default(false)
+  kidAge    Int?
+  pinHash   String? // SHA-256 of parental PIN
+  curfewMin Int? // daily minutes budget for kids
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Installed Stremio addons per profile
+model Addon {
+  id           String   @id // manifest id
+  transportUrl String
+  name         String
+  version      String?
+  logo         String?
+  description  String?
+  background   String?
+  contactEmail String?
+  types        String // JSON array of types
+  catalogs     String // JSON array of CatalogDef
+  resources    String // JSON array of resources
+  idPrefixes   String? // JSON array
+  behaviorHints String? // JSON {adult, p2p, configurable, configurationRequired}
+  flags        String? // JSON {official, protected}
+  enabled      Boolean  @default(true)
+  installedAt  DateTime @default(now())
+  profileId    String
+  order        Int      @default(0)
+  // Last health-probe result (mirrors the client-side AddonRecord.probe)
+  probeOk       Boolean?
+  probeResource String?
+  probeCount    Int?
+  probeMs       Int?
+  probeError    String?
+  probedAt      DateTime?
+  updatedAt    DateTime @updatedAt
+
+  @@unique([profileId, transportUrl])
+  @@index([profileId])
+}
+
+// Library items: watchlist bookmarks + continue-watching + watch history
+model LibraryItem {
+  id          String   @id // composite: profileId + itemId
+  profileId   String
+  itemId      String // e.g. tt1234567 or kitsu:123
+  type        String // movie | series | other
+  name        String
+  poster      String?
+  background  String?
+  logo        String?
+  releaseInfo String?
+  imdbRating  String?
+  state       String? // JSON {timeOffset, duration, season, episode, videoId, timeWatched, flaggedWatched, watched}
+  removed     Boolean  @default(false)
+  temp        Boolean  @default(false)
+  favorite    Boolean  @default(false)
+  watched     Boolean  @default(false)
+  lastWatched DateTime?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([profileId, itemId])
+  @@index([profileId, removed, temp])
+  @@index([profileId, favorite])
+}
+
+// Episode-level watch history
+model WatchEvent {
+  id        String   @id @default(cuid())
+  profileId String
+  itemId    String
+  videoId   String? // tt:s:e for episodes
+  season    Int?
+  episode   Int?
+  position  Float // seconds
+  duration  Float
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([profileId, itemId])
+  @@index([profileId, createdAt])
+}
+
+// Custom user lists ("My Lists")
+model CustomList {
+  id        String   @id @default(cuid())
+  profileId String
+  name      String
+  items     String   @default("[]") // JSON array of {itemId, type, name, poster}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// OAuth account links (Trakt / Simkl) — tokens encrypted at rest (AES-256-GCM,
+// see src/lib/harbor/vault.ts). The browser only ever receives `id` (opaque).
+model LinkedAccount {
+  id              String    @id @default(cuid())
+  provider        String // trakt | simkl
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  expiresAt       DateTime?
+  username        String?
+  avatar          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([provider])
+}
+
+// App settings per profile (JSON blob, mirrors Harbor settings)
+model AppSettings {
+  profileId String @id
+  data      String // JSON settings blob
+  updatedAt DateTime @updatedAt
+}
+
+// Server-wide key/value config (survives .env resets in sandboxed deploys).
+// Used e.g. for TRAKT_CLIENT_ID fallback: env var wins, DB row is the backup.
+model ServerConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Cached catalogs/metas for performance
+// (skipped in v1; in-memory LRU used instead)

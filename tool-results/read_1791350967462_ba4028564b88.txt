@@ -1,0 +1,763 @@
+     1→import { useEffect, useRef, useState } from "react";
+     2→import { FormatBadge, type BadgeKind } from "@/components/format-badge";
+     3→import previewPoster from "@/assets/preview/poster1.webp";
+     4→import previewPoster2 from "@/assets/preview/poster2.webp";
+     5→import previewPoster3 from "@/assets/preview/poster3.webp";
+     6→import previewPoster4 from "@/assets/preview/poster4.webp";
+     7→import { useSettings } from "@/lib/settings";
+     8→import { useT } from "@/lib/i18n";
+     9→import { resetPosterDock, updatePosterDock } from "@/lib/poster-dock";
+    10→import { Section, Segmented, ToggleRow } from "../shared";
+    11→import { SFX } from "@/lib/sfx";
+    12→
+    13→const DEFAULT_GLASS_BLUR = 2.5;
+    14→const DEFAULT_GLASS_TINT = 40;
+    15→
+    16→export function DisplaySection() {
+    17→  const t = useT();
+    18→  const { settings, update } = useSettings();
+    19→  const previewW = Math.round(108 * settings.posterScale);
+    20→  const cardW = Math.round(150 * settings.posterScale);
+    21→  const cardH = Math.round(cardW * 1.5);
+    22→  const soundEffectsEnabled = settings.soundTheme !== "none";
+    23→  const defaultGlassBlur = Number.isFinite(settings.defaultLiquidGlassBlur)
+    24→    ? settings.defaultLiquidGlassBlur
+    25→    : DEFAULT_GLASS_BLUR;
+    26→  const defaultGlassTint = Number.isFinite(settings.defaultLiquidGlassTint)
+    27→    ? settings.defaultLiquidGlassTint
+    28→    : DEFAULT_GLASS_TINT;
+    29→  return (
+    30→    <>
+    31→      <Section
+    32→        title={t("Poster card style")}
+    33→        subtitle={t(
+    34→          "Tune the size and corner radius of every poster across Home, Discover, and your library. The preview updates live.",
+    35→        )}
+    36→      >
+    37→        <div className="flex flex-col gap-8 sm:flex-row sm:items-start">
+    38→          <div className="flex shrink-0 flex-col gap-4 rounded-2xl border border-edge-soft bg-canvas/40 p-6 sm:w-[250px]">
+    39→            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+    40→              {t("Live preview")}
+    41→            </span>
+    42→            <div className="flex justify-center py-1">
+    43→              <img
+    44→                src={previewPoster}
+    45→                alt=""
+    46→                draggable={false}
+    47→                className="aspect-[2/3] object-cover shadow-[0_10px_28px_-10px_rgba(0,0,0,0.65)] transition-[width,border-radius] duration-200"
+    48→                style={{ width: previewW, borderRadius: settings.posterRadius }}
+    49→              />
+    50→            </div>
+    51→            <div className="flex flex-col gap-2.5 text-[12.5px]">
+    52→              <span className="flex items-center justify-between gap-3">
+    53→                <span className="font-medium text-ink">{t("Width")}</span>
+    54→                <PxField
+    55→                  value={cardW}
+    56→                  min={90}
+    57→                  max={300}
+    58→                  onCommit={(px) => update({ posterScale: Math.round((px / 150) * 100) / 100 })}
+    59→                />
+    60→              </span>
+    61→              <span className="flex items-center justify-between gap-3">
+    62→                <span className="font-medium text-ink">{t("Corner radius")}</span>
+    63→                <PxField
+    64→                  value={settings.posterRadius}
+    65→                  min={0}
+    66→                  max={40}
+    67→                  onCommit={(px) => update({ posterRadius: px })}
+    68→                />
+    69→              </span>
+    70→              <span className="flex items-center justify-between gap-3 text-ink-subtle">
+    71→                <span>{t("Height")}</span>
+    72→                <PxField
+    73→                  value={cardH}
+    74→                  min={135}
+    75→                  max={450}
+    76→                  onCommit={(px) => update({ posterScale: Math.round((px / 225) * 100) / 100 })}
+    77→                />
+    78→              </span>
+    79→            </div>
+    80→          </div>
+    81→          <div className="flex min-w-0 flex-1 flex-col gap-5">
+    82→            <div className="flex flex-col gap-2">
+    83→              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+    84→                {t("Size")}
+    85→              </span>
+    86→              <Segmented
+    87→                value={posterSizeKey(settings.posterScale)}
+    88→                options={POSTER_SIZES.map((p) => ({ value: p.value, label: p.label }))}
+    89→                onChange={(v) =>
+    90→                  update({ posterScale: POSTER_SIZES.find((p) => p.value === v)?.scale ?? 1 })
+    91→                }
+    92→              />
+    93→            </div>
+    94→            <div className="flex flex-col gap-2">
+    95→              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+    96→                {t("Corner radius")}
+    97→              </span>
+    98→              <Segmented
+    99→                value={radiusKey(settings.posterRadius)}
+   100→                options={POSTER_RADII.map((p) => ({ value: p.value, label: t(p.label) }))}
+   101→                onChange={(v) =>
+   102→                  update({ posterRadius: POSTER_RADII.find((p) => p.value === v)?.px ?? 12 })
+   103→                }
+   104→              />
+   105→            </div>
+   106→            <div className="flex flex-col gap-2">
+   107→              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+   108→                {t("Load effect")}
+   109→              </span>
+   110→              <Segmented
+   111→                value={settings.posterEffect}
+   112→                options={[
+   113→                  { value: "blur", label: t("Blur up") },
+   114→                  { value: "fade", label: t("Fade") },
+   115→                  { value: "off", label: t("Instant") },
+   116→                ]}
+   117→                onChange={(v) => update({ posterEffect: v as "blur" | "fade" | "off" })}
+   118→              />
+   119→              <p className="text-[12px] leading-relaxed text-ink-subtle">
+   120→                {t(
+   121→                  "How posters appear as they load. Blur up looks smoothest; Fade is lighter on older or low-power devices; Instant turns it off.",
+   122→                )}
+   123→              </p>
+   124→            </div>
+   125→          </div>
+   126→        </div>
+   127→        <div className="flex flex-col gap-4 rounded-2xl border border-edge-soft bg-canvas/35 p-5">
+   128→          <ToggleRow
+   129→            label={t("Focused Card")}
+   130→            sub={t(
+   131→              "Emphasize the selected card across the page while gently darkening and blurring the other cards.",
+   132→            )}
+   133→            value={settings.posterFocusedCard}
+   134→            onChange={(posterFocusedCard) => update({ posterFocusedCard })}
+   135→          />
+   136→          <ToggleRow
+   137→            label={t("Expanding Cards")}
+   138→            sub={t(
+   139→              "Expand poster cards during keyboard or remote navigation across poster rows, using preloaded wide artwork.",
+   140→            )}
+   141→            value={settings.posterBackdropExpansion}
+   142→            onChange={(posterBackdropExpansion) => update({ posterBackdropExpansion })}
+   143→          />
+   144→          <ToggleRow
+   145→            label={t("Poster Dock magnification")}
+   146→            sub={t("Gently magnify nearby posters as you move across a poster row.")}
+   147→            value={settings.posterDockMagnification}
+   148→            onChange={(posterDockMagnification) => update({ posterDockMagnification })}
+   149→          />
+   150→          {settings.posterDockMagnification && (
+   151→            <>
+   152→              <div className="flex items-center gap-4 px-1 py-1.5">
+   153→                <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">
+   154→                  {t("Animation speed")}
+   155→                </span>
+   156→                <input
+   157→                  type="range"
+   158→                  min="250"
+   159→                  max="1500"
+   160→                  step="10"
+   161→                  value={settings.posterDockTransitionMs}
+   162→                  onChange={(event) =>
+   163→                    update({ posterDockTransitionMs: Number(event.target.value) })
+   164→                  }
+   165→                  className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   166→                />
+   167→                <span className="w-16 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   168→                  {settings.posterDockTransitionMs}ms
+   169→                </span>
+   170→                {settings.posterDockTransitionMs !== 760 && (
+   171→                  <button
+   172→                    type="button"
+   173→                    onClick={() => update({ posterDockTransitionMs: 760 })}
+   174→                    className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   175→                  >
+   176→                    {t("Reset")}
+   177→                  </button>
+   178→                )}
+   179→              </div>
+   180→              <PosterDockPreview transitionMs={settings.posterDockTransitionMs} />
+   181→            </>
+   182→          )}
+   183→        </div>
+   184→      </Section>
+   185→      <Section title={t("Liquid Glass")}>
+   186→        <ToggleRow
+   187→          label={t("Use Enhanced Liquid Glass")}
+   188→          sub={t("May look better while using more graphics resources.")}
+   189→          value={settings.experimentalLiquidGlassEnabled}
+   190→          onChange={(experimentalLiquidGlassEnabled) => update({ experimentalLiquidGlassEnabled })}
+   191→        />
+   192→        {settings.experimentalLiquidGlassEnabled && (
+   193→          <div className="mt-4 flex items-center gap-4 px-1 py-1.5">
+   194→            <span className="w-40 shrink-0 text-[13.5px] font-medium text-ink">
+   195→              {t("Glass opacity")}
+   196→            </span>
+   197→            <input
+   198→              type="range"
+   199→              min="5"
+   200→              max="100"
+   201→              step="5"
+   202→              value={settings.experimentalLiquidGlassOpacity}
+   203→              onChange={(e) => update({ experimentalLiquidGlassOpacity: Number(e.target.value) })}
+   204→              className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   205→            />
+   206→            <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   207→              {settings.experimentalLiquidGlassOpacity}%
+   208→            </span>
+   209→          </div>
+   210→        )}
+   211→        {!settings.experimentalLiquidGlassEnabled && (
+   212→          <>
+   213→            <div className="mt-4 flex items-center gap-4 px-1 py-1.5">
+   214→              <span className="w-40 shrink-0 text-[13.5px] font-medium text-ink">
+   215→                {t("Default glass blur")}
+   216→              </span>
+   217→              <input
+   218→                type="range"
+   219→                min="0"
+   220→                max="8"
+   221→                step="0.5"
+   222→                value={defaultGlassBlur}
+   223→                onChange={(e) => update({ defaultLiquidGlassBlur: Number(e.target.value) })}
+   224→                className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   225→              />
+   226→              <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   227→                {defaultGlassBlur}px
+   228→              </span>
+   229→              {defaultGlassBlur !== DEFAULT_GLASS_BLUR && (
+   230→                <button
+   231→                  type="button"
+   232→                  onClick={() => update({ defaultLiquidGlassBlur: DEFAULT_GLASS_BLUR })}
+   233→                  className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   234→                >
+   235→                  {t("Reset")}
+   236→                </button>
+   237→              )}
+   238→            </div>
+   239→            <div className="mt-4 flex items-center gap-4 px-1 py-1.5">
+   240→              <span className="w-40 shrink-0 text-[13.5px] font-medium text-ink">
+   241→                {t("Glass tint")}
+   242→              </span>
+   243→              <input
+   244→                type="range"
+   245→                min="0"
+   246→                max="100"
+   247→                step="5"
+   248→                value={defaultGlassTint}
+   249→                onChange={(e) => update({ defaultLiquidGlassTint: Number(e.target.value) })}
+   250→                className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   251→              />
+   252→              <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   253→                {defaultGlassTint}%
+   254→              </span>
+   255→              {defaultGlassTint !== DEFAULT_GLASS_TINT && (
+   256→                <button
+   257→                  type="button"
+   258→                  onClick={() => update({ defaultLiquidGlassTint: DEFAULT_GLASS_TINT })}
+   259→                  className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   260→                >
+   261→                  {t("Reset")}
+   262→                </button>
+   263→              )}
+   264→            </div>
+   265→          </>
+   266→        )}
+   267→      </Section>
+   268→
+   269→      <Section
+   270→        title={t("Sound Effects (SFX)")}
+   271→        subtitle={t("Choose your preferred audio feedback for navigation and actions.")}
+   272→      >
+   273→        <div className="flex w-full flex-col gap-4">
+   274→          <ToggleRow
+   275→            label={t("Enable sound effects")}
+   276→            sub={t("Play sounds for navigation and actions.")}
+   277→            value={soundEffectsEnabled}
+   278→            onChange={(enabled) =>
+   279→              update({
+   280→                soundTheme: enabled
+   281→                  ? settings.soundTheme === "none"
+   282→                    ? "glass"
+   283→                    : settings.soundTheme || "glass"
+   284→                  : "none",
+   285→              })
+   286→            }
+   287→          />
+   288→
+   289→          {soundEffectsEnabled && (
+   290→            <>
+   291→              <select
+   292→                value={settings.soundTheme || "glass"}
+   293→                onChange={(e) => update({ soundTheme: e.target.value as any })}
+   294→                className="flex h-10 w-full items-center justify-between rounded-xl border border-edge-soft bg-surface px-4 text-sm font-medium text-text outline-none transition-colors hover:border-edge hover:bg-surface-hover focus:border-primary focus:ring-1 focus:ring-primary"
+   295→              >
+   296→                <option value="glass">{t("Glass")}</option>
+   297→                <option value="modern">{t("Modern")}</option>
+   298→                <option value="retro">{t("Retro")}</option>
+   299→                <option value="cinematic">{t("Cinematic")}</option>
+   300→              </select>
+   301→
+   302→              <div className="flex items-center gap-4 px-1 py-1.5">
+   303→                <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">
+   304→                  {t("Sound effects volume")}
+   305→                </span>
+   306→                <input
+   307→                  type="range"
+   308→                  min="0"
+   309→                  max="100"
+   310→                  step="5"
+   311→                  value={settings.sfxVolume ?? 50}
+   312→                  onChange={(e) => {
+   313→                    const volume = parseInt(e.target.value, 10);
+   314→                    update({ sfxVolume: volume });
+   315→                    SFX.setVolume(volume / 100);
+   316→                    SFX.click();
+   317→                  }}
+   318→                  className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   319→                />
+   320→                <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   321→                  {settings.sfxVolume ?? 50}%
+   322→                </span>
+   323→              </div>
+   324→
+   325→              <ToggleRow
+   326→                label={t("Player volume sounds")}
+   327→                sub={t("Play a short sound when changing the player volume. Off by default.")}
+   328→                value={settings.playerVolumeSfx}
+   329→                onChange={(value) => update({ playerVolumeSfx: value })}
+   330→              />
+   331→            </>
+   332→          )}
+   333→        </div>
+   334→      </Section>
+   335→      <Section
+   336→        title={t("Title text")}
+   337→        subtitle={t(
+   338→          "Resize the row titles on Home and the title shown in the player, without scaling the rest of the interface. You can also lead the player title with the series name instead of the episode.",
+   339→        )}
+   340→      >
+   341→        <SizeSlider
+   342→          label={t("Row titles")}
+   343→          value={settings.rowTitleScale}
+   344→          onChange={(v) => update({ rowTitleScale: v })}
+   345→        />
+   346→        <SizeSlider
+   347→          label={t("Player title")}
+   348→          value={settings.playerTitleScale}
+   349→          onChange={(v) => update({ playerTitleScale: v })}
+   350→        />
+   351→        <ToggleRow
+   352→          label={t("Show series name first in the player")}
+   353→          sub={t("Lead with the show name instead of the episode title at the top of the player.")}
+   354→          value={settings.playerTitleSeriesFirst}
+   355→          onChange={(v) => update({ playerTitleSeriesFirst: v })}
+   356→        />
+   357→      </Section>
+   358→
+   359→      <Section
+   360→        title={t("Accessibility")}
+   361→        subtitle={t(
+   362→          "Make everything bigger and easier to read: sidebar, menus, popups, every page. The whole interface scales live as you drag, so you can see the change right here. Great on 4K and ultrawide monitors, or whenever the text feels small.",
+   363→        )}
+   364→      >
+   365→        <div className="flex items-center gap-4 px-1 py-1.5">
+   366→          <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">
+   367→            {t("Interface scale")}
+   368→          </span>
+   369→          <input
+   370→            type="range"
+   371→            min={0.8}
+   372→            max={1.6}
+   373→            step={0.05}
+   374→            value={settings.uiScale}
+   375→            onChange={(e) => update({ uiScale: parseFloat(e.target.value) })}
+   376→            className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   377→          />
+   378→          <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   379→            {Math.round(settings.uiScale * 100)}%
+   380→          </span>
+   381→          {settings.uiScale !== 1 && (
+   382→            <button
+   383→              onClick={() => update({ uiScale: 1 })}
+   384→              className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   385→            >
+   386→              {t("Reset")}
+   387→            </button>
+   388→          )}
+   389→        </div>
+   390→      </Section>
+   391→
+   392→      <Section
+   393→        title={t("Stream format chips")}
+   394→        subtitle={t(
+   395→          "The little 4K · HDR · codec · audio chips that ride along each stream in the play picker.",
+   396→        )}
+   397→      >
+   398→        <ToggleRow
+   399→          label={t("Show format chips on stream rows")}
+   400→          sub={t(
+   401→            "The picker tags each stream with resolution, HDR flavor, codec, and audio format. Off hides them all.",
+   402→          )}
+   403→          value={settings.showQualityBadge}
+   404→          onChange={(v) => update({ showQualityBadge: v })}
+   405→        />
+   406→        <QualityPreview />
+   407→      </Section>
+   408→
+   409→      <Section
+   410→        title={t("Home hero")}
+   411→        subtitle={t("Make the featured banner on Home bigger and sharper.")}
+   412→      >
+   413→        <ToggleRow
+   414→          label={t("Full hero banner")}
+   415→          sub={t("Stretch the featured hero edge to edge and taller, across every layout.")}
+   416→          value={settings.heroFull}
+   417→          onChange={(v) => update({ heroFull: v })}
+   418→        />
+   419→        <ToggleRow
+   420→          label={t("Full quality hero image")}
+   421→          sub={t("Load the highest-resolution artwork for the featured hero. Uses more bandwidth.")}
+   422→          value={settings.heroFullQuality}
+   423→          onChange={(v) => update({ heroFullQuality: v })}
+   424→        />
+   425→      </Section>
+   426→
+   427→      <Section
+   428→        title={t("Home hero shadow")}
+   429→        subtitle={t(
+   430→          "How dark the gradient behind the featured title on Home is. 100% is the classic look; lower it to let more of the artwork show through.",
+   431→        )}
+   432→      >
+   433→        <div className="flex items-center gap-4 px-1 py-1.5">
+   434→          <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">{t("Shadow")}</span>
+   435→          <input
+   436→            type="range"
+   437→            min={0}
+   438→            max={100}
+   439→            step={5}
+   440→            value={settings.heroShadow}
+   441→            onChange={(e) => update({ heroShadow: parseInt(e.target.value, 10) })}
+   442→            className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   443→          />
+   444→          <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   445→            {settings.heroShadow}%
+   446→          </span>
+   447→          {settings.heroShadow !== 100 && (
+   448→            <button
+   449→              onClick={() => update({ heroShadow: 100 })}
+   450→              className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   451→            >
+   452→              {t("Reset")}
+   453→            </button>
+   454→          )}
+   455→        </div>
+   456→      </Section>
+   457→
+   458→      <Section
+   459→        title={t("Trailer quality")}
+   460→        subtitle={t(
+   461→          "How sharp the trailer is when you hit the preview button. Auto picks from your connection speed. 1080p and Best merge separate video and audio with the bundled ffmpeg, so they take a beat longer to start.",
+   462→        )}
+   463→      >
+   464→        <Segmented
+   465→          value={settings.trailerQuality}
+   466→          options={[
+   467→            { value: "auto", label: "Auto" },
+   468→            { value: "360p", label: "360p" },
+   469→            { value: "720p", label: "720p" },
+   470→            { value: "1080p", label: "1080p" },
+   471→            { value: "best", label: "Best" },
+   472→          ]}
+   473→          onChange={(v) => update({ trailerQuality: v })}
+   474→        />
+   475→        <ToggleRow
+   476→          label={t("Autoplay trailer on detail pages")}
+   477→          sub={t(
+   478→            "Plays a muted trailer in the backdrop when you open a title. Click the speaker to unmute. Falls back to the image when no trailer is available.",
+   479→          )}
+   480→          value={settings.detailTrailerAutoplay}
+   481→          onChange={(v) => update({ detailTrailerAutoplay: v })}
+   482→        />
+   483→        {settings.detailTrailerAutoplay && (
+   484→          <ToggleRow
+   485→            label={t("Start trailers with audio")}
+   486→            sub={t(
+   487→              "Detail page trailers begin unmuted. Falls back to muted if the browser blocks sound until you interact.",
+   488→            )}
+   489→            value={settings.detailTrailerAudio}
+   490→            onChange={(v) => update({ detailTrailerAudio: v })}
+   491→          />
+   492→        )}
+   493→      </Section>
+   494→    </>
+   495→  );
+   496→}
+   497→
+   498→function PosterDockPreview({ transitionMs }: { transitionMs: number }) {
+   499→  const trackRef = useRef<HTMLDivElement>(null);
+   500→  const frameRef = useRef<number | null>(null);
+   501→  const pointerXRef = useRef<number | null>(null);
+   502→
+   503→  const update = () => {
+   504→    frameRef.current = null;
+   505→    const track = trackRef.current;
+   506→    const pointerX = pointerXRef.current;
+   507→    if (!track || pointerX === null) return;
+   508→
+   509→    updatePosterDock({
+   510→      track,
+   511→      pointerX,
+   512→      cellWidth: 80,
+   513→      gap: 12,
+   514→      scrollPosition: 0,
+   515→      rtl: false,
+   516→      transitionMs,
+   517→    });
+   518→  };
+   519→
+   520→  const schedule = (pointerX: number) => {
+   521→    pointerXRef.current = pointerX;
+   522→    if (frameRef.current === null) frameRef.current = requestAnimationFrame(update);
+   523→  };
+   524→
+   525→  useEffect(
+   526→    () => () => {
+   527→      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+   528→      if (trackRef.current) resetPosterDock(trackRef.current);
+   529→    },
+   530→    [],
+   531→  );
+   532→
+   533→  return (
+   534→    <div className="flex flex-col gap-2">
+   535→      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+   536→        Live preview
+   537→      </span>
+   538→      <div
+   539→        ref={trackRef}
+   540→        onPointerMove={(event) => schedule(event.clientX)}
+   541→        onPointerLeave={() => {
+   542→          pointerXRef.current = null;
+   543→          if (trackRef.current) resetPosterDock(trackRef.current);
+   544→        }}
+   545→        className="flex items-start gap-3 overflow-visible px-3 pb-4 pt-2"
+   546→      >
+   547→        {[
+   548→          previewPoster,
+   549→          previewPoster2,
+   550→          previewPoster3,
+   551→          previewPoster4,
+   552→          previewPoster,
+   553→          previewPoster2,
+   554→        ].map((poster, index) => (
+   555→          <div key={`${poster}-${index}`} className="w-20 shrink-0">
+   556→            <div
+   557→              data-preview-anchor
+   558→              className="overflow-hidden rounded-lg shadow-[0_6px_16px_-8px_rgba(0,0,0,0.8)]"
+   559→            >
+   560→              <img
+   561→                src={poster}
+   562→                alt=""
+   563→                draggable={false}
+   564→                className="aspect-[2/3] w-full object-cover"
+   565→              />
+   566→            </div>
+   567→          </div>
+   568→        ))}
+   569→      </div>
+   570→    </div>
+   571→  );
+   572→}
+   573→
+   574→function SizeSlider({
+   575→  label,
+   576→  value,
+   577→  onChange,
+   578→}: {
+   579→  label: string;
+   580→  value: number;
+   581→  onChange: (v: number) => void;
+   582→}) {
+   583→  const t = useT();
+   584→  return (
+   585→    <div className="flex items-center gap-4 px-1 py-1.5">
+   586→      <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">{label}</span>
+   587→      <input
+   588→        type="range"
+   589→        min={0.8}
+   590→        max={1.6}
+   591→        step={0.05}
+   592→        value={value}
+   593→        onChange={(e) => onChange(parseFloat(e.target.value))}
+   594→        className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+   595→      />
+   596→      <span className="w-14 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+   597→        {Math.round(value * 100)}%
+   598→      </span>
+   599→      {value !== 1 && (
+   600→        <button
+   601→          onClick={() => onChange(1)}
+   602→          className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+   603→        >
+   604→          {t("Reset")}
+   605→        </button>
+   606→      )}
+   607→    </div>
+   608→  );
+   609→}
+   610→
+   611→const POSTER_RADII = [
+   612→  { value: "sharp", label: "Sharp", px: 0 },
+   613→  { value: "subtle", label: "Subtle", px: 6 },
+   614→  { value: "classic", label: "Classic", px: 12 },
+   615→  { value: "rounded", label: "Rounded", px: 18 },
+   616→  { value: "pill", label: "Pill", px: 28 },
+   617→];
+   618→
+   619→function radiusKey(px: number): string {
+   620→  return POSTER_RADII.reduce((best, p) => (Math.abs(p.px - px) < Math.abs(best.px - px) ? p : best))
+   621→    .value;
+   622→}
+   623→
+   624→function PxField({
+   625→  value,
+   626→  min,
+   627→  max,
+   628→  onCommit,
+   629→}: {
+   630→  value: number;
+   631→  min: number;
+   632→  max: number;
+   633→  onCommit: (v: number) => void;
+   634→}) {
+   635→  const [editing, setEditing] = useState(false);
+   636→  const [draft, setDraft] = useState(String(value));
+   637→  useEffect(() => {
+   638→    if (!editing) setDraft(String(value));
+   639→  }, [value, editing]);
+   640→  const commit = () => {
+   641→    const n = Math.max(min, Math.min(max, Math.round(Number(draft) || value)));
+   642→    onCommit(n);
+   643→    setEditing(false);
+   644→  };
+   645→  if (editing) {
+   646→    return (
+   647→      <input
+   648→        type="number"
+   649→        autoFocus
+   650→        value={draft}
+   651→        min={min}
+   652→        max={max}
+   653→        onChange={(e) => setDraft(e.target.value)}
+   654→        onBlur={commit}
+   655→        onKeyDown={(e) => {
+   656→          if (e.key === "Enter") commit();
+   657→          else if (e.key === "Escape") setEditing(false);
+   658→        }}
+   659→        className="w-14 rounded-md border border-ink bg-canvas px-1.5 py-0.5 text-[12px] tabular-nums text-ink outline-none"
+   660→      />
+   661→    );
+   662→  }
+   663→  return (
+   664→    <button
+   665→      type="button"
+   666→      onClick={() => setEditing(true)}
+   667→      title="Click to edit"
+   668→      className="rounded px-1 py-0.5 tabular-nums text-ink-muted transition-colors hover:bg-raised hover:text-ink"
+   669→    >
+   670→      {value}px
+   671→    </button>
+   672→  );
+   673→}
+   674→
+   675→const POSTER_SIZES = [
+   676→  { value: "compact", label: "Compact", scale: 0.8 },
+   677→  { value: "dense", label: "Dense", scale: 0.9 },
+   678→  { value: "standard", label: "Standard", scale: 1 },
+   679→  { value: "balanced", label: "Balanced", scale: 1.15 },
+   680→  { value: "comfort", label: "Comfort", scale: 1.3 },
+   681→  { value: "large", label: "Large", scale: 1.5 },
+   682→] as const;
+   683→
+   684→function posterSizeKey(scale: number): string {
+   685→  let best: (typeof POSTER_SIZES)[number] = POSTER_SIZES[0];
+   686→  for (const p of POSTER_SIZES) {
+   687→    if (Math.abs(p.scale - scale) < Math.abs(best.scale - scale)) best = p;
+   688→  }
+   689→  return best.value;
+   690→}
+   691→
+   692→function QualityPreview() {
+   693→  const samples: BadgeKind[] = [
+   694→    "8k",
+   695→    "4k-uhd",
+   696→    "uhd",
+   697→    "2k-qhd",
+   698→    "1080p",
+   699→    "1080i",
+   700→    "720p",
+   701→    "576p",
+   702→    "480p",
+   703→    "360p",
+   704→    "hd",
+   705→    "sd",
+   706→    "dvd",
+   707→    "imax",
+   708→    "3d",
+   709→    "bluray",
+   710→    "remux",
+   711→    "webdl",
+   712→    "webrip",
+   713→    "hdtv",
+   714→    "dvb",
+   715→    "cam",
+   716→    "hdcam",
+   717→    "telesync",
+   718→    "hdts",
+   719→    "telecine",
+   720→    "scr",
+   721→    "wp",
+   722→    "hevc",
+   723→    "av1",
+   724→    "dv",
+   725→    "hdr10-plus",
+   726→    "hdr10",
+   727→    "hdr",
+   728→    "hlg",
+   729→    "sdr",
+   730→    "atmos",
+   731→    "atmos-912",
+   732→    "truehd",
+   733→    "dts-hd-ma",
+   734→    "dts-hd",
+   735→    "dts-x",
+   736→    "dts",
+   737→    "ddp",
+   738→    "dd",
+   739→    "eac3",
+   740→    "ac3",
+   741→    "aac",
+   742→    "flac",
+   743→    "mp3",
+   744→    "opus",
+   745→    "lpcm",
+   746→    "pcm",
+   747→    "7.1",
+   748→    "5.1",
+   749→    "stereo",
+   750→    "mono",
+   751→    "extended",
+   752→    "remastered",
+   753→    "repack",
+   754→  ];
+   755→  return (
+   756→    <div className="flex flex-wrap items-center gap-0 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3.5">
+   757→      {samples.map((k) => (
+   758→        <FormatBadge key={k} kind={k} />
+   759→      ))}
+   760→    </div>
+   761→  );
+   762→}
+   763→

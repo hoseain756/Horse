@@ -1,0 +1,823 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — VS Code-style command palette (Round 8; Round 9 added remote
+     4→// content search: Cinemeta movies/series + installed addon catalogs, plus a
+     5→// "Search everywhere" hand-off to the full search overlay).
+     6→// Module-level zustand store so app-shell hotkeys can toggle it without prop drilling.
+     7→// Suppressed while a player overlay is active; always runs-and-closes.
+     8→import { useEffect, useMemo, useRef, useState } from "react";
+     9→import { create } from "zustand";
+    10→import {
+    11→  Search,
+    12→  X,
+    13→  Baby,
+    14→  Shuffle,
+    15→  CloudUpload,
+    16→  MonitorDown,
+    17→  Puzzle,
+    18→  Film,
+    19→  Tv,
+    20→  Loader2,
+    21→  House,
+    22→  Settings as SettingsIcon,
+    23→  SlidersHorizontal,
+    24→  Palette,
+    25→  Globe2,
+    26→  Plug,
+    27→  DatabaseBackup,
+    28→  Info,
+    29→} from "lucide-react";
+    30→import {
+    31→  useNav,
+    32→  useSettings,
+    33→  useAddons,
+    34→  installedAddons,
+    35→  type AddonRecord,
+    36→  type View,
+    37→} from "@/lib/harbor/store";
+    38→import type { Settings } from "@/lib/harbor/settings";
+    39→import { searchCinemeta, searchAddonCatalogs } from "@/lib/harbor/api";
+    40→import type { Meta } from "@/lib/harbor/types";
+    41→import { NAV_ITEMS, navItemsFor, navLabel } from "./nav-items";
+    42→import { getWatchlist, getCwCards, getHistory } from "@/lib/harbor/cw";
+    43→import { THEME_PRESETS } from "@/lib/harbor/themes";
+    44→import { useCloudSync } from "@/lib/harbor/cloud-sync";
+    45→import { usePwa } from "@/lib/harbor/pwa";
+    46→import { PosterImage } from "../common/poster";
+    47→import { cn } from "@/lib/utils";
+    48→
+    49→// ---------- Store ----------
+    50→type CommandPaletteState = {
+    51→  open: boolean;
+    52→  openPalette: () => void;
+    53→  close: () => void;
+    54→  toggle: () => void;
+    55→};
+    56→
+    57→function playerOverlayActive(): boolean {
+    58→  if (typeof window === "undefined") return false;
+    59→  return useNav.getState().stack.some((f) => f.kind === "player");
+    60→}
+    61→
+    62→export const useCommandPalette = create<CommandPaletteState>((set, get) => ({
+    63→  open: false,
+    64→  openPalette: () => {
+    65→    if (playerOverlayActive()) return; // never surface the palette over playback
+    66→    // Avoid double overlays: the existing "/" hotkey also opens the SearchOverlay.
+    67→    useNav.getState().setSearchOpen(false);
+    68→    set({ open: true });
+    69→  },
+    70→  close: () => set({ open: false }),
+    71→  toggle: () => {
+    72→    if (get().open) {
+    73→      set({ open: false });
+    74→      return;
+    75→    }
+    76→    get().openPalette();
+    77→  },
+    78→}));
+    79→
+    80→// ---------- Recents (localStorage, cap 5) ----------
+    81→const RECENTS_KEY = "harbor-web.palette.recents";
+    82→
+    83→type RecentAction =
+    84→  | { t: "view"; view: string }
+    85→  | { t: "section"; section: string }
+    86→  | { t: "action"; id: "kids" | "shuffle" | "sync" | "search" | "install" }
+    87→  | { t: "detail"; type: string; id: string; name: string; poster?: string }
+    88→  | { t: "addon"; addonId: string; name: string; logo?: string };
+    89→
+    90→type RecentRecord = {
+    91→  uid: string;
+    92→  label: string;
+    93→  group: string;
+    94→  thumb?: string;
+    95→  typeChip?: string;
+    96→  action: RecentAction;
+    97→};
+    98→
+    99→function loadRecents(): RecentRecord[] {
+   100→  if (typeof window === "undefined") return [];
+   101→  try {
+   102→    const raw = window.localStorage.getItem(RECENTS_KEY);
+   103→    if (!raw) return [];
+   104→    const arr = JSON.parse(raw) as RecentRecord[];
+   105→    return Array.isArray(arr) ? arr.filter((r) => r && r.uid && r.action).slice(0, 5) : [];
+   106→  } catch {
+   107→    return [];
+   108→  }
+   109→}
+   110→
+   111→function saveRecent(rec: RecentRecord): RecentRecord[] {
+   112→  const list = loadRecents().filter((r) => r.uid !== rec.uid);
+   113→  const next = [rec, ...list].slice(0, 5);
+   114→  try {
+   115→    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+   116→  } catch {
+   117→    /* ignore */
+   118→  }
+   119→  return next;
+   120→}
+   121→
+   122→// ---------- Item model ----------
+   123→type PaletteItem = {
+   124→  uid: string;
+   125→  icon: React.ComponentType<{ className?: string }>;
+   126→  label: string;
+   127→  group: string; // section tag shown on the row
+   128→  keywords?: string;
+   129→  thumb?: string;
+   130→  typeChip?: string;
+   131→  meta?: string;
+   132→  action?: RecentAction;
+   133→  accent?: boolean; // accent-colored label ("Search everywhere" row)
+   134→  kbd?: string; // right-aligned kbd hint chip ("Search everywhere" row)
+   135→  run: () => void;
+   136→};
+   137→
+   138→const GROUP_ORDER: Record<string, number> = {
+   139→  Recent: 0,
+   140→  Navigate: 1,
+   141→  Settings: 2,
+   142→  Actions: 3,
+   143→  Library: 4,
+   144→  // Round 9: remote content groups (Addons renumbered 5 → 9 to stay last).
+   145→  Movies: 6,
+   146→  Series: 7,
+   147→  "Addon results": 8,
+   148→  Addons: 9,
+   149→};
+   150→
+   151→// ---------- Fuzzy scoring (subsequence + consecutive/word-start bonuses) ----------
+   152→function fuzzyScore(query: string, text: string): number | null {
+   153→  const q = query.toLowerCase();
+   154→  const t = text.toLowerCase();
+   155→  if (!q) return 0;
+   156→  let score = 0;
+   157→  let searchFrom = 0;
+   158→  let prevIdx = -2;
+   159→  for (let qi = 0; qi < q.length; qi++) {
+   160→    const ch = q[qi];
+   161→    const idx = t.indexOf(ch, searchFrom);
+   162→    if (idx === -1) return null;
+   163→    let bonus = 1;
+   164→    if (idx === prevIdx + 1) bonus += 6; // consecutive match
+   165→    if (idx === 0 || /[\s\-_:.·/(\[]/.test(t[idx - 1])) bonus += 8; // word start
+   166→    score += bonus;
+   167→    prevIdx = idx;
+   168→    searchFrom = idx + 1;
+   169→  }
+   170→  // Slight preference for shorter targets
+   171→  score += Math.max(0, 8 - Math.floor(t.length / 12));
+   172→  return score;
+   173→}
+   174→
+   175→// ---------- Item builders ----------
+   176→function buildNavItems(settings: Settings): PaletteItem[] {
+   177→  return navItemsFor(settings)
+   178→    .filter((i) => i.id !== "settings") // settings reachable via its section items
+   179→    .map((i) => ({
+   180→      uid: `nav:${i.id}`,
+   181→      icon: i.icon,
+   182→      label: navLabel(i, settings.navRenamed),
+   183→      group: "Navigate",
+   184→      keywords: i.label,
+   185→      action: { t: "view", view: i.id } as RecentAction,
+   186→      run: () => useNav.getState().push({ kind: "view", view: i.id }),
+   187→    }));
+   188→}
+   189→
+   190→const SECTION_DEFS: {
+   191→  id: string;
+   192→  label: string;
+   193→  icon: React.ComponentType<{ className?: string }>;
+   194→  keywords: string;
+   195→}[] = [
+   196→  { id: "basics", label: "Basics", icon: SettingsIcon, keywords: "general preferences home posters badges profile region" },
+   197→  { id: "player", label: "Player", icon: SlidersHorizontal, keywords: "playback streaming subtitles resume seek speed" },
+   198→  { id: "theme", label: "Theme", icon: Palette, keywords: "appearance colors fonts layout theme studio background" },
+   199→  { id: "language", label: "Language", icon: Globe2, keywords: "locale translation preferred languages subtitles" },
+   200→  { id: "integrations", label: "Integrations", icon: Plug, keywords: "trakt simkl debrid iptv api keys cloud connect" },
+   201→  { id: "data", label: "Data", icon: DatabaseBackup, keywords: "backup restore cloud sync storage export import" },
+   202→  { id: "about", label: "About", icon: Info, keywords: "version credits license info harbor" },
+   203→];
+   204→
+   205→function buildSectionItems(): PaletteItem[] {
+   206→  return SECTION_DEFS.map((s) => ({
+   207→    uid: `section:${s.id}`,
+   208→    icon: s.icon,
+   209→    label: `Settings · ${s.label}`,
+   210→    group: "Settings",
+   211→    keywords: s.keywords,
+   212→    action: { t: "section", section: s.id } as RecentAction,
+   213→    run: () => {
+   214→      const nav = useNav.getState();
+   215→      const top = nav.top();
+   216→      if (top?.kind !== "view" || top.view !== "settings") {
+   217→        nav.push({ kind: "view", view: "settings" });
+   218→      }
+   219→      // The (possibly just-mounted) SettingsView listens for this event.
+   220→      window.setTimeout(() => {
+   221→        window.dispatchEvent(new CustomEvent("harbor:settings-section", { detail: s.id }));
+   222→      }, 60);
+   223→    },
+   224→  }));
+   225→}
+   226→
+   227→function buildActionItems(settings: Settings, canInstall: boolean): PaletteItem[] {
+   228→  const items: PaletteItem[] = [
+   229→    {
+   230→      uid: "act:kids",
+   231→      icon: Baby,
+   232→      label: "Toggle Kids Mode",
+   233→      group: "Actions",
+   234→      keywords: "kids parental children safe mode restriction lock",
+   235→      meta: settings.kidsMode ? "On" : "Off",
+   236→      action: { t: "action", id: "kids" },
+   237→      run: () => {
+   238→        const st = useSettings.getState();
+   239→        st.update({ kidsMode: !st.settings.kidsMode });
+   240→      },
+   241→    },
+   242→    {
+   243→      uid: "act:shuffle",
+   244→      icon: Shuffle,
+   245→      label: "Shuffle theme",
+   246→      group: "Actions",
+   247→      keywords: "random theme appearance colors preset surprise",
+   248→      action: { t: "action", id: "shuffle" },
+   249→      run: () => {
+   250→        const st = useSettings.getState();
+   251→        const current = st.settings.theme.preset;
+   252→        const pool = THEME_PRESETS.filter((p) => p.id !== current);
+   253→        const pick = pool[Math.floor(Math.random() * pool.length)] ?? THEME_PRESETS[0];
+   254→        if (!pick) return;
+   255→        // Persisted via the settings setter; the app-shell effect applies it live.
+   256→        st.update({
+   257→          theme: { ...st.settings.theme, preset: pick.id, customColors: null, customName: null },
+   258→        });
+   259→      },
+   260→    },
+   261→    {
+   262→      uid: "act:sync",
+   263→      icon: CloudUpload,
+   264→      label: "Sync now",
+   265→      group: "Actions",
+   266→      keywords: "cloud sync upload push backup server",
+   267→      action: { t: "action", id: "sync" },
+   268→      run: () => {
+   269→        void useCloudSync.getState().pushNow();
+   270→      },
+   271→    },
+   272→    {
+   273→      uid: "act:search",
+   274→      icon: Search,
+   275→      label: "Search content",
+   276→      group: "Actions",
+   277→      keywords: "find movies shows search ai titles",
+   278→      action: { t: "action", id: "search" },
+   279→      run: () => {
+   280→        useNav.getState().setSearchOpen(true);
+   281→      },
+   282→    },
+   283→  ];
+   284→  if (canInstall) {
+   285→    items.push({
+   286→      uid: "act:install",
+   287→      icon: MonitorDown,
+   288→      label: "Install app",
+   289→      group: "Actions",
+   290→      keywords: "pwa install add to home screen desktop app",
+   291→      action: { t: "action", id: "install" },
+   292→      run: () => {
+   293→        void usePwa.getState().promptInstall();
+   294→      },
+   295→    });
+   296→  }
+   297→  return items;
+   298→}
+   299→
+   300→function buildLibraryItems(): PaletteItem[] {
+   301→  const out: PaletteItem[] = [];
+   302→  const seen = new Set<string>();
+   303→  const add = (type: string, id: string, name: string, poster?: string, extraKw?: string) => {
+   304→    if (!id || !name || seen.has(`${type}:${id}`)) return;
+   305→    seen.add(`${type}:${id}`);
+   306→    out.push({
+   307→      uid: `detail:${type}:${id}`,
+   308→      icon: type === "series" ? Tv : Film,
+   309→      label: name,
+   310→      group: "Library",
+   311→      keywords: extraKw,
+   312→      thumb: poster,
+   313→      typeChip: type,
+   314→      action: { t: "detail", type, id, name, poster },
+   315→      run: () => useNav.getState().push({ kind: "detail", type, id }),
+   316→    });
+   317→  };
+   318→  for (const w of getWatchlist()) add(w.type, w.id, w.name, w.poster, w.releaseInfo);
+   319→  for (const c of getCwCards()) add(c.type, c.id, c.name, c.poster, "continue watching");
+   320→  for (const h of getHistory().slice(0, 30)) add(h.type, h.id, h.name, h.poster, "history");
+   321→  return out;
+   322→}
+   323→
+   324→// ---------- Round 9: remote content results ----------
+   325→function remoteMetaLine(m: Meta): string | undefined {
+   326→  const parts: string[] = [];
+   327→  if (m.releaseInfo) parts.push(m.releaseInfo); // "2016" / "2016–2019"
+   328→  if (m.imdbRating) parts.push(`★ ${m.imdbRating}`);
+   329→  return parts.length > 0 ? parts.join(" · ") : undefined;
+   330→}
+   331→
+   332→function buildRemoteItems(
+   333→  remote: { movies: Meta[]; series: Meta[]; addon: Meta[] },
+   334→  libraryKeys: Set<string>,
+   335→): PaletteItem[] {
+   336→  const out: PaletteItem[] = [];
+   337→  // Dedupe against the local library (type:id) — and, since `seen` accumulates,
+   338→  // addon results that duplicate a Cinemeta hit shown above them.
+   339→  const seen = new Set(libraryKeys);
+   340→  const push = (m: Meta, group: string, uid: string, keywords: string) => {
+   341→    if (!m?.id || !m.name) return;
+   342→    const key = `${m.type}:${m.id}`;
+   343→    if (seen.has(key)) return;
+   344→    seen.add(key);
+   345→    out.push({
+   346→      uid,
+   347→      icon: m.type === "series" ? Tv : Film,
+   348→      label: m.name,
+   349→      group,
+   350→      keywords,
+   351→      thumb: m.poster,
+   352→      typeChip: m.type,
+   353→      meta: remoteMetaLine(m),
+   354→      action: { t: "detail", type: m.type, id: m.id, name: m.name, poster: m.poster },
+   355→      run: () => useNav.getState().push({ kind: "detail", type: m.type, id: m.id }),
+   356→    });
+   357→  };
+   358→  for (const m of remote.movies.slice(0, 6)) {
+   359→    push(m, "Movies", `cine:movie:${m.id}`, `${m.type} search remote content`);
+   360→  }
+   361→  for (const m of remote.series.slice(0, 6)) {
+   362→    push(m, "Series", `cine:series:${m.id}`, `${m.type} search remote content`);
+   363→  }
+   364→  for (const m of remote.addon.slice(0, 8)) {
+   365→    push(
+   366→      m,
+   367→      "Addon results",
+   368→      `cine:addon:${m.type}:${m.id}`,
+   369→      `${m.type} addon search remote content`,
+   370→    );
+   371→  }
+   372→  return out;
+   373→}
+   374→
+   375→function buildAddonItems(addons: AddonRecord[]): PaletteItem[] {
+   376→  return addons.slice(0, 20).map((a) => ({
+   377→    uid: `addon:${a.manifest.id}`,
+   378→    icon: Puzzle,
+   379→    label: `Addon: ${a.manifest.name}`,
+   380→    group: "Addons",
+   381→    keywords: [a.manifest.types?.join(" "), a.manifest.description]
+   382→      .filter(Boolean)
+   383→      .join(" "),
+   384→    thumb: a.manifest.logo,
+   385→    typeChip: a.manifest.types?.[0],
+   386→    action: { t: "addon", addonId: a.manifest.id, name: a.manifest.name, logo: a.manifest.logo },
+   387→    run: () => useNav.getState().push({ kind: "addon-detail", addonId: a.manifest.id }),
+   388→  }));
+   389→}
+   390→
+   391→function itemFromRecent(rec: RecentRecord, settings: Settings, canInstall: boolean): PaletteItem | null {
+   392→  const a = rec.action;
+   393→  switch (a.t) {
+   394→    case "view": {
+   395→      const nav = NAV_ITEMS.find((n) => n.id === a.view);
+   396→      const view = a.view as View;
+   397→      return {
+   398→        uid: rec.uid,
+   399→        icon: nav?.icon ?? House,
+   400→        label: rec.label,
+   401→        group: "Recent",
+   402→        keywords: nav?.label,
+   403→        action: a,
+   404→        run: () => useNav.getState().push({ kind: "view", view }),
+   405→      };
+   406→    }
+   407→    case "section": {
+   408→      const def = SECTION_DEFS.find((s) => s.id === a.section);
+   409→      return {
+   410→        uid: rec.uid,
+   411→        icon: def?.icon ?? SettingsIcon,
+   412→        label: rec.label,
+   413→        group: "Recent",
+   414→        keywords: def?.keywords,
+   415→        action: a,
+   416→        run: () => {
+   417→          const nav = useNav.getState();
+   418→          const top = nav.top();
+   419→          if (top?.kind !== "view" || top.view !== "settings") {
+   420→            nav.push({ kind: "view", view: "settings" });
+   421→          }
+   422→          window.setTimeout(() => {
+   423→            window.dispatchEvent(new CustomEvent("harbor:settings-section", { detail: a.section }));
+   424→          }, 60);
+   425→        },
+   426→      };
+   427→    }
+   428→    case "action": {
+   429→      if (a.id === "install" && !canInstall) return null;
+   430→      const built = buildActionItems(settings, canInstall).find((i) => i.uid === `act:${a.id}`);
+   431→      if (!built) return null;
+   432→      return { ...built, uid: rec.uid, group: "Recent" };
+   433→    }
+   434→    case "detail":
+   435→      return {
+   436→        uid: rec.uid,
+   437→        icon: a.type === "series" ? Tv : Film,
+   438→        label: rec.label,
+   439→        group: "Recent",
+   440→        thumb: rec.thumb ?? a.poster,
+   441→        typeChip: rec.typeChip ?? a.type,
+   442→        action: a,
+   443→        run: () => useNav.getState().push({ kind: "detail", type: a.type, id: a.id }),
+   444→      };
+   445→    case "addon":
+   446→      return {
+   447→        uid: rec.uid,
+   448→        icon: Puzzle,
+   449→        label: rec.label,
+   450→        group: "Recent",
+   451→        thumb: rec.thumb ?? a.logo,
+   452→        action: a,
+   453→        run: () => useNav.getState().push({ kind: "addon-detail", addonId: a.addonId }),
+   454→      };
+   455→  }
+   456→}
+   457→
+   458→// ---------- Component ----------
+   459→export function CommandPalette() {
+   460→  const open = useCommandPalette((s) => s.open);
+   461→  const close = useCommandPalette((s) => s.close);
+   462→  if (!open) return null;
+   463→  // Remounts on every open → input/query/selection/recents reset naturally
+   464→  return <PaletteSurface onClose={close} />;
+   465→}
+   466→
+   467→function PaletteSurface({ onClose }: { onClose: () => void }) {
+   468→  const settings = useSettings((s) => s.settings);
+   469→  const addons = useAddons((s) => s.addons);
+   470→  const canInstall = usePwa((s) => s.canInstall);
+   471→
+   472→  const [query, setQuery] = useState("");
+   473→  const [selected, setSelected] = useState(0);
+   474→  const [recents, setRecents] = useState<RecentRecord[]>(() => loadRecents());
+   475→  // Round 9: remote content search state (Cinemeta + installed addon catalogs)
+   476→  // and the query the last completed search was for (drives the "Search
+   477→  // everywhere" row so it only shows for a finished, empty current search).
+   478→  const [remoteResults, setRemoteResults] = useState<{
+   479→    movies: Meta[];
+   480→    series: Meta[];
+   481→    addon: Meta[];
+   482→  }>({ movies: [], series: [], addon: [] });
+   483→  const [searching, setSearching] = useState(false);
+   484→  const [doneQuery, setDoneQuery] = useState<string | null>(null);
+   485→  const inputRef = useRef<HTMLInputElement>(null);
+   486→  const runToken = useRef(0);
+   487→
+   488→  // Focus + lock scroll while mounted (no state resets needed — fresh mount)
+   489→  useEffect(() => {
+   490→    const t = setTimeout(() => inputRef.current?.focus(), 30);
+   491→    document.body.style.overflow = "hidden";
+   492→    return () => {
+   493→      clearTimeout(t);
+   494→      document.body.style.overflow = "";
+   495→    };
+   496→  }, []);
+   497→
+   498→  // Round 9: debounced remote content search. The token is incremented on
+   499→  // every query change (and on unmount, below) so stale responses never reach
+   500→  // state. State resets use 0ms timeouts — the same setState-in-effect-safe
+   501→  // pattern the search overlay uses. Player overlays suppress the palette
+   502→  // entirely, so a remote search can never run during playback.
+   503→  useEffect(() => {
+   504→    const q = query.trim();
+   505→    const token = ++runToken.current; // invalidates any in-flight response
+   506→    if (q.length < 2) {
+   507→      const reset = setTimeout(() => {
+   508→        setRemoteResults({ movies: [], series: [], addon: [] });
+   509→        setSearching(false);
+   510→        setDoneQuery(null);
+   511→      }, 0);
+   512→      return () => clearTimeout(reset);
+   513→    }
+   514→    const spin = setTimeout(() => setSearching(true), 0);
+   515→    const t = setTimeout(() => {
+   516→      void Promise.allSettled([
+   517→        searchCinemeta(q),
+   518→        searchAddonCatalogs(installedAddons(), q),
+   519→      ]).then(([cine, addon]) => {
+   520→        if (token !== runToken.current) return; // stale response — ignore
+   521→        setRemoteResults({
+   522→          movies: cine.status === "fulfilled" ? cine.value.movies : [],
+   523→          series: cine.status === "fulfilled" ? cine.value.series : [],
+   524→          addon: addon.status === "fulfilled" ? addon.value : [],
+   525→        });
+   526→        setSearching(false);
+   527→        setDoneQuery(q);
+   528→      });
+   529→    }, 320);
+   530→    return () => {
+   531→      clearTimeout(spin);
+   532→      clearTimeout(t);
+   533→    };
+   534→  }, [query]);
+   535→
+   536→  // Invalidate any in-flight remote search when the palette unmounts (closes).
+   537→  useEffect(() => {
+   538→    return () => {
+   539→      runToken.current += 1;
+   540→    };
+   541→  }, []);
+   542→
+   543→  // Full command pool (only needed when filtering)
+   544→  const pool = useMemo<PaletteItem[]>(
+   545→    () => [
+   546→      ...buildNavItems(settings),
+   547→      ...buildSectionItems(),
+   548→      ...buildActionItems(settings, canInstall),
+   549→      ...buildLibraryItems(),
+   550→      ...buildAddonItems(addons),
+   551→    ],
+   552→    [settings, canInstall, addons],
+   553→  );
+   554→
+   555→  // Round 9: type:id keys of local library rows (library items store uid
+   556→  // `detail:{type}:{id}`), used to dedupe remote results against the library.
+   557→  const libraryKeys = useMemo(() => {
+   558→    const keys = new Set<string>();
+   559→    for (const it of pool) {
+   560→      if (it.uid.startsWith("detail:")) keys.add(it.uid.slice("detail:".length));
+   561→    }
+   562→    return keys;
+   563→  }, [pool]);
+   564→
+   565→  const itemsBase = useMemo<PaletteItem[]>(() => {
+   566→    const trimmed = query.trim();
+   567→    const q = trimmed.toLowerCase();
+   568→    if (!q) {
+   569→      // Empty query: recents first, then all navigation items. Recents reuse
+   570→      // the original item uids, so drop any nav item already shown as a recent
+   571→      // (duplicate React keys otherwise).
+   572→      const rec = recents
+   573→        .map((r) => itemFromRecent(r, settings, canInstall))
+   574→        .filter((i): i is PaletteItem => i !== null);
+   575→      const seen = new Set(rec.map((i) => i.uid));
+   576→      return [...rec, ...buildNavItems(settings).filter((i) => !seen.has(i.uid))];
+   577→    }
+   578→    const scored: { item: PaletteItem; score: number }[] = [];
+   579→    for (const item of pool) {
+   580→      let best = fuzzyScore(q, item.label);
+   581→      if (item.keywords) {
+   582→        const ks = fuzzyScore(q, item.keywords);
+   583→        if (ks !== null) best = best === null ? ks * 0.8 : Math.max(best, ks * 0.8);
+   584→      }
+   585→      if (best !== null) scored.push({ item, score: best });
+   586→    }
+   587→    scored.sort((a, b) => {
+   588→      if (b.score !== a.score) return b.score - a.score;
+   589→      const ga = GROUP_ORDER[a.item.group] ?? 9;
+   590→      const gb = GROUP_ORDER[b.item.group] ?? 9;
+   591→      if (ga !== gb) return ga - gb;
+   592→      return a.item.label.localeCompare(b.item.label);
+   593→    });
+   594→    const local = scored.map((s) => s.item);
+   595→    // Round 9: append remote content results after the local scored items.
+   596→    // Results are only stored when their response token was current, so they
+   597→    // always belong to the most recent completed search (typeahead-fresh).
+   598→    if (
+   599→      trimmed.length >= 2 &&
+   600→      remoteResults.movies.length +
+   601→        remoteResults.series.length +
+   602→        remoteResults.addon.length >
+   603→        0
+   604→    ) {
+   605→      return [...local, ...buildRemoteItems(remoteResults, libraryKeys)];
+   606→    }
+   607→    return local;
+   608→  }, [query, pool, recents, settings, canInstall, remoteResults, libraryKeys]);
+   609→
+   610→  // Round 9: when a >= 2-char query matched nothing locally or remotely and
+   611→  // that search has finished, offer a hand-off to the full search overlay
+   612→  // instead of a dead end (replaces the "No matches" block).
+   613→  const searchEverywhereItem = useMemo<PaletteItem | null>(() => {
+   614→    const q = query.trim();
+   615→    if (q.length < 2 || searching || doneQuery !== q || itemsBase.length > 0) return null;
+   616→    return {
+   617→      uid: "cine:search-everywhere",
+   618→      icon: Search,
+   619→      label: `Search everywhere for “${q}”`,
+   620→      group: "Search",
+   621→      keywords: `${q} everywhere all sources remote search`,
+   622→      accent: true,
+   623→      kbd: "↵",
+   624→      // Order matters (runItem closes the palette before run()): dispatch
+   625→      // stores the pending prefill, THEN the overlay opens and consumes it.
+   626→      run: () => {
+   627→        window.dispatchEvent(new CustomEvent("harbor:prefill-search", { detail: q }));
+   628→        useNav.getState().setSearchOpen(true);
+   629→      },
+   630→    };
+   631→  }, [query, searching, doneQuery, itemsBase]);
+   632→
+   633→  const items = useMemo(
+   634→    () => (searchEverywhereItem ? [searchEverywhereItem, ...itemsBase] : itemsBase),
+   635→    [searchEverywhereItem, itemsBase],
+   636→  );
+   637→
+   638→  const sel = Math.min(selected, Math.max(0, items.length - 1));
+   639→
+   640→  // Keep the selected row in view
+   641→  useEffect(() => {
+   642→    document
+   643→      .getElementById(`harbor-palette-opt-${sel}`)
+   644→      ?.scrollIntoView({ block: "nearest" });
+   645→  }, [sel, items]);
+   646→
+   647→  const runItem = (item: PaletteItem) => {
+   648→    if (item.action) {
+   649→      setRecents(
+   650→        saveRecent({
+   651→          uid: item.uid,
+   652→          label: item.label,
+   653→          group: item.group,
+   654→          thumb: item.thumb,
+   655→          typeChip: item.typeChip,
+   656→          action: item.action,
+   657→        }),
+   658→      );
+   659→    }
+   660→    onClose();
+   661→    item.run();
+   662→  };
+   663→
+   664→  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+   665→    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+   666→      // Palette shortcut is now Ctrl/Cmd+Shift+P (Ctrl/Cmd+K belongs to the floating search)
+   667→      e.preventDefault();
+   668→      onClose();
+   669→      return;
+   670→    }
+   671→    if (e.key === "ArrowDown") {
+   672→      e.preventDefault();
+   673→      setSelected((s) => (items.length ? Math.min(s + 1, items.length - 1) : 0));
+   674→    } else if (e.key === "ArrowUp") {
+   675→      e.preventDefault();
+   676→      setSelected((s) => Math.max(s - 1, 0));
+   677→    } else if (e.key === "Enter") {
+   678→      e.preventDefault();
+   679→      const item = items[sel];
+   680→      if (item) runItem(item);
+   681→    } else if (e.key === "Escape" || e.key === "Tab") {
+   682→      e.preventDefault();
+   683→      onClose();
+   684→    }
+   685→  };
+   686→
+   687→  return (
+   688→    <div
+   689→      className="fixed inset-0 z-[300] flex items-start justify-center bg-black/70 px-4 backdrop-blur-sm harbor-scroll"
+   690→      role="dialog"
+   691→      aria-modal="true"
+   692→      aria-label="Command palette"
+   693→      onClick={onClose}
+   694→    >
+   695→      <div
+   696→        className="mt-[12vh] w-full max-w-xl overflow-hidden rounded-2xl border border-edge-soft bg-canvas shadow-2xl harbor-pop-in"
+   697→        onClick={(e) => e.stopPropagation()}
+   698→      >
+   699→        {/* Input row */}
+   700→        <div className="flex items-center gap-3 border-b border-edge-soft px-4 py-3.5">
+   701→          <Search className="h-5 w-5 shrink-0 text-ink-subtle" />
+   702→          <input
+   703→            ref={inputRef}
+   704→            value={query}
+   705→            onChange={(e) => {
+   706→              setQuery(e.target.value);
+   707→              setSelected(0);
+   708→            }}
+   709→            onKeyDown={onInputKeyDown}
+   710→            placeholder="Type a command or search…"
+   711→            className="flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-subtle"
+   712→            aria-label="Command palette search"
+   713→            aria-controls="harbor-palette-list"
+   714→            aria-activedescendant={items.length > 0 ? `harbor-palette-opt-${sel}` : undefined}
+   715→          />
+   716→          {searching ? (
+   717→            <Loader2
+   718→              className="h-4 w-4 shrink-0 animate-spin text-accent"
+   719→              role="status"
+   720→              aria-label="Searching content"
+   721→            />
+   722→          ) : null}
+   723→          <kbd className="harbor-kbd">esc</kbd>
+   724→          <button
+   725→            type="button"
+   726→            onClick={onClose}
+   727→            className="harbor-tv-focus flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted hover:bg-raised hover:text-ink"
+   728→            aria-label="Close command palette"
+   729→          >
+   730→            <X className="h-5 w-5" />
+   731→          </button>
+   732→        </div>
+   733→
+   734→        {/* Results */}
+   735→        <div id="harbor-palette-list" role="listbox" aria-label="Commands" className="harbor-scroll harbor-palette-scroll p-2">
+   736→          {items.length === 0 ? (
+   737→            <div className="px-6 py-10 text-center">
+   738→              <Search className="mx-auto mb-3 h-8 w-8 text-ink-subtle opacity-50" />
+   739→              <p className="text-sm text-ink-muted">No matches for “{query.trim()}”</p>
+   740→              <p className="mt-1 text-xs text-ink-subtle">
+   741→                Try “settings” or a title from your library
+   742→              </p>
+   743→            </div>
+   744→          ) : (
+   745→            items.map((item, i) => {
+   746→              const Icon = item.icon;
+   747→              return (
+   748→                <div
+   749→                  key={item.uid}
+   750→                  id={`harbor-palette-opt-${i}`}
+   751→                  role="option"
+   752→                  aria-selected={i === sel}
+   753→                  aria-label={item.label}
+   754→                  onMouseEnter={() => setSelected(i)}
+   755→                  onClick={() => runItem(item)}
+   756→                  className={cn(
+   757→                    "flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+   758→                    i === sel ? "bg-raised text-ink" : "text-ink-muted",
+   759→                  )}
+   760→                >
+   761→                  <Icon className="h-4 w-4 shrink-0" />
+   762→                  {item.thumb ? (
+   763→                    <span className="relative block h-10 w-7 shrink-0 overflow-hidden rounded-md border border-edge-soft ring-1 ring-edge-soft">
+   764→                      <PosterImage
+   765→                        src={item.thumb}
+   766→                        alt=""
+   767→                        className="absolute inset-0 h-full w-full object-cover"
+   768→                      />
+   769→                    </span>
+   770→                  ) : null}
+   771→                  <span
+   772→                    className={cn(
+   773→                      "truncate",
+   774→                      item.accent && "font-medium text-accent",
+   775→                    )}
+   776→                  >
+   777→                    {item.label}
+   778→                  </span>
+   779→                  {item.typeChip ? (
+   780→                    <span className="shrink-0 rounded-full border border-edge-soft bg-black/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-ink-subtle">
+   781→                      {item.typeChip}
+   782→                    </span>
+   783→                  ) : null}
+   784→                  {item.meta ? (
+   785→                    <span className="shrink-0 text-[10px] font-semibold text-ink-subtle">
+   786→                      {item.meta}
+   787→                    </span>
+   788→                  ) : null}
+   789→                  <span className="ml-auto hidden shrink-0 text-[10px] uppercase tracking-wide text-ink-subtle sm:inline">
+   790→                    {item.group}
+   791→                  </span>
+   792→                  {item.kbd ? (
+   793→                    <kbd className="harbor-kbd ml-auto shrink-0 sm:ml-0">{item.kbd}</kbd>
+   794→                  ) : null}
+   795→                </div>
+   796→              );
+   797→            })
+   798→          )}
+   799→        </div>
+   800→
+   801→        {/* Footer hints */}
+   802→        <div className="flex items-center gap-4 border-t border-edge-soft px-4 py-2 text-[10px] text-ink-subtle">
+   803→          <span className="flex items-center gap-1">
+   804→            <kbd className="harbor-kbd">↑</kbd>
+   805→            <kbd className="harbor-kbd">↓</kbd> navigate
+   806→          </span>
+   807→          <span className="flex items-center gap-1">
+   808→            <kbd className="harbor-kbd">↵</kbd> select
+   809→          </span>
+   810→          <span className="flex items-center gap-1">
+   811→            <kbd className="harbor-kbd">esc</kbd> close
+   812→          </span>
+   813→          <span className="hidden md:inline">≥2 chars searches Cinemeta + addons</span>
+   814→          <span className="ml-auto hidden items-center gap-1 sm:flex">
+   815→            <kbd className="harbor-kbd">ctrl</kbd>
+   816→            <kbd className="harbor-kbd">K</kbd> toggle
+   817→          </span>
+   818→        </div>
+   819→      </div>
+   820→    </div>
+   821→  );
+   822→}
+   823→

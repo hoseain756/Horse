@@ -1,0 +1,837 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Wrapped view: personal viewing stats (port of Harbor wrapped.tsx, self-contained)
+     4→// Computes from local watch history: watch time, top genres (resolved via Cinemeta), activity, collage.
+     5→import { useCallback, useEffect, useMemo, useState } from "react";
+     6→import {
+     7→  Sparkles,
+     8→  Clock,
+     9→  Film,
+    10→  Tv,
+    11→  Flame,
+    12→  CalendarDays,
+    13→  Trophy,
+    14→  RadioTower,
+    15→  Share2,
+    16→  Loader2,
+    17→  Moon,
+    18→  Footprints,
+    19→  Layers,
+    20→  Compass,
+    21→  Heart,
+    22→  Timer,
+    23→  Medal,
+    24→} from "lucide-react";
+    25→import type { Meta } from "@/lib/harbor/types";
+    26→import { fetchMeta } from "@/lib/harbor/api";
+    27→import { getHistory, type HistoryEntry } from "@/lib/harbor/cw";
+    28→import { generateShareCard } from "@/lib/harbor/share-card";
+    29→import { useNav } from "@/lib/harbor/store";
+    30→import { useToast } from "@/hooks/use-toast";
+    31→import { cn } from "@/lib/utils";
+    32→import { PosterImage } from "../common/poster";
+    33→
+    34→type Stats = {
+    35→  totalEntries: number;
+    36→  uniqueTitles: number;
+    37→  movies: number;
+    38→  episodes: number;
+    39→  watchMs: number;
+    40→  activeDays: number;
+    41→  bestDay: { date: string; ms: number } | null;
+    42→  daily: { date: string; ms: number }[]; // last 14 days
+    43→  heat365: { date: string; ms: number }[]; // last 365 days, oldest -> today
+    44→  maxEpisodesPerDay: number; // most episodes of one series watched in a single day
+    45→  lateNightSessions: number; // sessions between 00:00-04:59 local
+    46→  maxSessions: number; // most sessions of a single title
+    47→  topTitles: { id: string; name: string; ms: number; poster?: string; type: string; count: number }[];
+    48→  topGenres: { genre: string; count: number }[];
+    49→};
+    50→
+    51→function dayKey(t: number): string {
+    52→  const d = new Date(t);
+    53→  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    54→}
+    55→
+    56→function computeStats(history: HistoryEntry[]): Stats {
+    57→  const totalMs = (e: HistoryEntry) => Math.max(0, Math.min(e.positionMs || e.durationMs, e.durationMs || e.positionMs));
+    58→  let watchMs = 0;
+    59→  let movies = 0;
+    60→  let episodes = 0;
+    61→  const byDay = new Map<string, number>();
+    62→  const byTitle = new Map<string, { name: string; ms: number; poster?: string; type: string; count: number }>();
+    63→  const days = new Set<string>();
+    64→
+    65→  for (const e of history) {
+    66→    const ms = totalMs(e);
+    67→    watchMs += ms;
+    68→    const dk = dayKey(e.t);
+    69→    days.add(dk);
+    70→    byDay.set(dk, (byDay.get(dk) ?? 0) + ms);
+    71→    if (e.type === "series" && e.episode) episodes++;
+    72→    else movies++;
+    73→    const prev = byTitle.get(e.id);
+    74→    byTitle.set(e.id, {
+    75→      name: e.name,
+    76→      ms: (prev?.ms ?? 0) + ms,
+    77→      poster: prev?.poster ?? e.poster,
+    78→      type: e.type,
+    79→      count: (prev?.count ?? 0) + 1,
+    80→    });
+    81→  }
+    82→
+    83→  // last 14 days series
+    84→  const daily: { date: string; ms: number }[] = [];
+    85→  const now = new Date();
+    86→  for (let i = 13; i >= 0; i--) {
+    87→    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    88→    const key = dayKey(d.getTime());
+    89→    daily.push({ date: key, ms: byDay.get(key) ?? 0 });
+    90→  }
+    91→
+    92→  // last 365 days heatmap series (day 364 days ago -> today, oldest first)
+    93→  const heat365: { date: string; ms: number }[] = [];
+    94→  for (let i = 364; i >= 0; i--) {
+    95→    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    96→    const key = dayKey(d.getTime());
+    97→    heat365.push({ date: key, ms: byDay.get(key) ?? 0 });
+    98→  }
+    99→
+   100→  // Badge stats — computed honestly from the same history
+   101→  let maxEpisodesPerDay = 0;
+   102→  let lateNightSessions = 0;
+   103→  const episodesPerDay = new Map<string, number>(); // `${dayKey}|${id}` -> same-series episode count
+   104→  for (const e of history) {
+   105→    if (new Date(e.t).getHours() < 5) lateNightSessions++;
+   106→    if (e.type === "series" && e.episode) {
+   107→      const k = `${dayKey(e.t)}|${e.id}`;
+   108→      const n = (episodesPerDay.get(k) ?? 0) + 1;
+   109→      episodesPerDay.set(k, n);
+   110→      if (n > maxEpisodesPerDay) maxEpisodesPerDay = n;
+   111→    }
+   112→  }
+   113→  let maxSessions = 0;
+   114→  for (const v of byTitle.values()) {
+   115→    if (v.count > maxSessions) maxSessions = v.count;
+   116→  }
+   117→
+   118→  let bestDay: { date: string; ms: number } | null = null;
+   119→  for (const [date, ms] of byDay) {
+   120→    if (!bestDay || ms > bestDay.ms) bestDay = { date, ms };
+   121→  }
+   122→
+   123→  const topTitles = Array.from(byTitle.entries())
+   124→    .map(([id, v]) => ({ id, ...v }))
+   125→    .sort((a, b) => b.ms - a.ms)
+   126→    .slice(0, 6);
+   127→
+   128→  return {
+   129→    totalEntries: history.length,
+   130→    uniqueTitles: byTitle.size,
+   131→    movies,
+   132→    episodes,
+   133→    watchMs,
+   134→    activeDays: days.size,
+   135→    bestDay,
+   136→    daily,
+   137→    heat365,
+   138→    maxEpisodesPerDay,
+   139→    lateNightSessions,
+   140→    maxSessions,
+   141→    topTitles,
+   142→    topGenres: [], // filled async
+   143→  };
+   144→}
+   145→
+   146→function fmtDuration(ms: number): string {
+   147→  const hours = Math.floor(ms / 3_600_000);
+   148→  const mins = Math.floor((ms % 3_600_000) / 60_000);
+   149→  const secs = Math.floor((ms % 60_000) / 1000);
+   150→  if (hours >= 1) return `${hours}h ${mins}m`;
+   151→  if (mins >= 1) return `${mins}m`;
+   152→  return `${secs}s`;
+   153→}
+   154→
+   155→/**
+   156→ * Resolve the app accent (applyTheme sets --color-accent-var on <html>) to a CSS
+   157→ * color string usable in inline color-mix() styles. Falls back to a pleasant
+   158→ * warm amber if the variable can't be read.
+   159→ */
+   160→function resolvedAccent(): string {
+   161→  try {
+   162→    const v = getComputedStyle(document.documentElement).getPropertyValue("--color-accent-var").trim();
+   163→    return v || "#f0b429";
+   164→  } catch {
+   165→    return "#f0b429";
+   166→  }
+   167→}
+   168→
+   169→// ---------- 365-day heatmap (GitHub style) ----------
+   170→
+   171→const WEEKDAY_ROWS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // row 0 = Monday
+   172→const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+   173→
+   174→type HeatCell = { key: string; label: string; level: number; future: boolean };
+   175→
+   176→function heatLevel(ms: number, max: number): number {
+   177→  if (ms <= 0) return 0;
+   178→  if (max <= 0) return 4;
+   179→  if (ms <= max * 0.25) return 1;
+   180→  if (ms <= max * 0.5) return 2;
+   181→  if (ms <= max * 0.75) return 3;
+   182→  return 4;
+   183→}
+   184→
+   185→/** 0 = raised/empty (class-driven); 1-4 = accent tints via color-mix. */
+   186→function levelBg(level: number, accent: string): string | undefined {
+   187→  switch (level) {
+   188→    case 1:
+   189→      return `color-mix(in srgb, ${accent} 25%, transparent)`;
+   190→    case 2:
+   191→      return `color-mix(in srgb, ${accent} 45%, transparent)`;
+   192→    case 3:
+   193→      return `color-mix(in srgb, ${accent} 70%, transparent)`;
+   194→    case 4:
+   195→      return accent;
+   196→    default:
+   197→      return undefined;
+   198→  }
+   199→}
+   200→
+   201→function HeatmapGrid({ heat, accent }: { heat: { date: string; ms: number }[]; accent: string }) {
+   202→  const { columns, monthLabels } = useMemo(() => {
+   203→    const now = new Date();
+   204→    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+   205→    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364);
+   206→    const dow = (start.getDay() + 6) % 7; // 0 = Monday
+   207→    const gridStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow);
+   208→    const byDate = new Map(heat.map((h) => [h.date, h.ms]));
+   209→    let max = 0;
+   210→    for (const h of heat) if (h.ms > max) max = h.ms;
+   211→
+   212→    const cols: HeatCell[][] = [];
+   213→    const monthLabels: (string | null)[] = [];
+   214→    let prevMonth = -1;
+   215→    const cursor = new Date(gridStart);
+   216→    while (cursor <= today) {
+   217→      const col: HeatCell[] = [];
+   218→      let firstInRangeMonth = -1;
+   219→      for (let r = 0; r < 7; r++) {
+   220→        if (cursor > today) {
+   221→          col.push({ key: `f${cols.length}-${r}`, label: "", level: 0, future: true });
+   222→        } else {
+   223→          if (cursor.getTime() >= start.getTime() && firstInRangeMonth === -1) {
+   224→            firstInRangeMonth = cursor.getMonth();
+   225→          }
+   226→          const key = dayKey(cursor.getTime());
+   227→          const ms = byDate.get(key) ?? 0;
+   228→          col.push({
+   229→            key,
+   230→            label: `${MONTHS_SHORT[cursor.getMonth()]} ${cursor.getDate()} · ${fmtDuration(ms)}`,
+   231→            level: heatLevel(ms, max),
+   232→            future: false,
+   233→          });
+   234→        }
+   235→        cursor.setDate(cursor.getDate() + 1);
+   236→      }
+   237→      if (firstInRangeMonth !== -1 && firstInRangeMonth !== prevMonth) {
+   238→        monthLabels.push(MONTHS_SHORT[firstInRangeMonth]);
+   239→        prevMonth = firstInRangeMonth;
+   240→      } else {
+   241→        monthLabels.push(null);
+   242→      }
+   243→      cols.push(col);
+   244→    }
+   245→    return { columns: cols, monthLabels };
+   246→  }, [heat]);
+   247→
+   248→  const todayKey = dayKey(Date.now());
+   249→
+   250→  return (
+   251→    <div className="flex" role="img" aria-label="365-day watch activity heatmap">
+   252→      {/* Weekday gutter (Mon/Wed/Fri only) */}
+   253→      <div className="mr-1.5 shrink-0 pt-[14px]" aria-hidden>
+   254→        <div className="flex flex-col gap-[2px]">
+   255→          {WEEKDAY_ROWS.map((wd, i) => (
+   256→            <div key={wd} className="flex h-[10px] w-6 items-center justify-end">
+   257→              {(i === 0 || i === 2 || i === 4) && (
+   258→                <span className="text-[9px] leading-none text-ink-subtle">{wd}</span>
+   259→              )}
+   260→            </div>
+   261→          ))}
+   262→        </div>
+   263→      </div>
+   264→      {/* Grid — horizontally scrollable on narrow screens */}
+   265→      <div className="harbor-scroll flex-1 overflow-x-auto pb-1">
+   266→        <div className="w-max">
+   267→          <div className="mb-[3px] flex h-[11px] gap-[2px]">
+   268→            {monthLabels.map((m, i) => (
+   269→              <div key={i} className="relative h-[11px] w-[10px] shrink-0">
+   270→                {m && (
+   271→                  <span className="absolute left-0 top-0 whitespace-nowrap text-[9px] leading-[11px] text-ink-subtle">
+   272→                    {m}
+   273→                  </span>
+   274→                )}
+   275→              </div>
+   276→            ))}
+   277→          </div>
+   278→          <div className="flex gap-[2px]">
+   279→            {columns.map((col, ci) => (
+   280→              <div key={ci} className="flex flex-col gap-[2px]">
+   281→                {col.map((cell) =>
+   282→                  cell.future ? (
+   283→                    <div key={cell.key} className="h-[10px] w-[10px]" />
+   284→                  ) : (
+   285→                    <div
+   286→                      key={cell.key}
+   287→                      className={cn(
+   288→                        "h-[10px] w-[10px] rounded-[2px]",
+   289→                        cell.level === 0 && "border border-edge-soft bg-raised",
+   290→                        cell.key === todayKey && "ring-1 ring-accent/80",
+   291→                      )}
+   292→                      style={cell.level > 0 ? { backgroundColor: levelBg(cell.level, accent) } : undefined}
+   293→                      title={cell.label}
+   294→                    />
+   295→                  ),
+   296→                )}
+   297→              </div>
+   298→            ))}
+   299→          </div>
+   300→        </div>
+   301→      </div>
+   302→    </div>
+   303→  );
+   304→}
+   305→
+   306→// ---------- Achievements (computed honestly from history) ----------
+   307→
+   308→type Achievement = {
+   309→  id: string;
+   310→  icon: React.ReactNode;
+   311→  title: string;
+   312→  desc: string;
+   313→  earned: boolean;
+   314→  progress: string;
+   315→};
+   316→
+   317→function buildAchievements(stats: Stats | null): Achievement[] {
+   318→  if (!stats) return [];
+   319→  const marathon = 8 * 3_600_000;
+   320→  const bestDayMs = stats.bestDay?.ms ?? 0;
+   321→  return [
+   322→    {
+   323→      id: "first-steps",
+   324→      icon: <Footprints className="w-4 h-4" />,
+   325→      title: "First Steps",
+   326→      desc: "Watch your first title",
+   327→      earned: stats.totalEntries >= 1,
+   328→      progress: stats.totalEntries >= 1 ? "1+ titles watched" : "0/1 titles",
+   329→    },
+   330→    {
+   331→      id: "binger",
+   332→      icon: <Layers className="w-4 h-4" />,
+   333→      title: "Binger",
+   334→      desc: "3+ episodes of one series in a day",
+   335→      earned: stats.maxEpisodesPerDay >= 3,
+   336→      progress:
+   337→        stats.maxEpisodesPerDay >= 3
+   338→          ? `best: ${stats.maxEpisodesPerDay} episodes`
+   339→          : `${stats.maxEpisodesPerDay}/3 episodes in a day`,
+   340→    },
+   341→    {
+   342→      id: "night-owl",
+   343→      icon: <Moon className="w-4 h-4" />,
+   344→      title: "Night Owl",
+   345→      desc: "Watch between midnight and 5am",
+   346→      earned: stats.lateNightSessions >= 1,
+   347→      progress:
+   348→        stats.lateNightSessions >= 1
+   349→          ? `${stats.lateNightSessions} late-night sessions`
+   350→          : "no late-night sessions yet",
+   351→    },
+   352→    {
+   353→      id: "explorer",
+   354→      icon: <Compass className="w-4 h-4" />,
+   355→      title: "Explorer",
+   356→      desc: "Discover 10 different titles",
+   357→      earned: stats.uniqueTitles >= 10,
+   358→      progress:
+   359→        stats.uniqueTitles >= 10
+   360→          ? `${stats.uniqueTitles} titles discovered`
+   361→          : `${stats.uniqueTitles}/10 titles`,
+   362→    },
+   363→    {
+   364→      id: "devoted",
+   365→      icon: <Heart className="w-4 h-4" />,
+   366→      title: "Devoted",
+   367→      desc: "Watch one title in 5+ separate sessions",
+   368→      earned: stats.maxSessions >= 5,
+   369→      progress:
+   370→        stats.maxSessions >= 5
+   371→          ? `top: ${stats.maxSessions} sessions`
+   372→          : `${stats.maxSessions}/5 sessions of one title`,
+   373→    },
+   374→    {
+   375→      id: "marathoner",
+   376→      icon: <Timer className="w-4 h-4" />,
+   377→      title: "Marathoner",
+   378→      desc: "8h+ of watch time in a single day",
+   379→      earned: bestDayMs >= marathon,
+   380→      progress:
+   381→        bestDayMs >= marathon
+   382→          ? `best day: ${fmtDuration(bestDayMs)}`
+   383→          : `best day: ${fmtDuration(bestDayMs)} of 8h`,
+   384→    },
+   385→  ];
+   386→}
+   387→
+   388→function AchievementCard({ a, delay }: { a: Achievement; delay: number }) {
+   389→  return (
+   390→    <div
+   391→      className={cn(
+   392→        "harbor-pop-in flex items-start gap-3 rounded-2xl border p-4",
+   393→        a.earned ? "border-accent/40 bg-accent-soft" : "border-edge-soft bg-elevated/40 opacity-70",
+   394→      )}
+   395→      style={{ animationDelay: `${delay}ms` }}
+   396→    >
+   397→      <div className={cn("harbor-stat-chip relative shrink-0", !a.earned && "grayscale opacity-60")}>
+   398→        {a.icon}
+   399→        {!a.earned && (
+   400→          <span
+   401→            aria-hidden
+   402→            className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-elevated bg-ink-subtle/80"
+   403→          />
+   404→        )}
+   405→      </div>
+   406→      <div className="min-w-0">
+   407→        <p className="text-sm font-semibold text-ink">{a.title}</p>
+   408→        <p className="text-xs text-ink-muted">{a.desc}</p>
+   409→        <p className={cn("mt-0.5 text-[10px]", a.earned ? "text-accent" : "text-ink-subtle")}>{a.progress}</p>
+   410→      </div>
+   411→    </div>
+   412→  );
+   413→}
+   414→
+   415→type GenreStatus = "idle" | "resolving" | "done";
+   416→
+   417→export function WrappedView() {
+   418→  const push = useNav((s) => s.push);
+   419→  const { toast } = useToast();
+   420→  const [stats, setStats] = useState<Stats | null>(null);
+   421→  const [genreMap, setGenreMap] = useState<Map<string, string[]>>(new Map());
+   422→  const [genreStatus, setGenreStatus] = useState<GenreStatus>("idle");
+   423→  const [genreMisses, setGenreMisses] = useState(0);
+   424→  const [sharing, setSharing] = useState(false);
+   425→  const [shareError, setShareError] = useState(false);
+   426→
+   427→  useEffect(() => {
+   428→    const t = setTimeout(() => setStats(computeStats(getHistory())), 0);
+   429→    return () => clearTimeout(t);
+   430→  }, []);
+   431→
+   432→  const accent = useMemo(() => (stats ? resolvedAccent() : "#f0b429"), [stats]);
+   433→
+   434→  const handleShare = useCallback(async () => {
+   435→    if (!stats || sharing || stats.totalEntries === 0) return;
+   436→    setSharing(true);
+   437→    setShareError(false);
+   438→    try {
+   439→      const blob = await generateShareCard({
+   440→        watchMs: stats.watchMs,
+   441→        movies: stats.movies,
+   442→        episodes: stats.episodes,
+   443→        activeDays: stats.activeDays,
+   444→        topTitles: stats.topTitles
+   445→          .slice(0, 3)
+   446→          .map((t) => ({ name: t.name, poster: t.poster, type: t.type })),
+   447→        accent: resolvedAccent(),
+   448→      });
+   449→      const url = URL.createObjectURL(blob);
+   450→      const a = document.createElement("a");
+   451→      a.href = url;
+   452→      a.download = "harbor-wrapped.png";
+   453→      document.body.appendChild(a);
+   454→      a.click();
+   455→      a.remove();
+   456→      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+   457→      toast({ title: "Share card downloaded" });
+   458→    } catch (e) {
+   459→      console.error("[wrapped] share card generation failed", e);
+   460→      setShareError(true);
+   461→    } finally {
+   462→      setSharing(false);
+   463→    }
+   464→  }, [stats, sharing, toast]);
+   465→
+   466→  // Resolve genres for top titles via Cinemeta (bounded time; never hangs the panel)
+   467→  useEffect(() => {
+   468→    if (!stats || stats.topTitles.length === 0) return;
+   469→    let alive = true;
+   470→    (async () => {
+   471→      setGenreStatus("resolving");
+   472→      const results = await Promise.allSettled(
+   473→        stats.topTitles.map((t) =>
+   474→          Promise.race([
+   475→            fetchMeta(t.type === "series" ? "series" : "movie", t.id),
+   476→            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8_000)),
+   477→          ]),
+   478→        ),
+   479→      );
+   480→      if (!alive) return;
+   481→      const map = new Map<string, string[]>();
+   482→      let misses = 0;
+   483→      for (let i = 0; i < results.length; i++) {
+   484→        const r = results[i];
+   485→        if (r.status === "fulfilled" && r.value) {
+   486→          map.set(stats.topTitles[i].id, (r.value.genres ?? []).slice(0, 4));
+   487→        } else {
+   488→          misses++;
+   489→        }
+   490→      }
+   491→      setGenreMap(map);
+   492→      setGenreMisses(misses);
+   493→      setGenreStatus("done");
+   494→    })();
+   495→    return () => {
+   496→      alive = false;
+   497→    };
+   498→  }, [stats]);
+   499→
+   500→  const topGenres = useMemo(() => {
+   501→    const counts = new Map<string, number>();
+   502→    for (const t of stats?.topTitles ?? []) {
+   503→      for (const g of genreMap.get(t.id) ?? []) {
+   504→        counts.set(g, (counts.get(g) ?? 0) + 1);
+   505→      }
+   506→    }
+   507→    return Array.from(counts.entries())
+   508→      .map(([genre, count]) => ({ genre, count }))
+   509→      .sort((a, b) => b.count - a.count)
+   510→      .slice(0, 5);
+   511→  }, [stats, genreMap]);
+   512→
+   513→  const heatTotalMs = useMemo(() => (stats?.heat365 ?? []).reduce((acc, d) => acc + d.ms, 0), [stats]);
+   514→  const heatActiveDays = useMemo(() => (stats?.heat365 ?? []).filter((d) => d.ms > 0).length, [stats]);
+   515→  const achievements = useMemo(() => buildAchievements(stats), [stats]);
+   516→  const earnedCount = achievements.filter((a) => a.earned).length;
+   517→
+   518→  if (!stats) {
+   519→    return (
+   520→      <div className="pt-24 px-4 md:px-8">
+   521→        <div className="harbor-skeleton h-40 rounded-3xl mb-6" aria-hidden />
+   522→        <div className="harbor-skeleton h-24 rounded-3xl" aria-hidden />
+   523→        <div className="sr-only">Loading your stats…</div>
+   524→      </div>
+   525→    );
+   526→  }
+   527→
+   528→  const maxDaily = Math.max(...stats.daily.map((d) => d.ms), 1);
+   529→
+   530→  return (
+   531→    <div className="pt-20 md:pt-14 pb-16 px-4 md:px-8 max-w-5xl">
+   532→      <div className="flex flex-wrap items-center gap-3 mb-1">
+   533→        <Sparkles className="w-6 h-6 text-accent" />
+   534→        <h1 className="font-display text-2xl md:text-3xl font-bold text-ink">Your Wrapped</h1>
+   535→        <div className="ml-auto flex items-center gap-2.5">
+   536→          {shareError && (
+   537→            <span role="alert" className="text-xs text-danger">
+   538→              Couldn&apos;t generate card
+   539→            </span>
+   540→          )}
+   541→          <button
+   542→            type="button"
+   543→            onClick={handleShare}
+   544→            disabled={sharing || !stats || stats.totalEntries === 0}
+   545→            aria-label="Share stats"
+   546→            className="harbor-tv-focus inline-flex items-center gap-2 rounded-xl border border-edge-soft bg-raised px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent disabled:pointer-events-none disabled:opacity-50"
+   547→          >
+   548→            {sharing ? (
+   549→              <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+   550→            ) : (
+   551→              <Share2 className="w-4 h-4" aria-hidden />
+   552→            )}
+   553→            Share stats
+   554→          </button>
+   555→        </div>
+   556→      </div>
+   557→      <p className="text-sm text-ink-muted mb-8">
+   558→        Everything you&apos;ve watched on this device, computed locally.
+   559→      </p>
+   560→
+   561→      {stats.totalEntries === 0 && <WrappedEmptyState onNavigate={(view) => push({ kind: "view", view })} />}
+   562→
+   563→      {stats.totalEntries > 0 && (
+   564→        <>
+   565→          {/* Stat tiles */}
+   566→          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+   567→            <StatTile icon={<Clock className="w-5 h-5" />} label="Total watch time" value={fmtDuration(stats.watchMs)} accent />
+   568→            <StatTile icon={<Film className="w-5 h-5" />} label="Movies" value={String(stats.movies)} />
+   569→            <StatTile icon={<Tv className="w-5 h-5" />} label="Episodes" value={String(stats.episodes)} />
+   570→            <StatTile icon={<Flame className="w-5 h-5" />} label="Active days" value={String(stats.activeDays)} />
+   571→          </div>
+   572→
+   573→          {/* 14-day activity */}
+   574→          <div className="harbor-card rounded-3xl border border-edge-soft bg-elevated p-5 mb-8">
+   575→            <div className="flex items-center gap-2 mb-4">
+   576→              <CalendarDays className="w-4 h-4 text-accent" />
+   577→              <h2 className="text-sm font-semibold text-ink">Last 14 days</h2>
+   578→              {stats.bestDay && (
+   579→                <span className="ml-auto text-xs text-ink-subtle">
+   580→                  Best day: {fmtDuration(stats.bestDay.ms)}
+   581→                </span>
+   582→              )}
+   583→            </div>
+   584→            <div className="flex items-end gap-1.5 h-28" role="img" aria-label="Watch activity chart">
+   585→              {stats.daily.map((d) => {
+   586→                const isToday = d.date === stats.daily[stats.daily.length - 1].date;
+   587→                return (
+   588→                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5 group">
+   589→                    <div
+   590→                      className={cn(
+   591→                        "w-full rounded-t-md transition-colors bg-gradient-to-t from-accent/50 to-accent group-hover:brightness-110",
+   592→                        isToday && "ring-1 ring-accent/60",
+   593→                      )}
+   594→                      style={{ height: `${Math.max(4, (d.ms / maxDaily) * 100)}%` }}
+   595→                      title={`${d.date}: ${fmtDuration(d.ms)}`}
+   596→                    />
+   597→                    <span className={cn("text-[9px]", isToday ? "text-ink font-semibold" : "text-ink-subtle")}>
+   598→                      {d.date.split("-")[2]}
+   599→                    </span>
+   600→                  </div>
+   601→                );
+   602→              })}
+   603→            </div>
+   604→          </div>
+   605→
+   606→          {/* 365-day heatmap */}
+   607→          <div className="harbor-card harbor-pop-in rounded-3xl border border-edge-soft bg-elevated p-5 mb-8" style={{ animationDelay: "60ms" }}>
+   608→            <div className="flex items-center gap-2 mb-4">
+   609→              <CalendarDays className="w-4 h-4 text-accent" />
+   610→              <h2 className="text-sm font-semibold text-ink">Last 365 days</h2>
+   611→              <span className="ml-auto text-xs text-ink-subtle">{heatActiveDays} active days</span>
+   612→            </div>
+   613→            <HeatmapGrid heat={stats.heat365} accent={accent} />
+   614→            <p className="sr-only">
+   615→              {`Over the last 365 days you watched ${fmtDuration(heatTotalMs)} across ${heatActiveDays} active days.`}
+   616→            </p>
+   617→            <div className="mt-3 flex items-center justify-end gap-1.5" aria-hidden>
+   618→              <span className="text-[9px] text-ink-subtle">Less</span>
+   619→              {[0, 1, 2, 3, 4].map((l) => (
+   620→                <div
+   621→                  key={l}
+   622→                  className={cn("h-[9px] w-[9px] rounded-[2px]", l === 0 && "border border-edge-soft bg-raised")}
+   623→                  style={l > 0 ? { backgroundColor: levelBg(l, accent) } : undefined}
+   624→                />
+   625→              ))}
+   626→              <span className="text-[9px] text-ink-subtle">More</span>
+   627→            </div>
+   628→          </div>
+   629→
+   630→          {/* Achievements */}
+   631→          <div className="harbor-pop-in mb-8" style={{ animationDelay: "120ms" }}>
+   632→            <div className="flex items-center gap-2 mb-3">
+   633→              <Medal className="w-4 h-4 text-accent" />
+   634→              <h2 className="text-sm font-semibold text-ink">Achievements</h2>
+   635→              <span className="text-xs text-ink-subtle">
+   636→                {earnedCount}/{achievements.length} earned
+   637→              </span>
+   638→            </div>
+   639→            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+   640→              {achievements.map((a, i) => (
+   641→                <AchievementCard key={a.id} a={a} delay={i * 45} />
+   642→              ))}
+   643→            </div>
+   644→          </div>
+   645→
+   646→          {/* Top titles + collage */}
+   647→          <div className="grid gap-6 md:grid-cols-2 mb-8">
+   648→            <div className="harbor-card rounded-3xl border border-edge-soft bg-elevated p-5">
+   649→              <div className="flex items-center gap-2 mb-4">
+   650→                <Trophy className="w-4 h-4 text-accent" />
+   651→                <h2 className="text-sm font-semibold text-ink">Most watched</h2>
+   652→              </div>
+   653→              <div className="space-y-3">
+   654→                {stats.topTitles.map((t, i) => (
+   655→                  <button
+   656→                    key={t.id}
+   657→                    type="button"
+   658→                    onClick={() => push({ kind: "detail", type: t.type === "series" ? "series" : "movie", id: t.id })}
+   659→                    className="harbor-tv-focus w-full flex items-center gap-3 text-left group"
+   660→                  >
+   661→                    <span className="font-display text-lg font-black text-ink-subtle w-5">{i + 1}</span>
+   662→                    <div className="w-10 h-14 rounded-lg overflow-hidden relative shrink-0 bg-raised">
+   663→                      <PosterImage src={t.poster} alt={t.name} className="absolute inset-0" />
+   664→                    </div>
+   665→                    <div className="min-w-0 flex-1">
+   666→                      <p className="harbor-clamp-1 text-sm font-medium text-ink group-hover:text-accent transition-colors">
+   667→                        {t.name}
+   668→                      </p>
+   669→                      <p className="text-xs text-ink-subtle">
+   670→                        {t.count > 1 ? `${t.count} sessions · ` : ""}{fmtDuration(t.ms)}
+   671→                      </p>
+   672→                      {genreMap.has(t.id) && (
+   673→                        <p className="harbor-clamp-1 text-[10px] text-ink-subtle">
+   674→                          {(genreMap.get(t.id) ?? []).join(" · ")}
+   675→                        </p>
+   676→                      )}
+   677→                    </div>
+   678→                  </button>
+   679→                ))}
+   680→              </div>
+   681→            </div>
+   682→
+   683→            <div className="harbor-card rounded-3xl border border-edge-soft bg-elevated p-5 flex flex-col">
+   684→              <h2 className="text-sm font-semibold text-ink mb-4">Top genres</h2>
+   685→              {topGenres.length === 0 && genreStatus === "resolving" ? (
+   686→                <div className="space-y-3 flex-1" aria-label="Resolving genres">
+   687→                  {[0, 1, 2].map((i) => (
+   688→                    <div key={i}>
+   689→                      <div className="harbor-skeleton h-3 w-24 rounded mb-1.5" />
+   690→                      <div className="harbor-skeleton h-2 rounded-full" style={{ width: `${80 - i * 20}%` }} />
+   691→                    </div>
+   692→                  ))}
+   693→                </div>
+   694→              ) : topGenres.length === 0 ? (
+   695→                <p className="text-xs text-ink-subtle">
+   696→                  {genreMisses > 0
+   697→                    ? "Genres unavailable — could not reach Cinemeta for these titles."
+   698→                    : "No genre data for your watch history yet."}
+   699→                </p>
+   700→              ) : (
+   701→                <div className="space-y-3 flex-1">
+   702→                  {topGenres.map((g) => {
+   703→                    const max = topGenres[0].count || 1;
+   704→                    return (
+   705→                      <div key={g.genre}>
+   706→                        <div className="flex justify-between text-xs mb-1">
+   707→                          <span className="text-ink font-medium">{g.genre}</span>
+   708→                          <span className="text-ink-subtle">{g.count}</span>
+   709→                        </div>
+   710→                        <div className="h-2 rounded-full bg-raised overflow-hidden">
+   711→                          <div
+   712→                            className="h-full rounded-full bg-gradient-to-r from-accent/60 to-accent"
+   713→                            style={{ width: `${(g.count / max) * 100}%` }}
+   714→                          />
+   715→                        </div>
+   716→                      </div>
+   717→                    );
+   718→                  })}
+   719→                </div>
+   720→              )}
+   721→              {/* Poster collage */}
+   722→              <div className="grid grid-cols-3 gap-1.5 mt-5">
+   723→                {stats.topTitles.slice(0, 6).map((t) => (
+   724→                  <div key={`c-${t.id}`} className="aspect-[2/3] rounded-lg overflow-hidden relative bg-raised">
+   725→                    <PosterImage src={t.poster} alt="" className="absolute inset-0" />
+   726→                  </div>
+   727→                ))}
+   728→              </div>
+   729→            </div>
+   730→          </div>
+   731→
+   732→          <p className="text-[11px] text-ink-subtle text-center">
+   733→            Stats are computed locally from your watch history. Private by design — nothing leaves
+   734→            this device unless you sign in to Stremio.
+   735→          </p>
+   736→        </>
+   737→      )}
+   738→    </div>
+   739→  );
+   740→}
+   741→
+   742→function WrappedEmptyState({
+   743→  onNavigate,
+   744→}: {
+   745→  onNavigate: (view: "movies" | "shows" | "live") => void;
+   746→}) {
+   747→  const previews = [
+   748→    { icon: <Clock className="h-4 w-4" />, label: "Watch time" },
+   749→    { icon: <Flame className="h-4 w-4" />, label: "Active days" },
+   750→    { icon: <Trophy className="h-4 w-4" />, label: "Top title" },
+   751→  ];
+   752→  return (
+   753→    <div className="flex justify-center">
+   754→      <div className="harbor-pop-in w-full max-w-xl rounded-3xl border border-edge-soft bg-elevated/60 p-8 text-center shadow-2xl md:p-10">
+   755→        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-edge-soft bg-accent-soft text-accent">
+   756→          <Sparkles className="h-8 w-8" aria-hidden />
+   757→        </div>
+   758→        <h2 className="font-display mt-5 text-2xl font-bold text-ink md:text-3xl">Your year in stories</h2>
+   759→        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-muted">
+   760→          Watch time, active days, top titles and genres — computed locally from your watch
+   761→          history on this device. Nothing leaves your browser unless you sign in yourself.
+   762→        </p>
+   763→
+   764→        <div
+   765→          className="harbor-pop-in mt-6 flex flex-wrap items-center justify-center gap-2.5"
+   766→          style={{ animationDelay: "90ms" }}
+   767→        >
+   768→          <button
+   769→            type="button"
+   770→            onClick={() => onNavigate("movies")}
+   771→            className="harbor-tv-focus inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-black transition-all hover:brightness-110"
+   772→          >
+   773→            <Film className="h-4 w-4" aria-hidden />
+   774→            Browse Movies
+   775→          </button>
+   776→          <button
+   777→            type="button"
+   778→            onClick={() => onNavigate("shows")}
+   779→            className="harbor-tv-focus inline-flex items-center gap-2 rounded-xl border border-edge-soft bg-raised px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-accent/50 hover:text-accent"
+   780→          >
+   781→            <Tv className="h-4 w-4" aria-hidden />
+   782→            Top Shows
+   783→          </button>
+   784→          <button
+   785→            type="button"
+   786→            onClick={() => onNavigate("live")}
+   787→            className="harbor-tv-focus inline-flex items-center gap-2 rounded-xl border border-edge-soft bg-raised px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-accent/50 hover:text-accent"
+   788→          >
+   789→            <RadioTower className="h-4 w-4" aria-hidden />
+   790→            Open Live TV
+   791→          </button>
+   792→        </div>
+   793→
+   794→        {/* Decorative preview of what the stats will look like — placeholder only, no data faked,
+   795→            non-interactive and hidden from assistive tech on purpose */}
+   796→        <div aria-hidden className="pointer-events-none mt-8 grid select-none grid-cols-3 gap-3 opacity-50">
+   797→          {previews.map((p, i) => (
+   798→            <div
+   799→              key={p.label}
+   800→              className="harbor-stat-card is-placeholder harbor-pop-in text-left"
+   801→              style={{ animationDelay: `${160 + i * 70}ms` }}
+   802→            >
+   803→              <span className="harbor-stat-chip">{p.icon}</span>
+   804→              <div className="mt-3 h-2.5 w-12 rounded-full bg-white/10" />
+   805→              <p className="mt-1.5 text-[11px] font-medium text-ink-subtle">{p.label}</p>
+   806→            </div>
+   807→          ))}
+   808→        </div>
+   809→      </div>
+   810→    </div>
+   811→  );
+   812→}
+   813→
+   814→function StatTile({
+   815→  icon,
+   816→  label,
+   817→  value,
+   818→  accent,
+   819→}: {
+   820→  icon: React.ReactNode;
+   821→  label: string;
+   822→  value: string;
+   823→  accent?: boolean;
+   824→}) {
+   825→  return (
+   826→    <div
+   827→      className={`harbor-card rounded-2xl border p-4 ${
+   828→        accent ? "border-accent/40 bg-accent-soft" : "border-edge-soft bg-elevated"
+   829→      }`}
+   830→    >
+   831→      <div className={accent ? "text-accent" : "text-ink-subtle"}>{icon}</div>
+   832→      <p className="font-display text-2xl font-bold text-ink mt-2">{value}</p>
+   833→      <p className="text-xs text-ink-muted">{label}</p>
+   834→    </div>
+   835→  );
+   836→}
+   837→

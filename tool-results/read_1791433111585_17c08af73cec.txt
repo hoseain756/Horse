@@ -1,0 +1,1964 @@
+     1→"use client";
+     2→// Round 8: palette deep-link marker
+     3→
+     4→
+     5→// Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
+     6→import { useEffect, useRef, useState } from "react";
+     7→import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network } from "lucide-react";
+     8→import { useNav, useSettings } from "@/lib/harbor/store";
+     9→import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
+    10→import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
+    11→import { usePwa } from "@/lib/harbor/pwa";
+    12→import {
+    13→  THEME_PRESETS,
+    14→  FONT_PAIRS,
+    15→  applyTheme,
+    16→  deleteUserTheme,
+    17→  loadUserThemes,
+    18→  type FontPairId,
+    19→  type UserTheme,
+    20→} from "@/lib/harbor/themes";
+    21→import { getWatchlist, getWatchlistLength } from "@/lib/harbor/cw";
+    22→import { useTrakt, installTraktPushSync } from "@/lib/harbor/trakt";
+    23→import { useSimkl } from "@/lib/harbor/simkl";
+    24→import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
+    25→import { p2pHealth, p2pCleanup, formatSpeed, P2P_PORT } from "@/lib/harbor/p2p";
+    26→import { TmdbCard, TmdbAttribution } from "../chrome/tmdb-card";
+    27→import { LinkAccountFlow } from "../chrome/link-account-flow";
+    28→import { RatingsSettingsCard } from "../chrome/ratings-row";
+    29→import { useLinking } from "@/lib/harbor/linking";
+    30→import { useToast } from "@/hooks/use-toast";
+    31→import { Button } from "@/components/ui/button";
+    32→import { Input } from "@/components/ui/input";
+    33→import { Slider } from "@/components/ui/slider";
+    34→import { Switch } from "@/components/ui/switch";
+    35→import { ThemeStudio } from "../chrome/theme-studio";
+    36→import { cn } from "@/lib/utils";
+    37→
+    38→type Section = "basics" | "player" | "theme" | "language" | "integrations" | "data" | "about";
+    39→
+    40→const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    41→  { id: "basics", label: "Basics", icon: SettingsIcon },
+    42→  { id: "player", label: "Player", icon: SlidersHorizontal },
+    43→  { id: "theme", label: "Theme", icon: Palette },
+    44→  { id: "language", label: "Language", icon: Globe2 },
+    45→  { id: "integrations", label: "Integrations", icon: Plug },
+    46→  { id: "data", label: "Data", icon: DatabaseBackup },
+    47→  { id: "about", label: "About", icon: Info },
+    48→];
+    49→
+    50→export function SettingsView() {
+    51→  const [section, setSection] = useState<Section>("basics");
+    52→
+    53→  // Round 8: command palette (and other callers) can jump straight to a section
+    54→  useEffect(() => {
+    55→    const h = (e: Event) => {
+    56→      const id = (e as CustomEvent<string>).detail;
+    57→      if (SECTIONS.some((s) => s.id === id)) setSection(id as Section);
+    58→    };
+    59→    window.addEventListener("harbor:settings-section", h);
+    60→    return () => window.removeEventListener("harbor:settings-section", h);
+    61→  }, []);
+    62→
+    63→  return (
+    64→    <div className="pt-20 md:pt-14 pb-16 px-4 md:px-8 max-w-6xl">
+    65→      <div className="flex items-center gap-3 mb-7">
+    66→        <SettingsIcon className="w-6 h-6 text-accent" />
+    67→        <h1 className="font-display text-2xl md:text-3xl font-bold text-ink">Settings</h1>
+    68→      </div>
+    69→
+    70→      <div className="harbor-scroll-x overflow-x-auto flex gap-2 mb-7 pb-1">
+    71→        {SECTIONS.map((s) => {
+    72→          const Icon = s.icon;
+    73→          return (
+    74→            <button
+    75→              key={s.id}
+    76→              type="button"
+    77→              onClick={() => setSection(s.id)}
+    78→              className={cn(
+    79→                "harbor-tv-focus flex items-center gap-2 shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+    80→                section === s.id ? "bg-accent text-black" : "bg-raised text-ink-muted hover:text-ink",
+    81→              )}
+    82→            >
+    83→              <Icon className="w-4 h-4" /> {s.label}
+    84→            </button>
+    85→          );
+    86→        })}
+    87→      </div>
+    88→
+    89→      {section === "basics" && <BasicsPanel />}
+    90→      {section === "player" && <PlayerPanel />}
+    91→      {section === "theme" && <ThemePanel />}
+    92→      {section === "language" && <LanguagePanel />}
+    93→      {section === "integrations" && <IntegrationsPanel />}
+    94→      {section === "data" && <DataPanel />}
+    95→      {section === "about" && <AboutPanel />}
+    96→    </div>
+    97→  );
+    98→}
+    99→
+   100→// ---------- Shared row ----------
+   101→function SettingRow({
+   102→  title,
+   103→  description,
+   104→  children,
+   105→}: {
+   106→  title: string;
+   107→  description?: string;
+   108→  children: React.ReactNode;
+   109→}) {
+   110→  return (
+   111→    <div className="flex items-center justify-between gap-6 rounded-2xl border border-edge-soft bg-elevated px-4 py-3.5">
+   112→      <div className="min-w-0">
+   113→        <p className="text-sm font-medium text-ink">{title}</p>
+   114→        {description && <p className="text-xs text-ink-subtle mt-0.5">{description}</p>}
+   115→      </div>
+   116→      <div className="shrink-0">{children}</div>
+   117→    </div>
+   118→  );
+   119→}
+   120→
+   121→function BasicsPanel() {
+   122→  const settings = useSettings((s) => s.settings);
+   123→  const update = useSettings((s) => s.update);
+   124→
+   125→  return (
+   126→    <div className="space-y-3 max-w-3xl">
+   127→      <SettingRow title="Instant play" description="Open the best stream immediately when clicking Play">
+   128→        <Switch checked={settings.instantPlay} onCheckedChange={(v) => update({ instantPlay: v })} />
+   129→      </SettingRow>
+   130→      <SettingRow title="Auto-play next episode" description="Continue to the next episode automatically">
+   131→        <Switch checked={settings.autoPlayNextEpisode} onCheckedChange={(v) => update({ autoPlayNextEpisode: v })} />
+   132→      </SettingRow>
+   133→      <SettingRow title="Resume playback" description="Pick up where you left off">
+   134→        <Switch checked={settings.resumePlayback} onCheckedChange={(v) => update({ resumePlayback: v })} />
+   135→      </SettingRow>
+   136→      <SettingRow title="Confirm leaving playback" description="Ask before closing the player">
+   137→        <Switch checked={settings.playerConfirmLeave} onCheckedChange={(v) => update({ playerConfirmLeave: v })} />
+   138→      </SettingRow>
+   139→      <SettingRow title="Show card badges" description="IMDb rating badges on posters">
+   140→        <Switch checked={settings.showCardBadges} onCheckedChange={(v) => update({ showCardBadges: v })} />
+   141→      </SettingRow>
+   142→      <SettingRow title="Home mode" description="Harbor layout with hero, or classic rows only">
+   143→        <div className="flex rounded-full bg-raised p-1">
+   144→          {(["harbor", "classic"] as const).map((m) => (
+   145→            <button
+   146→              key={m}
+   147→              type="button"
+   148→              onClick={() => update({ homeMode: m })}
+   149→              className={cn(
+   150→                "rounded-full px-3 py-1 text-xs font-medium capitalize",
+   151→                settings.homeMode === m ? "bg-accent text-black" : "text-ink-muted",
+   152→              )}
+   153→            >
+   154→              {m}
+   155→            </button>
+   156→          ))}
+   157→        </div>
+   158→      </SettingRow>
+   159→      <SettingRow title="Show all addon rows on home" description="Include every addon catalog row">
+   160→        <Switch checked={settings.homeShowAllAddonRows} onCheckedChange={(v) => update({ homeShowAllAddonRows: v })} />
+   161→      </SettingRow>
+   162→      <SettingRow title="Hide watched in catalogs" description="Filter titles you already watched">
+   163→        <Switch checked={settings.hideWatchedInCatalogs} onCheckedChange={(v) => update({ hideWatchedInCatalogs: v })} />
+   164→      </SettingRow>
+   165→      <SettingRow title="Poster size" description={`${Math.round(settings.posterScale * 100)}%`}>
+   166→        <div className="w-40">
+   167→          <Slider
+   168→            value={[settings.posterScale]}
+   169→            min={0.7}
+   170→            max={1.4}
+   171→            step={0.05}
+   172→            onValueChange={([v]) => update({ posterScale: v })}
+   173→          />
+   174→        </div>
+   175→      </SettingRow>
+   176→      <SettingRow title="Poster corner radius" description={`${settings.posterRadius}px`}>
+   177→        <div className="w-40">
+   178→          <Slider
+   179→            value={[settings.posterRadius]}
+   180→            min={0}
+   181→            max={28}
+   182→            step={1}
+   183→            onValueChange={([v]) => update({ posterRadius: v })}
+   184→          />
+   185→        </div>
+   186→      </SettingRow>
+   187→    </div>
+   188→  );
+   189→}
+   190→
+   191→function PlayerPanel() {
+   192→  const settings = useSettings((s) => s.settings);
+   193→  const update = useSettings((s) => s.update);
+   194→
+   195→  return (
+   196→    <div className="space-y-3 max-w-3xl">
+   197→      <SettingRow title="Seek step" description={`Arrow keys seek ±${settings.seekBackStepSec}s`}>
+   198→        <div className="flex items-center gap-3">
+   199→          <span className="text-xs text-ink-subtle w-12 text-right">{settings.seekBackStepSec}s</span>
+   200→          <div className="w-36">
+   201→            <Slider
+   202→              value={[settings.seekBackStepSec]}
+   203→              min={5}
+   204→              max={60}
+   205→              step={5}
+   206→              onValueChange={([v]) => update({ seekBackStepSec: v, seekForwardStepSec: v })}
+   207→            />
+   208→          </div>
+   209→        </div>
+   210→      </SettingRow>
+   211→      <SettingRow title="Subtitles size" description={`${settings.subFontSize}px`}>
+   212→        <div className="w-40">
+   213→          <Slider
+   214→            value={[settings.subFontSize]}
+   215→            min={14}
+   216→            max={56}
+   217→            step={2}
+   218→            onValueChange={([v]) => update({ subFontSize: v })}
+   219→          />
+   220→        </div>
+   221→      </SettingRow>
+   222→      <SettingRow title="Subtitle background" description={`${Math.round(settings.subBackgroundOpacity * 100)}% opacity behind text`}>
+   223→        <div className="w-40">
+   224→          <Slider
+   225→            value={[settings.subBackgroundOpacity]}
+   226→            min={0}
+   227→            max={1}
+   228→            step={0.05}
+   229→            onValueChange={([v]) => update({ subBackgroundOpacity: v })}
+   230→          />
+   231→        </div>
+   232→      </SettingRow>
+   233→      <SettingRow title="Subtitle border" description={`${settings.subBorderSize}px outline`}>
+   234→        <div className="w-40">
+   235→          <Slider
+   236→            value={[settings.subBorderSize]}
+   237→            min={0}
+   238→            max={8}
+   239→            step={1}
+   240→            onValueChange={([v]) => update({ subBorderSize: v })}
+   241→          />
+   242→        </div>
+   243→      </SettingRow>
+   244→      <SettingRow title="Video fill" description="How video fits the screen">
+   245→        <div className="flex rounded-full bg-raised p-1">
+   246→          {(["fit", "fill", "zoom"] as const).map((m) => (
+   247→            <button
+   248→              key={m}
+   249→              type="button"
+   250→              onClick={() => update({ videoFill: m })}
+   251→              className={cn(
+   252→                "rounded-full px-3 py-1 text-xs font-medium capitalize",
+   253→                settings.videoFill === m ? "bg-accent text-black" : "text-ink-muted",
+   254→              )}
+   255→            >
+   256→              {m}
+   257→            </button>
+   258→          ))}
+   259→        </div>
+   260→      </SettingRow>
+   261→      <SettingRow title="Player chrome" description="Stremio-style or Harbor-style controls">
+   262→        <div className="flex rounded-full bg-raised p-1">
+   263→          {(["auto", "default", "stremio"] as const).map((m) => (
+   264→            <button
+   265→              key={m}
+   266→              type="button"
+   267→              onClick={() => update({ playerTheme: m })}
+   268→              className={cn(
+   269→                "rounded-full px-3 py-1 text-xs font-medium capitalize",
+   270→                settings.playerTheme === m ? "bg-accent text-black" : "text-ink-muted",
+   271→              )}
+   272→            >
+   273→              {m}
+   274→            </button>
+   275→          ))}
+   276→        </div>
+   277→      </SettingRow>
+   278→      <SettingRow title="Stream picker layout" description="Condensed rows or Stremio-style tiers">
+   279→        <div className="flex rounded-full bg-raised p-1">
+   280→          {(["stremio", "condensed"] as const).map((m) => (
+   281→            <button
+   282→              key={m}
+   283→              type="button"
+   284→              onClick={() => update({ pickerLayout: m })}
+   285→              className={cn(
+   286→                "rounded-full px-3 py-1 text-xs font-medium capitalize",
+   287→                settings.pickerLayout === m ? "bg-accent text-black" : "text-ink-muted",
+   288→              )}
+   289→            >
+   290→              {m}
+   291→            </button>
+   292→          ))}
+   293→        </div>
+   294→      </SettingRow>
+   295→      <SettingRow title="Quality info in picker" description="Show codec, size and source details">
+   296→        <Switch checked={settings.showQualityInfo} onCheckedChange={(v) => update({ showQualityInfo: v })} />
+   297→      </SettingRow>
+   298→    </div>
+   299→  );
+   300→}
+   301→
+   302→function ThemePanel() {
+   303→  const settings = useSettings((s) => s.settings);
+   304→  const update = useSettings((s) => s.update);
+   305→  const fileRef = useRef<HTMLInputElement>(null);
+   306→  const { toast } = useToast();
+   307→  const [studioOpen, setStudioOpen] = useState(false);
+   308→  const [userThemes, setUserThemes] = useState<UserTheme[]>([]);
+   309→
+   310→  // Load saved themes after mount (client-only storage; avoids hydration mismatch)
+   311→  useEffect(() => {
+   312→    const t = setTimeout(() => setUserThemes(loadUserThemes()), 0);
+   313→    return () => clearTimeout(t);
+   314→  }, []);
+   315→
+   316→  const setPreset = (preset: string) => {
+   317→    update({ theme: { ...settings.theme, preset, customColors: null, customName: null } });
+   318→  };
+   319→
+   320→  const applyUserTheme = (t: UserTheme) => {
+   321→    update({
+   322→      theme: {
+   323→        ...settings.theme,
+   324→        preset: "custom",
+   325→        customColors: t.colors,
+   326→        fontPair: t.fontPair,
+   327→        customLayout: t.layout,
+   328→        customCardStyle: t.cardStyle,
+   329→        customButtonStyle: t.buttonStyle,
+   330→        customName: t.name,
+   331→      },
+   332→    });
+   333→  };
+   334→
+   335→  const removeUserTheme = (id: string) => {
+   336→    const next = deleteUserTheme(id);
+   337→    setUserThemes(next);
+   338→    // If the deleted theme was active, fall back to the default preset
+   339→    if (settings.theme.preset === "custom") {
+   340→      const stillExists = next.some((t) => t.name === settings.theme.customName);
+   341→      if (!stillExists) {
+   342→        update({ theme: { ...settings.theme, preset: "cool-grey", customColors: null, customName: null } });
+   343→      }
+   344→    }
+   345→  };
+   346→
+   347→  const onBgUpload = (file: File) => {
+   348→    if (!file.type.startsWith("image/")) return;
+   349→    if (file.size > 3 * 1024 * 1024) {
+   350→      toast({ title: "Image too large", description: "Use an image under 3 MB.", variant: "destructive" });
+   351→      return;
+   352→    }
+   353→    const reader = new FileReader();
+   354→    reader.onload = () => {
+   355→      update({ theme: { ...settings.theme, backgroundImage: reader.result as string } });
+   356→    };
+   357→    reader.readAsDataURL(file);
+   358→  };
+   359→
+   360→  return (
+   361→    <div className="space-y-7 max-w-4xl">
+   362→      {/* Theme Studio */}
+   363→      <div className="rounded-3xl border border-accent/30 bg-accent-soft/50 p-5">
+   364→        <div className="flex items-center justify-between gap-4 flex-wrap">
+   365→          <div className="min-w-0">
+   366→            <h2 className="font-display text-lg font-bold text-ink flex items-center gap-2">
+   367→              <Brush className="w-[18px] h-[18px] text-accent" /> Theme Studio
+   368→            </h2>
+   369→            <p className="text-xs text-ink-muted mt-0.5">
+   370→              Build a fully custom palette, fonts and layout — with live preview.
+   371→              {settings.theme.preset === "custom" && settings.theme.customName && (
+   372→                <span className="text-accent font-medium"> Active: {settings.theme.customName}</span>
+   373→              )}
+   374→            </p>
+   375→          </div>
+   376→          <Button onClick={() => setStudioOpen(true)} className="bg-accent text-black hover:brightness-110">
+   377→            <Brush className="w-4 h-4 mr-1.5" /> Open Theme Studio
+   378→          </Button>
+   379→        </div>
+   380→        {userThemes.length > 0 && (
+   381→          <div className="mt-4">
+   382→            <p className="text-[10px] uppercase tracking-wide text-ink-subtle mb-2">Your saved themes</p>
+   383→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+   384→              {userThemes.map((t) => (
+   385→                <div
+   386→                  key={t.id}
+   387→                  className={cn(
+   388→                    "group relative rounded-xl border p-2.5 cursor-pointer transition-all hover:scale-[1.02]",
+   389→                    settings.theme.preset === "custom" && settings.theme.customName === t.name
+   390→                      ? "border-accent"
+   391→                      : "border-edge-soft",
+   392→                  )}
+   393→                  style={{ background: t.colors.canvas }}
+   394→                  onClick={() => applyUserTheme(t)}
+   395→                  role="button"
+   396→                  tabIndex={0}
+   397→                  onKeyDown={(e) => e.key === "Enter" && applyUserTheme(t)}
+   398→                  aria-label={`Apply theme ${t.name}`}
+   399→                >
+   400→                  <div className="flex items-center justify-between">
+   401→                    <div className="flex gap-1">
+   402→                      {[t.colors.canvas, t.colors.accent, t.colors.elevated].map((c, i) => (
+   403→                        <span key={i} className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ background: c }} />
+   404→                      ))}
+   405→                    </div>
+   406→                    <button
+   407→                      type="button"
+   408→                      onClick={(e) => {
+   409→                        e.stopPropagation();
+   410→                        removeUserTheme(t.id);
+   411→                      }}
+   412→                      className="opacity-0 group-hover:opacity-100 text-white/50 hover:text-danger transition-all"
+   413→                      aria-label={`Delete theme ${t.name}`}
+   414→                    >
+   415→                      <Trash2 className="w-3.5 h-3.5" />
+   416→                    </button>
+   417→                  </div>
+   418→                  <p className="text-xs font-semibold mt-1.5 truncate" style={{ color: t.colors.accent }}>
+   419→                    {t.name}
+   420→                  </p>
+   421→                  <p className="text-[10px] text-white/50 capitalize">{t.layout} · {t.fontPair.split("-")[0]}</p>
+   422→                </div>
+   423→              ))}
+   424→            </div>
+   425→          </div>
+   426→        )}
+   427→      </div>
+   428→
+   429→      <div>
+   430→        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Theme presets</h2>
+   431→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+   432→          {THEME_PRESETS.map((p) => (
+   433→            <button
+   434→              key={p.id}
+   435→              type="button"
+   436→              onClick={() => setPreset(p.id)}
+   437→              className={cn(
+   438→                "harbor-tv-focus rounded-2xl border-2 p-3 text-left transition-all hover:scale-[1.02]",
+   439→                settings.theme.preset === p.id ? "border-accent" : "border-edge-soft",
+   440→              )}
+   441→              style={{ background: p.canvas }}
+   442→              aria-pressed={settings.theme.preset === p.id}
+   443→            >
+   444→              <div className="flex items-center justify-between mb-2.5">
+   445→                <div className="flex gap-1.5">
+   446→                  {p.swatch.map((c) => (
+   447→                    <span key={c} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
+   448→                  ))}
+   449→                </div>
+   450→                {settings.theme.preset === p.id && (
+   451→                  <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
+   452→                    <Check className="w-3 h-3 text-black" />
+   453→                  </span>
+   454→                )}
+   455→              </div>
+   456→              <p className="text-sm font-semibold" style={{ color: p.accent }}>
+   457→                {p.name}
+   458→              </p>
+   459→              <p className="text-[11px] text-white/50 capitalize">{p.layout} layout</p>
+   460→            </button>
+   461→          ))}
+   462→        </div>
+   463→      </div>
+   464→
+   465→      <div>
+   466→        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Font pairing</h2>
+   467→        <div className="flex flex-wrap gap-2">
+   468→          {(Object.keys(FONT_PAIRS) as FontPairId[]).map((id) => (
+   469→            <button
+   470→              key={id}
+   471→              type="button"
+   472→              onClick={() => {
+   473→                update({ theme: { ...settings.theme, fontPair: id } });
+   474→                // live preview: apply font immediately
+   475→                const pair = FONT_PAIRS[id];
+   476→                document.documentElement.style.setProperty("--font-display-var", pair.display);
+   477→                document.documentElement.style.setProperty("--font-sans-var", pair.sans);
+   478→              }}
+   479→              className={cn(
+   480→                "harbor-tv-focus rounded-xl border px-4 py-2.5 text-sm transition-colors",
+   481→                settings.theme.fontPair === id ? "border-accent bg-accent-soft text-ink" : "border-edge-soft bg-elevated text-ink-muted hover:text-ink",
+   482→              )}
+   483→              style={{ fontFamily: FONT_PAIRS[id].display }}
+   484→            >
+   485→              {FONT_PAIRS[id].name}
+   486→            </button>
+   487→          ))}
+   488→        </div>
+   489→      </div>
+   490→
+   491→      <div>
+   492→        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Custom background</h2>
+   493→        <div className="flex items-center gap-3 flex-wrap">
+   494→          <Button variant="outline" onClick={() => fileRef.current?.click()} className="border-edge text-ink-muted">
+   495→            Upload image
+   496→          </Button>
+   497→          {settings.theme.backgroundImage && (
+   498→            <Button
+   499→              variant="outline"
+   500→              onClick={() => update({ theme: { ...settings.theme, backgroundImage: null } })}
+   501→              className="border-edge text-ink-muted"
+   502→            >
+   503→              <RotateCcw className="w-4 h-4 mr-1" /> Remove
+   504→            </Button>
+   505→          )}
+   506→          <div className="flex items-center gap-2">
+   507→            <span className="text-xs text-ink-subtle">Dim</span>
+   508→            <div className="w-32">
+   509→              <Slider
+   510→                value={[settings.theme.backgroundDim]}
+   511→                min={0}
+   512→                max={1}
+   513→                step={0.05}
+   514→                onValueChange={([v]) => update({ theme: { ...settings.theme, backgroundDim: v } })}
+   515→              />
+   516→            </div>
+   517→          </div>
+   518→          <input
+   519→            ref={fileRef}
+   520→            type="file"
+   521→            accept="image/*"
+   522→            className="hidden"
+   523→            onChange={(e) => e.target.files?.[0] && onBgUpload(e.target.files[0])}
+   524→            aria-label="Upload background image"
+   525→          />
+   526→        </div>
+   527→      </div>
+   528→
+   529→      <ThemeStudio
+   530→        open={studioOpen}
+   531→        onClose={() => {
+   532→          setStudioOpen(false);
+   533→          // Restore the persisted theme in case the draft preview diverged, and refresh the saved list
+   534→          applyTheme(useSettings.getState().settings.theme);
+   535→          setUserThemes(loadUserThemes());
+   536→        }}
+   537→      />
+   538→    </div>
+   539→  );
+   540→}
+   541→
+   542→function LanguagePanel() {
+   543→  const settings = useSettings((s) => s.settings);
+   544→  const update = useSettings((s) => s.update);
+   545→  const LANGS = ["English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese", "Arabic", "Hindi", "Portuguese", "Russian", "Italian"];
+   546→  const preferred = settings.preferredSubLangs;
+   547→
+   548→  const toggleLang = (lang: string) => {
+   549→    // Read live store state (not the hook snapshot) so rapid successive toggles
+   550→    // within one render batch can't silently drop each other's changes.
+   551→    const cur = useSettings.getState().settings.preferredSubLangs;
+   552→    const set = new Set(cur);
+   553→    if (set.has(lang)) set.delete(lang);
+   554→    else set.add(lang);
+   555→    update({ preferredSubLangs: Array.from(set) });
+   556→  };
+   557→
+   558→  // Move a language in the priority list (index-based; bounds-safe)
+   559→  const move = (from: number, to: number) => {
+   560→    const cur = useSettings.getState().settings.preferredSubLangs;
+   561→    if (from === to || to < 0 || to >= cur.length) return;
+   562→    const next = [...cur];
+   563→    const [item] = next.splice(from, 1);
+   564→    next.splice(to, 0, item);
+   565→    update({ preferredSubLangs: next });
+   566→  };
+   567→
+   568→  // Drag-to-reorder state (HTML5 DnD; buttons below cover keyboard/touch)
+   569→  const [dragIdx, setDragIdx] = useState<number | null>(null);
+   570→  const [overIdx, setOverIdx] = useState<number | null>(null);
+   571→  const dropOn = (to: number) => {
+   572→    if (dragIdx !== null) move(dragIdx, to);
+   573→    setDragIdx(null);
+   574→    setOverIdx(null);
+   575→  };
+   576→
+   577→  return (
+   578→    <div className="space-y-3 max-w-3xl">
+   579→      <div className="rounded-2xl border border-edge-soft bg-elevated px-4 py-4">
+   580→        <p className="text-sm font-medium text-ink mb-1">Preferred subtitle languages</p>
+   581→        <p className="text-xs text-ink-subtle mb-3">
+   582→          Toggle languages below, then order them — the player picks the highest-priority match first.
+   583→        </p>
+   584→        <div className="flex flex-wrap gap-2">
+   585→          {LANGS.map((lang) => (
+   586→            <button
+   587→              key={lang}
+   588→              type="button"
+   589→              onClick={() => toggleLang(lang)}
+   590→              className={cn(
+   591→                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+   592→                preferred.includes(lang)
+   593→                  ? "bg-accent text-black"
+   594→                  : "bg-raised text-ink-muted hover:text-ink",
+   595→              )}
+   596→              aria-pressed={preferred.includes(lang)}
+   597→            >
+   598→              {lang}
+   599→            </button>
+   600→          ))}
+   601→        </div>
+   602→
+   603→        {preferred.length > 0 && (
+   604→          <div className="mt-4">
+   605→            <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted mb-2">
+   606→              Priority order
+   607→            </p>
+   608→            <div className="space-y-1.5" role="list" aria-label="Subtitle language priority">
+   609→              {preferred.map((lang, i) => (
+   610→                <div
+   611→                  key={lang}
+   612→                  role="listitem"
+   613→                  draggable
+   614→                  onDragStart={() => setDragIdx(i)}
+   615→                  onDragOver={(e) => {
+   616→                    e.preventDefault();
+   617→                    setOverIdx(i);
+   618→                  }}
+   619→                  onDragLeave={() => setOverIdx((v) => (v === i ? null : v))}
+   620→                  onDrop={(e) => {
+   621→                    e.preventDefault();
+   622→                    dropOn(i);
+   623→                  }}
+   624→                  onDragEnd={() => {
+   625→                    setDragIdx(null);
+   626→                    setOverIdx(null);
+   627→                  }}
+   628→                  className={cn(
+   629→                    "harbor-card flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all",
+   630→                    dragIdx === i
+   631→                      ? "border-accent/60 bg-accent-soft opacity-70"
+   632→                      : overIdx === i && dragIdx !== null
+   633→                        ? "border-accent/60 bg-accent-soft/40"
+   634→                        : "border-edge-soft bg-raised/60",
+   635→                  )}
+   636→                >
+   637→                  <span
+   638→                    className={cn(
+   639→                      "shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold tabular-nums cursor-grab active:cursor-grabbing",
+   640→                      i === 0 ? "bg-accent text-black" : "bg-raised text-ink-muted",
+   641→                    )}
+   642→                    title="Drag to reorder"
+   643→                  >
+   644→                    {i + 1}
+   645→                  </span>
+   646→                  <span className="flex-1 text-sm text-ink harbor-clamp-1">{lang}</span>
+   647→                  {i === 0 && (
+   648→                    <span className="shrink-0 rounded-full bg-accent-soft text-accent px-2 py-0.5 text-[9px] font-bold tracking-wide">
+   649→                      TOP PICK
+   650→                    </span>
+   651→                  )}
+   652→                  <div className="flex items-center gap-0.5 shrink-0">
+   653→                    <button
+   654→                      type="button"
+   655→                      onClick={() => move(i, i - 1)}
+   656→                      disabled={i === 0}
+   657→                      className="harbor-tv-focus w-7 h-7 rounded-lg flex items-center justify-center text-ink-muted hover:text-ink hover:bg-raised disabled:opacity-30 disabled:hover:bg-transparent"
+   658→                      aria-label={`Move ${lang} up`}
+   659→                      title="Move up"
+   660→                    >
+   661→                      <ChevronUp className="w-4 h-4" />
+   662→                    </button>
+   663→                    <button
+   664→                      type="button"
+   665→                      onClick={() => move(i, i + 1)}
+   666→                      disabled={i === preferred.length - 1}
+   667→                      className="harbor-tv-focus w-7 h-7 rounded-lg flex items-center justify-center text-ink-muted hover:text-ink hover:bg-raised disabled:opacity-30 disabled:hover:bg-transparent"
+   668→                      aria-label={`Move ${lang} down`}
+   669→                      title="Move down"
+   670→                    >
+   671→                      <ChevronDown className="w-4 h-4" />
+   672→                    </button>
+   673→                    <button
+   674→                      type="button"
+   675→                      onClick={() => toggleLang(lang)}
+   676→                      className="harbor-tv-focus w-7 h-7 rounded-lg flex items-center justify-center text-ink-muted hover:text-danger hover:bg-raised"
+   677→                      aria-label={`Remove ${lang}`}
+   678→                      title="Remove"
+   679→                    >
+   680→                      <X className="w-4 h-4" />
+   681→                    </button>
+   682→                  </div>
+   683→                </div>
+   684→              ))}
+   685→            </div>
+   686→          </div>
+   687→        )}
+   688→      </div>
+   689→      <SettingRow title="Subtitles off by default" description="Don't auto-enable subtitle tracks">
+   690→        <Switch checked={settings.subtitlesOffByDefault} onCheckedChange={(v) => update({ subtitlesOffByDefault: v })} />
+   691→      </SettingRow>
+   692→    </div>
+   693→  );
+   694→}
+   695→
+   696→function DataPanel() {
+   697→  const { toast } = useToast();
+   698→  const settings = useSettings((s) => s.settings);
+   699→  const fileRef = useRef<HTMLInputElement>(null);
+   700→
+   701→  const exportBackup = () => {
+   702→    const data: Record<string, string> = {};
+   703→    for (let i = 0; i < window.localStorage.length; i++) {
+   704→      const key = window.localStorage.key(i);
+   705→      if (key?.startsWith("harbor-web.")) {
+   706→        const v = window.localStorage.getItem(key);
+   707→        if (v) data[key] = v;
+   708→      }
+   709→    }
+   710→    const backup = {
+   711→      format: "harbor-web-backup",
+   712→      version: 1,
+   713→      exportedAt: new Date().toISOString(),
+   714→      data,
+   715→    };
+   716→    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+   717→    const url = URL.createObjectURL(blob);
+   718→    const a = document.createElement("a");
+   719→    a.href = url;
+   720→    a.download = `harbor-web-backup-${new Date().toISOString().slice(0, 10)}.harbx`;
+   721→    a.click();
+   722→    URL.revokeObjectURL(url);
+   723→    toast({ title: "Backup exported", description: `${Object.keys(data).length} keys saved.` });
+   724→  };
+   725→
+   726→  const importBackup = async (file: File) => {
+   727→    try {
+   728→      const text = await file.text();
+   729→      const parsed = JSON.parse(text) as { format?: string; data?: Record<string, string> };
+   730→      if (parsed.format !== "harbor-web-backup" || !parsed.data) {
+   731→        throw new Error("Not a Harbor Web backup file");
+   732→      }
+   733→      let restored = 0;
+   734→      for (const [key, value] of Object.entries(parsed.data)) {
+   735→        if (key.startsWith("harbor-web.")) {
+   736→          window.localStorage.setItem(key, value);
+   737→          restored++;
+   738→        }
+   739→      }
+   740→      toast({ title: "Backup restored", description: `${restored} keys restored. Reloading…` });
+   741→      setTimeout(() => window.location.reload(), 900);
+   742→    } catch (e) {
+   743→      toast({
+   744→        title: "Restore failed",
+   745→        description: e instanceof Error ? e.message : "Invalid file",
+   746→        variant: "destructive",
+   747→      });
+   748→    }
+   749→  };
+   750→
+   751→  const clearData = () => {
+   752→    const keys: string[] = [];
+   753→    for (let i = 0; i < window.localStorage.length; i++) {
+   754→      const key = window.localStorage.key(i);
+   755→      if (key?.startsWith("harbor-web.")) keys.push(key);
+   756→    }
+   757→    keys.forEach((k) => window.localStorage.removeItem(k));
+   758→    toast({ title: "Local data cleared", description: "Reloading…" });
+   759→    setTimeout(() => window.location.reload(), 900);
+   760→  };
+   761→
+   762→  return (
+   763→    <div className="space-y-3 max-w-3xl">
+   764→      <CloudSyncCard />
+   765→      <SettingRow title="Export backup" description={`Save settings, addons, watchlist (${getWatchlist().length} items) to a .harbx file`}>
+   766→        <Button onClick={exportBackup} className="bg-accent text-black hover:brightness-110">
+   767→          Export
+   768→        </Button>
+   769→      </SettingRow>
+   770→      <SettingRow title="Restore backup" description="Import a .harbx backup file">
+   771→        <Button variant="outline" onClick={() => fileRef.current?.click()} className="border-edge text-ink-muted">
+   772→          Restore
+   773→        </Button>
+   774→        <input
+   775→          ref={fileRef}
+   776→          type="file"
+   777→          accept=".harbx,.json"
+   778→          className="hidden"
+   779→          onChange={(e) => e.target.files?.[0] && importBackup(e.target.files[0])}
+   780→          aria-label="Import backup file"
+   781→        />
+   782→      </SettingRow>
+   783→      <SettingRow title="Clear local data" description="Remove all Harbor Web data from this browser">
+   784→        <Button variant="outline" onClick={clearData} className="border-danger/40 text-danger hover:bg-danger/10">
+   785→          Clear
+   786→        </Button>
+   787→      </SettingRow>
+   788→      <SettingRow
+   789→        title="Current settings size"
+   790→        description={`${(JSON.stringify(settings).length / 1024).toFixed(1)} KB in localStorage`}
+   791→      >
+   792→        <span />
+   793→      </SettingRow>
+   794→    </div>
+   795→  );
+   796→}
+   797→
+   798→// ---------- Cloud sync card ----------
+   799→function CloudSyncCard() {
+   800→  const settings = useSettings((s) => s.settings);
+   801→  const update = useSettings((s) => s.update);
+   802→  const { toast } = useToast();
+   803→  const status = useCloudSync((s) => s.status);
+   804→  const lastSync = useCloudSync((s) => s.lastSync);
+   805→  const error = useCloudSync((s) => s.error);
+   806→  const pushNow = useCloudSync((s) => s.pushNow);
+   807→  const [storedSync, setStoredSync] = useState<number | null>(null);
+   808→
+   809→  useEffect(() => {
+   810→    const t = setTimeout(() => setStoredSync(lastSyncFromStorage()), 0);
+   811→    return () => clearTimeout(t);
+   812→  }, [status]);
+   813→
+   814→  const enabled = settings.cloudSyncEnabled;
+   815→  const shownSync = lastSync ?? storedSync;
+   816→
+   817→  const dot = !enabled
+   818→    ? "bg-ink-subtle"
+   819→    : status === "synced"
+   820→      ? "bg-emerald-400"
+   821→      : status === "syncing"
+   822→        ? "bg-amber-300 animate-pulse"
+   823→        : status === "error"
+   824→          ? "bg-danger"
+   825→          : "bg-ink-subtle";
+   826→  const statusLabel = !enabled
+   827→    ? "Off"
+   828→    : status === "synced"
+   829→      ? "Up to date"
+   830→      : status === "syncing"
+   831→        ? "Syncing…"
+   832→        : status === "error"
+   833→          ? "Sync error"
+   834→          : "Idle";
+   835→
+   836→  return (
+   837→    <div className="rounded-2xl border border-edge-soft bg-elevated p-5 relative overflow-hidden">
+   838→      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" aria-hidden />
+   839→      <div className="flex items-start justify-between gap-4 flex-wrap">
+   840→        <div className="min-w-0">
+   841→          <div className="flex items-center gap-2 mb-1">
+   842→            {enabled ? <CloudUpload className="w-4 h-4 text-accent" /> : <CloudOff className="w-4 h-4 text-ink-subtle" />}
+   843→            <h3 className="text-sm font-semibold text-ink">Cloud sync</h3>
+   844→            <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 text-[11px] text-ink-muted")}>
+   845→              <span className={cn("w-1.5 h-1.5 rounded-full", dot)} aria-hidden />
+   846→              {statusLabel}
+   847→            </span>
+   848→          </div>
+   849→          <p className="text-xs text-ink-muted max-w-md">
+   850→            {enabled
+   851→              ? "Addons, settings, themes, watchlist, continue-watching and history are stored on this server (SQLite). Sign in to Stremio to restore them in any browser; without an account, sync keys to this device."
+   852→              : "Sync is disabled. Your data stays in this browser only — export a backup if you want a second copy."}
+   853→          </p>
+   854→          {enabled && (
+   855→            <p className="mt-2 text-[11px] text-ink-subtle flex items-center gap-1.5 flex-wrap">
+   856→              <ShieldCheck className="w-3.5 h-3.5" />
+   857→              Anonymous device key <code className="rounded bg-raised px-1 py-0.5">{deviceIdShort()}</code>
+   858→              {shownSync ? ` · last sync ${new Date(shownSync).toLocaleTimeString()}` : " · not synced yet"}
+   859→              {error && <span className="text-danger"> · {error}</span>}
+   860→            </p>
+   861→          )}
+   862→        </div>
+   863→        <div className="flex items-center gap-2 shrink-0">
+   864→          <Switch
+   865→            checked={enabled}
+   866→            onCheckedChange={(v) => {
+   867→              update({ cloudSyncEnabled: v });
+   868→              toast({ title: v ? "Cloud sync enabled" : "Cloud sync disabled", description: v ? "A first sync will start now." : "Local data stays untouched." });
+   869→              if (v) setTimeout(() => void useCloudSync.getState().boot(), 300);
+   870→            }}
+   871→            aria-label="Toggle cloud sync"
+   872→          />
+   873→          <Button
+   874→            size="sm"
+   875→            variant="outline"
+   876→            className="border-edge text-ink-muted gap-1.5"
+   877→            disabled={!enabled || status === "syncing"}
+   878→            onClick={() =>
+   879→              void pushNow().then(() => toast({ title: "Synced", description: "Your library is up to date on the server." }))
+   880→            }
+   881→          >
+   882→            <RefreshCw className={cn("w-3.5 h-3.5", status === "syncing" && "animate-spin")} />
+   883→            Sync now
+   884→          </Button>
+   885→        </div>
+   886→      </div>
+   887→    </div>
+   888→  );
+   889→}
+   890→
+   891→function AboutPanel() {
+   892→  const canInstall = usePwa((s) => s.canInstall);
+   893→  const installed = usePwa((s) => s.installed);
+   894→  const promptInstall = usePwa((s) => s.promptInstall);
+   895→  const { toast } = useToast();
+   896→
+   897→  return (
+   898→    <div className="space-y-4 max-w-3xl">
+   899→      <div className="rounded-2xl border border-edge-soft bg-elevated p-6">
+   900→        <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
+   901→          <h2 className="font-display text-xl font-bold text-ink">Harbor Web</h2>
+   902→          {canInstall && (
+   903→            <Button
+   904→              size="sm"
+   905→              onClick={() =>
+   906→                void promptInstall().then((r) => {
+   907→                  if (r === "accepted") toast({ title: "Installing Harbor…", description: "Find it in your apps list." });
+   908→                })
+   909→              }
+   910→              className="bg-accent text-black hover:brightness-110"
+   911→            >
+   912→              Install app
+   913→            </Button>
+   914→          )}
+   915→          {installed && <span className="text-[11px] text-ink-subtle rounded-full border border-edge-soft px-2 py-1">Installed as app</span>}
+   916→        </div>
+   917→        <p className="text-sm text-ink-muted">
+   918→          A web port of Harbor — the open-source Stremio client built for adventure. Original
+   919→          desktop app by the Harbor project (github.com/harborstremio/harbor), MIT licensed.
+   920→        </p>
+   921→        <div className="mt-4 space-y-2 text-xs text-ink-subtle">
+   922→          <p>
+   923→            Harbor Web is an independent, open-source media center for the Stremio addon protocol.
+   924→            It is <span className="text-ink-muted font-medium">not affiliated with Stremio</span>.
+   925→            It hosts, indexes, and ships no media and bundles no content addons — users install
+   926→            their own addons.
+   927→          </p>
+   928→          <p>
+   929→            Licensed MIT. Attribution: Harbor desktop (github.com/harborstremio/harbor).
+   930→          </p>
+   931→          <p className="pt-1 border-t border-edge-soft mt-2">
+   932→            <TmdbAttribution />
+   933→          </p>
+   934→        </div>
+   935→      </div>
+   936→      <div className="rounded-2xl border border-edge-soft bg-elevated p-6">
+   937→        <h3 className="text-sm font-semibold text-ink mb-3">Keyboard shortcuts</h3>
+   938→        <div className="grid grid-cols-2 gap-2 text-xs text-ink-muted">
+   939→          {[
+   940→            ["/", "Focus search"],
+   941→            ["Space", "Play / pause"],
+   942→            ["F", "Fullscreen"],
+   943→            ["← / →", "Seek ±10s"],
+   944→            ["↑ / ↓", "Volume"],
+   945→            ["M", "Mute"],
+   946→            ["S / C", "Cycle subtitles"],
+   947→            ["N / B", "Next / prev episode"],
+   948→            ["W", "Stream switcher"],
+   949→            ["E", "Episodes panel"],
+   950→            ["Esc", "Close player"],
+   951→            ["0–9", "Seek to %"],
+   952→            ["Backspace", "Back"],
+   953→          ].map(([key, label]) => (
+   954→            <div key={key} className="flex items-center gap-2">
+   955→              <kbd className="rounded bg-raised border border-edge-soft px-1.5 py-0.5 font-mono text-[10px] text-ink">{key}</kbd>
+   956→              {label}
+   957→            </div>
+   958→          ))}
+   959→        </div>
+   960→      </div>
+   961→    </div>
+   962→  );
+   963→}
+   964→
+   965→// ---------- Integrations panel ----------
+   966→
+   967→function IntegrationsPanel() {
+   968→  const loadLinks = useLinking((s) => s.load);
+   969→  const checkEnv = useLinking((s) => s.checkEnv);
+   970→  useEffect(() => {
+   971→    loadLinks();
+   972→    void checkEnv();
+   973→  }, [loadLinks, checkEnv]);
+   974→  return (
+   975→    <div className="space-y-6 max-w-3xl">
+   976→      <div>
+   977→        <h2 className="font-display text-xl font-bold text-ink mb-1">Integrations</h2>
+   978→        <p className="text-sm text-ink-subtle">
+   979→          Connect optional third-party services. Activation-code linking keeps tokens encrypted on
+   980→          this app's server; the browser never sees them.
+   981→        </p>
+   982→      </div>
+   983→      <TraktCard />
+   984→      <SimklCard />
+   985→      <TmdbCard />
+   986→      <RatingsSettingsCard />
+   987→      <DebridCard />
+   988→      <P2pCard />
+   989→      <div className="rounded-2xl border border-edge-soft bg-elevated/60 px-4 py-3.5 flex items-start gap-3">
+   990→        <ShieldCheck className="w-4.5 h-4.5 text-accent mt-0.5 shrink-0" />
+   991→        <p className="text-xs text-ink-subtle">
+   992→          Harbor Web never ships shared API keys. Each user brings their own credentials — this keeps
+   993→          the app self-hostable and avoids proxying anyone else's quota.
+   994→        </p>
+   995→      </div>
+   996→    </div>
+   997→  );
+   998→}
+   999→
+  1000→function TraktCard() {
+  1001→  const { toast } = useToast();
+  1002→  const auth = useTrakt((s) => s.auth);
+  1003→  const phase = useTrakt((s) => s.phase);
+  1004→  const device = useTrakt((s) => s.device);
+  1005→  const error = useTrakt((s) => s.error);
+  1006→  const importing = useTrakt((s) => s.importing);
+  1007→  const loaded = useTrakt((s) => s.loaded);
+  1008→  const load = useTrakt((s) => s.load);
+  1009→  const connect = useTrakt((s) => s.connect);
+  1010→  const pollOnce = useTrakt((s) => s.pollOnce);
+  1011→  const cancelConnect = useTrakt((s) => s.cancelConnect);
+  1012→  const disconnect = useTrakt((s) => s.disconnect);
+  1013→  const importWatchlist = useTrakt((s) => s.importWatchlist);
+  1014→  const importingHistory = useTrakt((s) => s.importingHistory);
+  1015→  const importHistory = useTrakt((s) => s.importHistory);
+  1016→  const scrobbleEnabled = useTrakt((s) => s.scrobbleEnabled);
+  1017→  const setScrobbleEnabled = useTrakt((s) => s.setScrobbleEnabled);
+  1018→  const pushing = useTrakt((s) => s.pushing);
+  1019→  const pushEnabled = useTrakt((s) => s.pushEnabled);
+  1020→  const pushWatchlist = useTrakt((s) => s.pushWatchlist);
+  1021→  const setPushEnabled = useTrakt((s) => s.setPushEnabled);
+  1022→
+  1023→  const [clientId, setClientId] = useState("");
+  1024→  const [clientSecret, setClientSecret] = useState("");
+  1025→  const [connecting, setConnecting] = useState(false);
+  1026→  const [wlCount, setWlCount] = useState<number | null>(null);
+  1027→  const [histCount, setHistCount] = useState<number | null>(null);
+  1028→  const [pushCount, setPushCount] = useState<string | null>(null);
+  1029→
+  1030→  useEffect(() => {
+  1031→    load();
+  1032→  }, [load]);
+  1033→
+  1034→  // Install the watchlist auto-push listener once (module-level singleton).
+  1035→  useEffect(() => installTraktPushSync(), []);
+  1036→
+  1037→  // Poll Trakt while a device code is active
+  1038→  useEffect(() => {
+  1039→    if (phase !== "connecting" || !device) return;
+  1040→    let alive = true;
+  1041→    let timer: ReturnType<typeof setTimeout> | null = null;
+  1042→    const tick = async () => {
+  1043→      if (!alive) return;
+  1044→      const result = await pollOnce();
+  1045→      if (!alive) return;
+  1046→      if (result === "authorized") {
+  1047→        toast({ title: "Trakt connected", description: "You can now import your watchlist." });
+  1048→        return; // stop polling
+  1049→      }
+  1050→      if (result === "pending") {
+  1051→        timer = setTimeout(tick, 5000);
+  1052→      }
+  1053→      // "failed" → phase reset by store; stop
+  1054→    };
+  1055→    timer = setTimeout(tick, 5000);
+  1056→    return () => {
+  1057→      alive = false;
+  1058→      if (timer) clearTimeout(timer);
+  1059→    };
+  1060→  }, [phase, device, pollOnce, toast]);
+  1061→
+  1062→  const startConnect = async () => {
+  1063→    // PKCE apps have no secret — only the Client ID is required
+  1064→    if (!clientId.trim()) {
+  1065→      toast({ title: "Client ID is required", variant: "destructive" });
+  1066→      return;
+  1067→    }
+  1068→    setConnecting(true);
+  1069→    const ok = await connect(clientId, clientSecret || undefined);
+  1070→    setConnecting(false);
+  1071→    if (ok) toast({ title: "Enter the code on Trakt", description: "Approve access to continue." });
+  1072→    else toast({ title: "Could not start Trakt flow", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+  1073→  };
+  1074→
+  1075→  const doImport = async () => {
+  1076→    const added = await importWatchlist();
+  1077→    if (added >= 0) {
+  1078→      setWlCount(added);
+  1079→      toast({
+  1080→        title: added > 0 ? `Imported ${added} ${added === 1 ? "title" : "titles"}` : "Watchlist already up to date",
+  1081→        description: added > 0 ? "Merged into your Library watchlist." : undefined,
+  1082→      });
+  1083→    } else {
+  1084→      toast({ title: "Import failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+  1085→    }
+  1086→  };
+  1087→
+  1088→  const doImportHistory = async () => {
+  1089→    const added = await importHistory();
+  1090→    if (added >= 0) {
+  1091→      setHistCount(added);
+  1092→      toast({
+  1093→        title: added > 0 ? `Imported ${added} ${added === 1 ? "play" : "plays"}` : "History already up to date",
+  1094→        description: added > 0 ? "Merged into your playback history." : undefined,
+  1095→      });
+  1096→    } else {
+  1097→      toast({ title: "History import failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+  1098→    }
+  1099→  };
+  1100→
+  1101→  const doPush = async () => {
+  1102→    const res = await pushWatchlist();
+  1103→    if (res === null) {
+  1104→      toast({ title: "Push failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+  1105→      return;
+  1106→    }
+  1107→    if (res === "empty") {
+  1108→      setPushCount(null);
+  1109→      toast({
+  1110→        title: "Nothing to push",
+  1111→        description: "Your watchlist has no imdb-backed titles — install Cinemeta metadata to get imdb ids.",
+  1112→      });
+  1113→      return;
+  1114→    }
+  1115→    const total = res.pushed + res.notFound;
+  1116→    setPushCount(
+  1117→      res.notFound > 0
+  1118→        ? `Last push: +${res.pushed} · ${res.notFound} not on Trakt`
+  1119→        : `Last push: +${total}`,
+  1120→    );
+  1121→    toast({
+  1122→      title: res.pushed > 0 ? `Pushed ${res.pushed} ${total === 1 ? "title" : "titles"} to Trakt` : "Trakt watchlist already up to date",
+  1123→      description: res.notFound > 0 ? `${res.notFound} ${res.notFound === 1 ? "title" : "titles"} couldn't be matched on Trakt.` : undefined,
+  1124→    });
+  1125→  };
+  1126→
+  1127→  if (!loaded) return null;
+  1128→
+  1129→  return (
+  1130→    <div className="rounded-2xl border border-edge-soft bg-elevated p-5">
+  1131→      <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
+  1132→        <div className="flex items-center gap-3">
+  1133→          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+  1134→            <Plug className="w-5 h-5 text-accent" />
+  1135→          </span>
+  1136→          <div>
+  1137→            <h3 className="text-sm font-bold text-ink">Trakt.tv</h3>
+  1138→            <p className="text-xs text-ink-subtle">
+  1139→              {auth ? `Connected${auth.username ? ` as @${auth.username}` : ""}` : "Import your Trakt watchlist"}
+  1140→            </p>
+  1141→          </div>
+  1142→        </div>
+  1143→        {auth && (
+  1144→          <button
+  1145→            type="button"
+  1146→            onClick={() => {
+  1147→              disconnect();
+  1148→              setWlCount(null);
+  1149→              setHistCount(null);
+  1150→              toast({ title: "Trakt disconnected" });
+  1151→            }}
+  1152→            className="harbor-tv-focus flex items-center gap-1.5 rounded-xl bg-raised px-3.5 py-2 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
+  1153→          >
+  1154→            <Unplug className="w-3.5 h-3.5" /> Disconnect
+  1155→          </button>
+  1156→        )}
+  1157→      </div>
+  1158→
+  1159→      {!auth && phase !== "connecting" && (
+  1160→        <>
+  1161→          {/* Zero-config activation-code linking (preferred) */}
+  1162→          <LinkAccountFlow service="trakt" />
+  1163→          {/* Legacy BYO flow — collapsed by default */}
+  1164→          <details className="mt-3">
+  1165→            <summary className="harbor-tv-focus cursor-pointer select-none text-xs font-medium text-ink-muted hover:text-ink">
+  1166→              Advanced: use your own Trakt app credentials
+  1167→            </summary>
+  1168→            <div className="mt-3 space-y-3">
+  1169→          <div className="grid sm:grid-cols-2 gap-3">
+  1170→            <div>
+  1171→              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="trakt-client-id">
+  1172→                Client ID
+  1173→              </label>
+  1174→              <Input
+  1175→                id="trakt-client-id"
+  1176→                value={clientId}
+  1177→                onChange={(e) => setClientId(e.target.value)}
+  1178→                placeholder="Your Trakt app client id"
+  1179→                className="bg-raised border-edge-soft font-mono text-xs"
+  1180→                autoComplete="off"
+  1181→                spellCheck={false}
+  1182→              />
+  1183→            </div>
+  1184→            <div>
+  1185→              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="trakt-client-secret">
+  1186→                Client secret (optional — PKCE apps have none)
+  1187→              </label>
+  1188→              <Input
+  1189→                id="trakt-client-secret"
+  1190→                type="password"
+  1191→                value={clientSecret}
+  1192→                onChange={(e) => setClientSecret(e.target.value)}
+  1193→                placeholder="Your Trakt app client secret"
+  1194→                className="bg-raised border-edge-soft font-mono text-xs"
+  1195→                autoComplete="off"
+  1196→                spellCheck={false}
+  1197→              />
+  1198→            </div>
+  1199→          </div>
+  1200→          <p className="text-xs text-ink-subtle">
+  1201→            Create a free app at{" "}
+  1202→            <a
+  1203→              href="https://trakt.tv/oauth/applications/new"
+  1204→              target="_blank"
+  1205→              rel="noreferrer noopener"
+  1206→              className="text-accent underline underline-offset-2"
+  1207→            >
+  1208→              trakt.tv/oauth/applications/new
+  1209→            </a>{" "}
+  1210→            (name it anything; redirect URI is unused for device flow). Credentials never leave this
+  1211→            browser except to authenticate with Trakt itself.
+  1212→          </p>
+  1213→          <div className="flex items-center gap-3">
+  1214→            <Button onClick={startConnect} disabled={connecting} className="bg-accent text-black hover:brightness-110">
+  1215→              {connecting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plug className="w-4 h-4 mr-1.5" />}
+  1216→              Connect
+  1217→            </Button>
+  1218→            {error && <span className="text-xs text-danger">{error}</span>}
+  1219→          </div>
+  1220→            </div>
+  1221→          </details>
+  1222→        </>
+  1223→      )}
+  1224→
+  1225→      {phase === "connecting" && device && (
+  1226→        <div className="mt-4 rounded-xl border border-accent/40 bg-accent-soft/50 p-4">
+  1227→          <p className="text-xs text-ink-muted mb-2">
+  1228→            Visit{" "}
+  1229→            <a
+  1230→              href={device.verificationUrl}
+  1231→              target="_blank"
+  1232→              rel="noreferrer noopener"
+  1233→              className="text-accent font-semibold underline underline-offset-2"
+  1234→            >
+  1235→              {device.verificationUrl.replace(/^https?:\/\//, "")}
+  1236→            </a>{" "}
+  1237→            and enter this code:
+  1238→          </p>
+  1239→          <div className="flex items-center gap-4 flex-wrap">
+  1240→            <span className="font-mono text-3xl font-bold tracking-[0.3em] text-accent select-all" aria-label="Device code">
+  1241→              {device.userCode}
+  1242→            </span>
+  1243→            <span className="flex items-center gap-2 text-xs text-ink-subtle">
+  1244→              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for authorization…
+  1245→            </span>
+  1246→            <button
+  1247→              type="button"
+  1248→              onClick={() => {
+  1249→                cancelConnect();
+  1250→                toast({ title: "Trakt connection cancelled" });
+  1251→              }}
+  1252→              className="ml-auto flex items-center gap-1.5 rounded-lg bg-raised px-3 py-1.5 text-xs font-semibold text-ink-muted hover:text-ink"
+  1253→            >
+  1254→              <Square className="w-3 h-3" /> Cancel
+  1255→            </button>
+  1256→          </div>
+  1257→        </div>
+  1258→      )}
+  1259→
+  1260→      {auth && (
+  1261→        <div className="mt-4 space-y-3">
+  1262→          <div className="flex items-center gap-4 flex-wrap">
+  1263→            <div className="flex items-center gap-3">
+  1264→              <Button onClick={doImport} disabled={importing} className="bg-accent text-black hover:brightness-110">
+  1265→                {importing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <DownloadCloud className="w-4 h-4 mr-1.5" />}
+  1266→                Import watchlist
+  1267→              </Button>
+  1268→              <span className="text-xs text-ink-subtle">
+  1269→                {wlCount !== null
+  1270→                  ? `Last import: +${wlCount} new`
+  1271→                  : `Local watchlist has ${getWatchlistLength()} titles`}
+  1272→              </span>
+  1273→            </div>
+  1274→            <div className="flex items-center gap-3">
+  1275→              <Button onClick={doImportHistory} disabled={importingHistory} className="bg-accent text-black hover:brightness-110">
+  1276→                {importingHistory ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <History className="w-4 h-4 mr-1.5" />}
+  1277→                Import history
+  1278→              </Button>
+  1279→              {histCount !== null && <span className="text-xs text-ink-subtle">Last import: +{histCount} plays</span>}
+  1280→            </div>
+  1281→            <div className="flex items-center gap-3">
+  1282→              <Button onClick={doPush} disabled={pushing} className="bg-accent text-black hover:brightness-110">
+  1283→                {pushing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-1.5" />}
+  1284→                Push watchlist
+  1285→              </Button>
+  1286→              {pushCount !== null && <span className="text-xs text-ink-subtle">{pushCount}</span>}
+  1287→            </div>
+  1288→            {error && <span className="text-xs text-danger w-full">{error}</span>}
+  1289→          </div>
+  1290→          <div className="flex items-center gap-3 w-fit">
+  1291→            <Switch
+  1292→              id="trakt-scrobble"
+  1293→              checked={scrobbleEnabled}
+  1294→              onCheckedChange={setScrobbleEnabled}
+  1295→              aria-label="Scrobble to Trakt while playing"
+  1296→            />
+  1297→            <label
+  1298→              htmlFor="trakt-scrobble"
+  1299→              className="text-xs text-ink-muted cursor-pointer select-none"
+  1300→            >
+  1301→              Scrobble to Trakt while playing
+  1302→            </label>
+  1303→          </div>
+  1304→          <div className="flex items-start gap-3 w-fit">
+  1305→            <Switch
+  1306→              id="trakt-push"
+  1307→              checked={pushEnabled}
+  1308→              onCheckedChange={(v) => {
+  1309→                setPushEnabled(v);
+  1310→                if (v) {
+  1311→                  setPushCount(null);
+  1312→                  toast({
+  1313→                    title: "Watchlist sync on",
+  1314→                    description: "Titles you add to your watchlist from now on are pushed to Trakt automatically.",
+  1315→                  });
+  1316→                }
+  1317→              }}
+  1318→              aria-label="Keep watchlist in sync with Trakt"
+  1319→            />
+  1320→            <div className="max-w-md">
+  1321→              <label
+  1322→                htmlFor="trakt-push"
+  1323→                className="text-xs text-ink-muted cursor-pointer select-none block"
+  1324→              >
+  1325→                Keep watchlist in sync (push additions to Trakt)
+  1326→              </label>
+  1327→              <p className="text-[11px] text-ink-subtle mt-0.5">
+  1328→                One-way: additions flow to Trakt a few seconds after you add them. Imports from Trakt
+  1329→                are never pushed back, and nothing is ever removed from your Trakt list.
+  1330→              </p>
+  1331→            </div>
+  1332→          </div>
+  1333→        </div>
+  1334→      )}
+  1335→    </div>
+  1336→  );
+  1337→}
+  1338→
+  1339→function SimklCard() {
+  1340→  const { toast } = useToast();
+  1341→  const auth = useSimkl((s) => s.auth);
+  1342→  const phase = useSimkl((s) => s.phase);
+  1343→  const pin = useSimkl((s) => s.pin);
+  1344→  const error = useSimkl((s) => s.error);
+  1345→  const importing = useSimkl((s) => s.importing);
+  1346→  const loaded = useSimkl((s) => s.loaded);
+  1347→  const load = useSimkl((s) => s.load);
+  1348→  const connect = useSimkl((s) => s.connect);
+  1349→  const pollOnce = useSimkl((s) => s.pollOnce);
+  1350→  const cancelConnect = useSimkl((s) => s.cancelConnect);
+  1351→  const disconnect = useSimkl((s) => s.disconnect);
+  1352→  const importWatchlist = useSimkl((s) => s.importWatchlist);
+  1353→  const importingHistory = useSimkl((s) => s.importingHistory);
+  1354→  const importHistory = useSimkl((s) => s.importHistory);
+  1355→
+  1356→  const [clientId, setClientId] = useState("");
+  1357→  const [clientSecret, setClientSecret] = useState("");
+  1358→  const [connecting, setConnecting] = useState(false);
+  1359→  const [wlCount, setWlCount] = useState<number | null>(null);
+  1360→  const [histCount, setHistCount] = useState<number | null>(null);
+  1361→
+  1362→  useEffect(() => {
+  1363→    load();
+  1364→  }, [load]);
+  1365→
+  1366→  // Poll Simkl while a PIN code is active
+  1367→  useEffect(() => {
+  1368→    if (phase !== "connecting" || !pin) return;
+  1369→    let alive = true;
+  1370→    let timer: ReturnType<typeof setTimeout> | null = null;
+  1371→    const tick = async () => {
+  1372→      if (!alive) return;
+  1373→      const result = await pollOnce();
+  1374→      if (!alive) return;
+  1375→      if (result === "authorized") {
+  1376→        toast({ title: "Simkl connected", description: "You can now import your watchlist." });
+  1377→        return; // stop polling
+  1378→      }
+  1379→      if (result === "pending") {
+  1380→        timer = setTimeout(tick, 5000);
+  1381→      }
+  1382→      // "failed" → phase reset by store; stop
+  1383→    };
+  1384→    timer = setTimeout(tick, 5000);
+  1385→    return () => {
+  1386→      alive = false;
+  1387→      if (timer) clearTimeout(timer);
+  1388→    };
+  1389→  }, [phase, pin, pollOnce, toast]);
+  1390→
+  1391→  const startConnect = async () => {
+  1392→    if (!clientId.trim()) {
+  1393→      toast({ title: "Client ID is required", variant: "destructive" });
+  1394→      return;
+  1395→    }
+  1396→    setConnecting(true);
+  1397→    const ok = await connect(clientId, clientSecret || undefined);
+  1398→    setConnecting(false);
+  1399→    if (ok) toast({ title: "Enter the code on Simkl", description: "Approve access to continue." });
+  1400→    else toast({ title: "Could not start Simkl flow", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
+  1401→  };
+  1402→
+  1403→  const doImport = async () => {
+  1404→    const added = await importWatchlist();
+  1405→    if (added >= 0) {
+  1406→      setWlCount(added);
+  1407→      toast({
+  1408→        title: added > 0 ? `Imported ${added} ${added === 1 ? "title" : "titles"}` : "Watchlist already up to date",
+  1409→        description: added > 0 ? "Merged into your Library watchlist." : undefined,
+  1410→      });
+  1411→    } else {
+  1412→      toast({ title: "Import failed", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
+  1413→    }
+  1414→  };
+  1415→
+  1416→  const doImportHistory = async () => {
+  1417→    const added = await importHistory();
+  1418→    if (added >= 0) {
+  1419→      setHistCount(added);
+  1420→      toast({
+  1421→        title: added > 0 ? `Imported ${added} ${added === 1 ? "play" : "plays"}` : "History already up to date",
+  1422→        description: added > 0 ? "Merged into your playback history." : undefined,
+  1423→      });
+  1424→    } else {
+  1425→      toast({ title: "History import failed", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
+  1426→    }
+  1427→  };
+  1428→
+  1429→  if (!loaded) return null;
+  1430→
+  1431→  return (
+  1432→    <div className="rounded-2xl border border-edge-soft bg-elevated p-5">
+  1433→      <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
+  1434→        <div className="flex items-center gap-3">
+  1435→          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+  1436→            <TvMinimalPlay className="w-5 h-5 text-accent" />
+  1437→          </span>
+  1438→          <div>
+  1439→            <h3 className="text-sm font-bold text-ink">Simkl</h3>
+  1440→            <p className="text-xs text-ink-subtle">
+  1441→              {auth ? `Connected${auth.username ? ` as @${auth.username}` : ""}` : "Import your Simkl watchlist"}
+  1442→            </p>
+  1443→          </div>
+  1444→        </div>
+  1445→        {auth && (
+  1446→          <button
+  1447→            type="button"
+  1448→            onClick={() => {
+  1449→              disconnect();
+  1450→              setWlCount(null);
+  1451→              setHistCount(null);
+  1452→              toast({ title: "Simkl disconnected" });
+  1453→            }}
+  1454→            className="harbor-tv-focus flex items-center gap-1.5 rounded-xl bg-raised px-3.5 py-2 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
+  1455→          >
+  1456→            <Unplug className="w-3.5 h-3.5" /> Disconnect
+  1457→          </button>
+  1458→        )}
+  1459→      </div>
+  1460→
+  1461→      {!auth && phase !== "connecting" && (
+  1462→        <>
+  1463→          {/* Zero-config activation-code linking (preferred) */}
+  1464→          <LinkAccountFlow service="simkl" />
+  1465→          {/* Legacy BYO flow — collapsed by default */}
+  1466→          <details className="mt-3">
+  1467→            <summary className="harbor-tv-focus cursor-pointer select-none text-xs font-medium text-ink-muted hover:text-ink">
+  1468→              Advanced: use your own Simkl app credentials
+  1469→            </summary>
+  1470→            <div className="mt-3 space-y-3">
+  1471→          <div className="grid sm:grid-cols-2 gap-3">
+  1472→            <div>
+  1473→              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="simkl-client-id">
+  1474→                Client ID
+  1475→              </label>
+  1476→              <Input
+  1477→                id="simkl-client-id"
+  1478→                value={clientId}
+  1479→                onChange={(e) => setClientId(e.target.value)}
+  1480→                placeholder="Your Simkl app client id"
+  1481→                className="bg-raised border-edge-soft font-mono text-xs"
+  1482→                autoComplete="off"
+  1483→                spellCheck={false}
+  1484→              />
+  1485→            </div>
+  1486→            <div>
+  1487→              <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="simkl-client-secret">
+  1488→                Client secret <span className="text-ink-subtle">(optional)</span>
+  1489→              </label>
+  1490→              <Input
+  1491→                id="simkl-client-secret"
+  1492→                type="password"
+  1493→                value={clientSecret}
+  1494→                onChange={(e) => setClientSecret(e.target.value)}
+  1495→                placeholder="Only if your Simkl app has one"
+  1496→                className="bg-raised border-edge-soft font-mono text-xs"
+  1497→                autoComplete="off"
+  1498→                spellCheck={false}
+  1499→              />
+  1500→            </div>
+  1501→          </div>
+  1502→          <p className="text-xs text-ink-subtle">
+  1503→            Create a free app at{" "}
+  1504→            <a
+  1505→              href="https://simkl.com/apps/new"
+  1506→              target="_blank"
+  1507→              rel="noreferrer noopener"
+  1508→              className="text-accent underline underline-offset-2"
+  1509→            >
+  1510→              simkl.com/apps/new
+  1511→            </a>{" "}
+  1512→            (pick any name; you only need the client id). Credentials never leave this browser except
+  1513→            to authenticate with Simkl itself.
+  1514→          </p>
+  1515→          <div className="flex items-center gap-3">
+  1516→            <Button onClick={startConnect} disabled={connecting} className="bg-accent text-black hover:brightness-110">
+  1517→              {connecting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plug className="w-4 h-4 mr-1.5" />}
+  1518→              Connect
+  1519→            </Button>
+  1520→            {error && <span className="text-xs text-danger">{error}</span>}
+  1521→          </div>
+  1522→            </div>
+  1523→          </details>
+  1524→        </>
+  1525→      )}
+  1526→
+  1527→      {phase === "connecting" && pin && (
+  1528→        <div className="mt-4 rounded-xl border border-accent/40 bg-accent-soft/50 p-4">
+  1529→          <p className="text-xs text-ink-muted mb-2">
+  1530→            Visit{" "}
+  1531→            <a
+  1532→              href={pin.verificationUrl}
+  1533→              target="_blank"
+  1534→              rel="noreferrer noopener"
+  1535→              className="text-accent font-semibold underline underline-offset-2"
+  1536→            >
+  1537→              {pin.verificationUrl.replace(/^https?:\/\//, "")}
+  1538→            </a>{" "}
+  1539→            and enter this code:
+  1540→          </p>
+  1541→          <div className="flex items-center gap-4 flex-wrap">
+  1542→            <span className="font-mono text-3xl font-bold tracking-[0.3em] text-accent select-all" aria-label="PIN code">
+  1543→              {pin.userCode}
+  1544→            </span>
+  1545→            <span className="flex items-center gap-2 text-xs text-ink-subtle">
+  1546→              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for authorization…
+  1547→            </span>
+  1548→            <button
+  1549→              type="button"
+  1550→              onClick={() => {
+  1551→                cancelConnect();
+  1552→                toast({ title: "Simkl connection cancelled" });
+  1553→              }}
+  1554→              className="ml-auto flex items-center gap-1.5 rounded-lg bg-raised px-3 py-1.5 text-xs font-semibold text-ink-muted hover:text-ink"
+  1555→            >
+  1556→              <Square className="w-3 h-3" /> Cancel
+  1557→            </button>
+  1558→          </div>
+  1559→        </div>
+  1560→      )}
+  1561→
+  1562→      {auth && (
+  1563→        <div className="mt-4 space-y-3">
+  1564→          <div className="flex items-center gap-4 flex-wrap">
+  1565→            <div className="flex items-center gap-3">
+  1566→              <Button onClick={doImport} disabled={importing} className="bg-accent text-black hover:brightness-110">
+  1567→                {importing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <DownloadCloud className="w-4 h-4 mr-1.5" />}
+  1568→                Import watchlist
+  1569→              </Button>
+  1570→              <span className="text-xs text-ink-subtle">
+  1571→                {wlCount !== null
+  1572→                  ? `Last import: +${wlCount} new`
+  1573→                  : `Local watchlist has ${getWatchlistLength()} titles`}
+  1574→              </span>
+  1575→            </div>
+  1576→            <div className="flex items-center gap-3">
+  1577→              <Button onClick={doImportHistory} disabled={importingHistory} className="bg-accent text-black hover:brightness-110">
+  1578→                {importingHistory ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <History className="w-4 h-4 mr-1.5" />}
+  1579→                Import history
+  1580→              </Button>
+  1581→              {histCount !== null && <span className="text-xs text-ink-subtle">Last import: +{histCount} plays</span>}
+  1582→            </div>
+  1583→            {error && <span className="text-xs text-danger w-full">{error}</span>}
+  1584→          </div>
+  1585→        </div>
+  1586→      )}
+  1587→    </div>
+  1588→  );
+  1589→}
+  1590→
+  1591→function DebridCard() {
+  1592→  const { toast } = useToast();
+  1593→  const service = useDebrid((s) => s.service);
+  1594→  const apiKey = useDebrid((s) => s.apiKey);
+  1595→  const username = useDebrid((s) => s.username);
+  1596→  const premium = useDebrid((s) => s.premium);
+  1597→  const expiresAt = useDebrid((s) => s.expiresAt);
+  1598→  const status = useDebrid((s) => s.status);
+  1599→  const loaded = useDebrid((s) => s.loaded);
+  1600→  const error = useDebrid((s) => s.error);
+  1601→  const load = useDebrid((s) => s.load);
+  1602→  const validate = useDebrid((s) => s.validate);
+  1603→  const disconnect = useDebrid((s) => s.disconnect);
+  1604→
+  1605→  const [svcOverride, setSvcOverride] = useState<DebridService | null>(null);
+  1606→  const [key, setKey] = useState("");
+  1607→  const [checking, setChecking] = useState(false);
+  1608→
+  1609→  useEffect(() => {
+  1610→    load();
+  1611→  }, [load]);
+  1612→
+  1613→  const svc: DebridService = svcOverride ?? (loaded ? service : "realdebrid");
+  1614→
+  1615→  const serviceName = svc === "realdebrid" ? "Real-Debrid" : "AllDebrid";
+  1616→  const isConnected = apiKey !== null && service === svc;
+  1617→
+  1618→  const doValidate = async () => {
+  1619→    if (!key.trim()) {
+  1620→      toast({ title: "Paste your API key first", variant: "destructive" });
+  1621→      return;
+  1622→    }
+  1623→    setChecking(true);
+  1624→    const ok = await validate(svc, key.trim());
+  1625→    setChecking(false);
+  1626→    if (ok) {
+  1627→      setKey("");
+  1628→      toast({ title: "Debrid connected", description: `${serviceName} account verified.` });
+  1629→    } else {
+  1630→      toast({
+  1631→        title: "Validation failed",
+  1632→        description: useDebrid.getState().error ?? undefined,
+  1633→        variant: "destructive",
+  1634→      });
+  1635→    }
+  1636→  };
+  1637→
+  1638→  if (!loaded) return null;
+  1639→
+  1640→  return (
+  1641→    <div className="rounded-2xl border border-edge-soft bg-elevated p-5">
+  1642→      <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+  1643→        <div className="flex items-center gap-3">
+  1644→          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+  1645→            <KeyRound className="w-5 h-5 text-accent" />
+  1646→          </span>
+  1647→          <div>
+  1648→            <h3 className="text-sm font-bold text-ink">Debrid</h3>
+  1649→            <p className="text-xs text-ink-subtle">
+  1650→              {isConnected
+  1651→                ? `Connected${username ? ` as ${username}` : ""}`
+  1652→                : "Unlock cached torrent streams instantly"}
+  1653→            </p>
+  1654→          </div>
+  1655→        </div>
+  1656→        {isConnected && (
+  1657→          <span
+  1658→            className={cn(
+  1659→              "rounded-full px-2.5 py-1 text-[10px] font-bold",
+  1660→              premium ? "bg-accent-soft text-accent" : "bg-raised text-ink-muted",
+  1661→            )}
+  1662→          >
+  1663→            {premium ? "Premium" : "Non-premium"}
+  1664→          </span>
+  1665→        )}
+  1666→      </div>
+  1667→
+  1668→      {/* Service segmented control */}
+  1669→      <div
+  1670→        className="flex items-center gap-1 rounded-xl border border-edge-soft bg-raised p-1 w-fit mb-4"
+  1671→        role="tablist"
+  1672→        aria-label="Debrid service"
+  1673→      >
+  1674→        {(
+  1675→          [
+  1676→            ["realdebrid", "Real-Debrid"],
+  1677→            ["alldebrid", "AllDebrid"],
+  1678→          ] as const
+  1679→        ).map(([id, label]) => (
+  1680→          <button
+  1681→            key={id}
+  1682→            type="button"
+  1683→            role="tab"
+  1684→            aria-selected={svc === id}
+  1685→            onClick={() => setSvcOverride(id)}
+  1686→            className={cn(
+  1687→              "harbor-tv-focus rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors",
+  1688→              svc === id ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
+  1689→            )}
+  1690→          >
+  1691→            {label}
+  1692→          </button>
+  1693→        ))}
+  1694→      </div>
+  1695→
+  1696→      {isConnected ? (
+  1697→        <div className="space-y-3">
+  1698→          <div className="flex items-center gap-3 flex-wrap">
+  1699→            <span className="text-sm font-semibold text-ink">
+  1700→              {username ?? serviceName}
+  1701→            </span>
+  1702→            <span
+  1703→              className={cn(
+  1704→                "rounded-full px-2.5 py-1 text-[10px] font-bold",
+  1705→                premium ? "bg-accent-soft text-accent" : "bg-raised text-ink-muted",
+  1706→              )}
+  1707→            >
+  1708→              {premium ? "Premium" : "Non-premium"}
+  1709→            </span>
+  1710→            {expiresAt !== null && Number.isFinite(expiresAt) && (
+  1711→              <span className="text-xs text-ink-subtle">
+  1712→                Expires {new Date(expiresAt).toLocaleDateString()}
+  1713→              </span>
+  1714→            )}
+  1715→          </div>
+  1716→          <button
+  1717→            type="button"
+  1718→            onClick={() => {
+  1719→              disconnect();
+  1720→              setKey("");
+  1721→              toast({ title: `${serviceName} disconnected` });
+  1722→            }}
+  1723→            className="harbor-tv-focus flex items-center gap-1.5 rounded-xl bg-raised px-3.5 py-2 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
+  1724→          >
+  1725→            <Unplug className="w-3.5 h-3.5" /> Disconnect
+  1726→          </button>
+  1727→        </div>
+  1728→      ) : (
+  1729→        <div className="space-y-3">
+  1730→          <div>
+  1731→            <label className="block text-xs font-medium text-ink-muted mb-1.5" htmlFor="debrid-api-key">
+  1732→              {serviceName} API key
+  1733→            </label>
+  1734→            <Input
+  1735→              id="debrid-api-key"
+  1736→              type="password"
+  1737→              value={key}
+  1738→              onChange={(e) => setKey(e.target.value)}
+  1739→              placeholder={svc === "realdebrid" ? "Your Real-Debrid API key" : "Your AllDebrid API key"}
+  1740→              className="bg-raised border-edge-soft font-mono text-xs"
+  1741→              autoComplete="off"
+  1742→              spellCheck={false}
+  1743→            />
+  1744→          </div>
+  1745→          <p className="text-xs text-ink-subtle">
+  1746→            Find it on your{" "}
+  1747→            <a
+  1748→              href={svc === "realdebrid" ? "https://real-debrid.com/account" : "https://alldebrid.com/api/"}
+  1749→              target="_blank"
+  1750→              rel="noreferrer noopener"
+  1751→              className="text-accent underline underline-offset-2"
+  1752→            >
+  1753→              {svc === "realdebrid" ? "real-debrid.com/account" : "alldebrid.com/api"}
+  1754→            </a>{" "}
+  1755→            page, then validate it here.
+  1756→          </p>
+  1757→          <div className="flex items-center gap-3 flex-wrap">
+  1758→            <Button onClick={doValidate} disabled={checking} className="bg-accent text-black hover:brightness-110">
+  1759→              {checking ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-1.5" />}
+  1760→              Validate
+  1761→            </Button>
+  1762→            {status === "invalid" && error && (
+  1763→              <span className="text-xs text-danger" role="alert">
+  1764→                {error}
+  1765→              </span>
+  1766→            )}
+  1767→          </div>
+  1768→        </div>
+  1769→      )}
+  1770→
+  1771→      <div className="mt-4 pt-4 border-t border-edge-soft space-y-2">
+  1772→        <p className="text-xs text-ink-subtle">
+  1773→          Your key is stored in this browser only and relayed server-side per request. Torrent streams
+  1774→          cached by the service unlock instantly; uncached torrents are skipped (honest error).
+  1775→        </p>
+  1776→        <p className="flex items-center gap-2 text-[11px] text-ink-subtle">
+  1777→          <Zap className="w-3.5 h-3.5 text-accent shrink-0" />
+  1778→          <span>
+  1779→            Streams unlocked with Debrid — resolved links live only for the current session; nothing is
+  1780→            counted or stored.
+  1781→          </span>
+  1782→        </p>
+  1783→      </div>
+  1784→    </div>
+  1785→  );
+  1786→}
+  1787→
+  1788→
+  1789→// ---------- P2P torrent engine (server-side webtorrent) ----------
+  1790→
+  1791→type P2pHealthState = {
+  1792→  ok: boolean;
+  1793→  paused: boolean;
+  1794→  torrents: { key: string; name: string | null; ready: boolean; progress: number; peers: number; downloadSpeed: number }[];
+  1795→};
+  1796→
+  1797→function P2pCard() {
+  1798→  const { toast } = useToast();
+  1799→  const p2pEnabled = useSettings((s) => s.settings.p2pEnabled);
+  1800→  const update = useSettings((s) => s.update);
+  1801→  const [health, setHealth] = useState<P2pHealthState | null>(null);
+  1802→  const [checking, setChecking] = useState(false);
+  1803→  const [clearing, setClearing] = useState(false);
+  1804→
+  1805→  const check = async () => {
+  1806→    setChecking(true);
+  1807→    try {
+  1808→      const h = await p2pHealth();
+  1809→      setHealth({
+  1810→        ok: !!h.ok,
+  1811→        paused: h.paused === true,
+  1812→        torrents: (h.torrents ?? []).map((t) => ({
+  1813→          key: t.key,
+  1814→          name: t.name,
+  1815→          ready: t.ready,
+  1816→          progress: t.progress,
+  1817→          peers: t.peers,
+  1818→          downloadSpeed: t.downloadSpeed,
+  1819→        })),
+  1820→      });
+  1821→    } catch {
+  1822→      setHealth({ ok: false, paused: false, torrents: [] });
+  1823→    } finally {
+  1824→      setChecking(false);
+  1825→    }
+  1826→  };
+  1827→
+  1828→  useEffect(() => {
+  1829→    void check();
+  1830→  }, []);
+  1831→
+  1832→  const doCleanup = async (purge: boolean) => {
+  1833→    setClearing(true);
+  1834→    try {
+  1835→      await p2pCleanup(purge);
+  1836→      toast({
+  1837→        title: purge ? "Torrent cache wiped" : "Torrents stopped",
+  1838→        description: purge ? "All downloaded P2P data has been deleted." : "Active swarms were closed; cache kept for resume.",
+  1839→      });
+  1840→      void check();
+  1841→    } catch (e) {
+  1842→      toast({ title: "Cleanup failed", description: e instanceof Error ? e.message : undefined, variant: "destructive" });
+  1843→    } finally {
+  1844→      setClearing(false);
+  1845→    }
+  1846→  };
+  1847→
+  1848→  const activeCount = health?.torrents.length ?? 0;
+  1849→  const totalSpeed = health?.torrents.reduce((a, t) => a + (t.downloadSpeed ?? 0), 0) ?? 0;
+  1850→
+  1851→  return (
+  1852→    <div className="rounded-2xl border border-edge-soft bg-elevated p-5">
+  1853→      <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+  1854→        <div className="flex items-center gap-3">
+  1855→          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+  1856→            <Network className="w-5 h-5 text-accent" />
+  1857→          </span>
+  1858→          <div>
+  1859→            <h3 className="text-sm font-bold text-ink">P2P Torrent Engine</h3>
+  1860→            <p className="text-xs text-ink-subtle">Play torrents without any account — server-side BitTorrent</p>
+  1861→          </div>
+  1862→        </div>
+  1863→        <span
+  1864→          className={cn(
+  1865→            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold",
+  1866→            health === null
+  1867→              ? "bg-raised text-ink-muted"
+  1868→              : health.ok
+  1869→                ? "bg-accent-soft text-accent"
+  1870→                : "bg-danger/10 text-danger",
+  1871→          )}
+  1872→        >
+  1873→          <span
+  1874→            aria-hidden
+  1875→            className={cn(
+  1876→              "w-1.5 h-1.5 rounded-full",
+  1877→              health === null ? "bg-ink-subtle" : health.ok ? "bg-accent" : "bg-danger",
+  1878→            )}
+  1879→          />
+  1880→          {health === null ? "Checking…" : health.ok ? `Online · port ${P2P_PORT}` : "Offline"}
+  1881→        </span>
+  1882→      </div>
+  1883→
+  1884→      <div className="flex items-center justify-between gap-3 rounded-xl border border-edge-soft bg-raised px-3.5 py-3">
+  1885→        <div className="min-w-0">
+  1886→          <p className="text-xs font-semibold text-ink">Play torrents via P2P</p>
+  1887→          <p className="text-[11px] text-ink-subtle">
+  1888→            Join swarms directly when a stream addon only offers torrents. Debrid stays the faster path
+  1889→            for cached releases.
+  1890→          </p>
+  1891→        </div>
+  1892→        <Switch
+  1893→          checked={p2pEnabled}
+  1894→          onCheckedChange={(v) => update({ p2pEnabled: v })}
+  1895→          aria-label="Toggle P2P torrent playback"
+  1896→        />
+  1897→      </div>
+  1898→
+  1899→      {health?.ok && (
+  1900→        <div className="mt-4 rounded-xl border border-edge-soft bg-raised/60 px-3.5 py-3 space-y-2">
+  1901→          <div className="flex items-center justify-between text-[11px] text-ink-muted">
+  1902→            <span>
+  1903→              {activeCount === 0
+  1904→                ? "No active swarms"
+  1905→                : `${activeCount} active swarm${activeCount === 1 ? "" : "s"}${totalSpeed > 0 ? ` · ${formatSpeed(totalSpeed)}` : ""}`}
+  1906→            </span>
+  1907→            <button
+  1908→              type="button"
+  1909→              onClick={() => void check()}
+  1910→              disabled={checking}
+  1911→              className="harbor-tv-focus flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-ink-muted hover:text-ink disabled:opacity-50"
+  1912→            >
+  1913→              <RefreshCw className={cn("w-3 h-3", checking && "animate-spin")} /> Refresh
+  1914→            </button>
+  1915→          </div>
+  1916→          {health.torrents.slice(0, 4).map((t) => (
+  1917→            <div key={t.key} className="flex items-center gap-2.5 text-[11px]">
+  1918→              <span className="harbor-clamp-1 flex-1 text-ink">{t.name ?? t.key.slice(0, 12)}</span>
+  1919→              <span className="text-ink-subtle tabular-nums">{Math.round((t.progress ?? 0) * 100)}%</span>
+  1920→              <span className="text-ink-subtle tabular-nums w-14 text-right">{t.peers} peers</span>
+  1921→              <span className="text-ink-subtle tabular-nums w-16 text-right">{formatSpeed(t.downloadSpeed)}</span>
+  1922→            </div>
+  1923→          ))}
+  1924→        </div>
+  1925→      )}
+  1926→
+  1927→      {health && !health.ok && (
+  1928→        <p className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-xs text-danger">
+  1929→          Torrent engine is not reachable — P2P playback will fail until the torrent-service is running.
+  1930→          Debrid playback is unaffected.
+  1931→        </p>
+  1932→      )}
+  1933→
+  1934→      <div className="mt-4 pt-4 border-t border-edge-soft space-y-3">
+  1935→        <p className="text-xs text-ink-subtle">
+  1936→          Torrents download to a server-side cache and stream over HTTP (native containers) or through an
+  1937→          ffmpeg remux (mkv). Idle swarms are evicted after 45 minutes; swarms that never find peers are
+  1938→          dropped after 90 seconds.
+  1939→        </p>
+  1940→        <div className="flex items-center gap-2 flex-wrap">
+  1941→          <Button
+  1942→            variant="outline"
+  1943→            disabled={clearing || activeCount === 0}
+  1944→            onClick={() => void doCleanup(false)}
+  1945→            className="border-edge-soft bg-raised text-ink hover:text-ink"
+  1946→          >
+  1947→            {clearing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Square className="w-3.5 h-3.5 mr-1.5" />}
+  1948→            Stop all
+  1949→          </Button>
+  1950→          <Button
+  1951→            variant="outline"
+  1952→            disabled={clearing}
+  1953→            onClick={() => void doCleanup(true)}
+  1954→            className="border-edge-soft bg-raised text-ink-muted hover:text-danger"
+  1955→          >
+  1956→            {clearing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+  1957→            Wipe cache
+  1958→          </Button>
+  1959→        </div>
+  1960→      </div>
+  1961→    </div>
+  1962→  );
+  1963→}
+  1964→

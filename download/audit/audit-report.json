@@ -1,0 +1,6011 @@
+[
+  {
+    "id": "home",
+    "locale": "en",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "View details",
+        "w": 167,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "movies",
+    "locale": "en",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "View details",
+        "w": 167,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "kids",
+    "locale": "en",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "View details",
+        "w": 167,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "addons",
+    "locale": "en",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "View details",
+        "w": 167,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "home",
+    "locale": "en",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "movies",
+    "locale": "en",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "kids",
+    "locale": "en",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "addons",
+    "locale": "en",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Pause autoplay",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Set up in Settings → Integra",
+        "w": 296,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "home",
+    "locale": "ar",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "عرض التفاصيل",
+        "w": 164,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "movies",
+    "locale": "ar",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "عرض التفاصيل",
+        "w": 164,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "shows",
+    "locale": "ar",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "عرض التفاصيل",
+        "w": 164,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "kids",
+    "locale": "ar",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 2 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "عرض التفاصيل",
+        "w": 164,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "addons",
+    "locale": "ar",
+    "width": 390,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 3 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 106
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 106
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 106
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 106
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "عرض التفاصيل",
+        "w": 164,
+        "h": 45
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "home",
+    "locale": "ar",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "movies",
+    "locale": "ar",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "shows",
+    "locale": "ar",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 1 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "kids",
+    "locale": "ar",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 2 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  },
+  {
+    "id": "addons",
+    "locale": "ar",
+    "width": 1280,
+    "theme": "dark",
+    "scale": 100,
+    "overflow": [],
+    "narrowText": [
+      {
+        "text": "الشريحة 3 من 8",
+        "width": 1
+      },
+      {
+        "text": "الرائج على ⁨Stremio⁩",
+        "width": 94
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "Resident Evil",
+        "width": 1
+      },
+      {
+        "text": "Tom Clancy's Jack Ryan: Ghost War",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "Dhurandhar The Revenge",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Tvoe serdtse budet razbito",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Heart of the Beast",
+        "width": 1
+      },
+      {
+        "text": "The Love Hypothesis",
+        "width": 1
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "width": 1
+      },
+      {
+        "text": "The End of Oak Street",
+        "width": 1
+      },
+      {
+        "text": "Project Hail Mary",
+        "width": 1
+      },
+      {
+        "text": "Coyote vs. Acme",
+        "width": 1
+      },
+      {
+        "text": "The Whisper Man",
+        "width": 1
+      },
+      {
+        "text": "Evil Dead Burn",
+        "width": 1
+      },
+      {
+        "text": "Teenage Sex and Death at Camp Miasma",
+        "width": 1
+      },
+      {
+        "text": "Disclosure Day",
+        "width": 1
+      },
+      {
+        "text": "Avengers: Endgame",
+        "width": 1
+      },
+      {
+        "text": "The Muppet Show",
+        "width": 1
+      },
+      {
+        "text": "The Shawshank Redemption",
+        "width": 1
+      },
+      {
+        "text": "Practical Magic",
+        "width": 1
+      },
+      {
+        "text": "The Ministry of Ungentlemanly Warfare",
+        "width": 1
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "width": 1
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "width": 1
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "width": 1
+      },
+      {
+        "text": "Law & Order: Special Victims Unit",
+        "width": 1
+      },
+      {
+        "text": "Grey's Anatomy",
+        "width": 1
+      },
+      {
+        "text": "Deathstroke: Knights & Dragons",
+        "width": 1
+      },
+      {
+        "text": "Late Night with Seth Meyers",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "The Daily Show",
+        "width": 1
+      },
+      {
+        "text": "The Kelly Clarkson Show",
+        "width": 1
+      },
+      {
+        "text": "American Dad!",
+        "width": 1
+      },
+      {
+        "text": "Criminal Minds",
+        "width": 1
+      },
+      {
+        "text": "Best Medicine",
+        "width": 1
+      },
+      {
+        "text": "Phineas and Ferb",
+        "width": 1
+      },
+      {
+        "text": "Reasonable Doubt",
+        "width": 1
+      },
+      {
+        "text": "It's Always Sunny in Philadelphia",
+        "width": 1
+      },
+      {
+        "text": "Last Week Tonight with John Oliver",
+        "width": 1
+      },
+      {
+        "text": "Animal Control",
+        "width": 1
+      },
+      {
+        "text": "Outlander: Blood of My Blood",
+        "width": 1
+      },
+      {
+        "text": "The Celebrity Traitors UK",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Amazing Race",
+        "width": 1
+      },
+      {
+        "text": "All Creatures Great & Small",
+        "width": 1
+      },
+      {
+        "text": "Women in Blue",
+        "width": 1
+      },
+      {
+        "text": "American Horror Story",
+        "width": 1
+      },
+      {
+        "text": "The Gentlemen",
+        "width": 1
+      },
+      {
+        "text": "Coven Academy",
+        "width": 1
+      },
+      {
+        "text": "A Different World",
+        "width": 1
+      },
+      {
+        "text": "The Mentalist",
+        "width": 1
+      },
+      {
+        "text": "Dexter: Resurrection",
+        "width": 1
+      },
+      {
+        "text": "Game of Thrones",
+        "width": 1
+      },
+      {
+        "text": "Murder in a Small Town",
+        "width": 1
+      },
+      {
+        "text": "Re: Zero - Starting Life in Another Worl",
+        "width": 1
+      }
+    ],
+    "clipped": [],
+    "targets": [
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "إيقاف العرض التلقائي مؤقتاً",
+        "w": 44,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "الإعداد في الإعدادات ← التكا",
+        "w": 231,
+        "h": 44
+      },
+      {
+        "sev": "warn",
+        "tag": "BUTTON",
+        "label": "Dismiss setup suggestions",
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "fixedOverlap": [],
+    "latinOnly": [
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Watch What Happens Live with Andy Cohen",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Tonight Show Starring Jimmy Fallon",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Late Show with Stephen Colbert",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Reacher",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Running Man",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Peddi",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Spider-Man: Brand New Day",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Resident Evil",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "The Odyssey",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Runner",
+        "where": "P.md-title-small harbor-clamp-1 "
+      },
+      {
+        "text": "Hotel Tehran",
+        "where": "P.md-title-small harbor-clamp-1 "
+      }
+    ],
+    "axe": [],
+    "blocking": 0
+  }
+]

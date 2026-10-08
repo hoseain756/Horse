@@ -1,0 +1,702 @@
+     1→     1→import auroraPreview from "@/assets/theme-previews/aurora.png";
+     2→     2→import crunchPreview from "@/assets/theme-previews/crunchy.png";
+     3→     3→import draculaPreview from "@/assets/theme-previews/dracula.png";
+     4→     4→import forestPreview from "@/assets/theme-previews/forest.png";
+     5→     5→import harborPreview from "@/assets/theme-previews/harbor.png";
+     6→     6→import minuiPreview from "@/assets/theme-previews/minui.png";
+     7→     7→import noirPreview from "@/assets/theme-previews/noir.png";
+     8→     8→import nordPreview from "@/assets/theme-previews/nord.png";
+     9→     9→import royalPreview from "@/assets/theme-previews/royal.png";
+    10→    10→import stremioPreview from "@/assets/theme-previews/stremio.png";
+    11→    11→import velvetPreview from "@/assets/theme-previews/velvet.png";
+    12→    12→import { getCustomThemes } from "./custom-themes";
+    13→    13→
+    14→    14→export type ThemePresetId =
+    15→    15→  | "cool-grey"
+    16→    16→  | "nord"
+    17→    17→  | "stremio"
+    18→    18→  | "crunch"
+    19→    19→  | "tokyo-night"
+    20→    20→  | "dracula"
+    21→    21→  | "forest"
+    22→    22→  | "noir";
+    23→    23→
+    24→    24→export type ThemeLayout =
+    25→    25→  | "sidebar"
+    26→    26→  | "topdock"
+    27→    27→  | "rail"
+    28→    28→  | "stremio"
+    29→    29→  | "minui"
+    30→    30→  | "dracula"
+    31→    31→  | "nord"
+    32→    32→  | "forest"
+    33→    33→  | "royal"
+    34→    34→  | "cinematic"
+    35→    35→  | "custom";
+    36→    36→export type ThemeCardStyle = "flat" | "glass" | "stremio" | "minui" | "crunch" | "noir" | "custom";
+    37→    37→export type ThemeButtonStyle = "flat" | "glossy" | "minui" | "crunch" | "noir" | "custom";
+    38→    38→
+    39→    39→export type ActiveThemeId = ThemePresetId | "custom" | `user:${string}`;
+    40→    40→
+    41→    41→export type FontPairId =
+    42→    42→  | "sentient-switzer"
+    43→    43→  | "fraunces-inter"
+    44→    44→  | "general-sans"
+    45→    45→  | "cabinet-switzer"
+    46→    46→  | "plex"
+    47→    47→  | "plus-jakarta"
+    48→    48→  | "system";
+    49→    49→
+    50→    50→export type ThemeBackground = {
+    51→    51→  image: string;
+    52→    52→  dim?: number;
+    53→    53→};
+    54→    54→
+    55→    55→export type ThemeLogo = {
+    56→    56→  wordmark?: string;
+    57→    57→  mark?: string;
+    58→    58→};
+    59→    59→
+    60→    60→export type ChromeNavId =
+    61→    61→  | "home"
+    62→    62→  | "movies"
+    63→    63→  | "shows"
+    64→    64→  | "anime"
+    65→    65→  | "library"
+    66→    66→  | "live"
+    67→    67→  | "discover"
+    68→    68→  | "calendar"
+    69→    69→  | "settings";
+    70→    70→
+    71→    71→export type ChromeConfig = {
+    72→    72→  position: "sidebar" | "topbar";
+    73→    73→  brand: string;
+    74→    74→  items: ChromeNavId[];
+    75→    75→  labels?: Partial<Record<ChromeNavId, string>>;
+    76→    76→  icons?: Partial<Record<ChromeNavId, string>>;
+    77→    77→};
+    78→    78→
+    79→    79→export type ThemePreset = {
+    80→    80→  id: ThemePresetId;
+    81→    81→  name: string;
+    82→    82→  blurb: string;
+    83→    83→  swatch: [string, string, string];
+    84→    84→  tokens: Record<string, string>;
+    85→    85→  background?: ThemeBackground;
+    86→    86→  logo?: ThemeLogo;
+    87→    87→  layout?: ThemeLayout;
+    88→    88→  cardStyle?: ThemeCardStyle;
+    89→    89→  buttonStyle?: ThemeButtonStyle;
+    90→    90→  bokeh?: boolean;
+    91→    91→  chrome?: ChromeConfig;
+    92→    92→  navCustomization?: {
+    93→    93→    order: string[];
+    94→    94→    hidden: string[];
+    95→    95→    renamed: Record<string, string>;
+    96→    96→  };
+    97→    97→  previewImage?: string;
+    98→    98→  fontPair?: FontPairId;
+    99→    99→  css?: string;
+   100→   100→  js?: string;
+   101→   101→  html?: string;
+   102→   102→};
+   103→   103→
+   104→   104→export type FontPair = {
+   105→   105→  id: FontPairId;
+   106→   106→  name: string;
+   107→   107→  blurb: string;
+   108→   108→  display: string;
+   109→   109→  sans: string;
+   110→   110→};
+   111→   111→
+   112→   112→export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
+   113→   113→  "cool-grey": {
+   114→   114→    id: "cool-grey",
+   115→   115→    name: "Harbor default",
+   116→   116→    blurb: "What ships out of the box.",
+   117→   117→    previewImage: harborPreview,
+   118→   118→    swatch: ["#2c2e36", "#3a3d47", "#dcdde4"],
+   119→   119→    tokens: {
+   120→   120→      "--color-canvas": "oklch(0.18 0.004 260)",
+   121→   121→      "--color-surface": "oklch(0.22 0.004 260)",
+   122→   122→      "--color-elevated": "oklch(0.27 0.004 260)",
+   123→   123→      "--color-raised": "oklch(0.32 0.004 260)",
+   124→   124→      "--color-ink": "oklch(0.97 0.003 260)",
+   125→   125→      "--color-ink-muted": "oklch(0.72 0.003 260)",
+   126→   126→      "--color-ink-subtle": "oklch(0.50 0.003 260)",
+   127→   127→      "--color-edge": "oklch(0.36 0.004 260 / 0.55)",
+   128→   128→      "--color-edge-soft": "oklch(0.36 0.004 260 / 0.25)",
+   129→   129→      "--color-accent": "oklch(0.78 0.13 60)",
+   130→   130→      "--color-accent-soft": "oklch(0.78 0.13 60 / 0.18)",
+   131→   131→      "--color-danger": "oklch(0.55 0.18 25)",
+   132→   132→    },
+   133→   133→  },
+   134→   134→  nord: {
+   135→   135→    id: "nord",
+   136→   136→    name: "Nord",
+   137→   137→    blurb: "Cool grey-blue. Arctic and crisp.",
+   138→   138→    previewImage: nordPreview,
+   139→   139→    swatch: ["#2e3440", "#434c5e", "#88c0d0"],
+   140→   140→    tokens: {
+   141→   141→      "--color-canvas": "#2e3440",
+   142→   142→      "--color-surface": "#353a47",
+   143→   143→      "--color-elevated": "#3b4252",
+   144→   144→      "--color-raised": "#434c5e",
+   145→   145→      "--color-ink": "#eceff4",
+   146→   146→      "--color-ink-muted": "#d8dee9",
+   147→   147→      "--color-ink-subtle": "#8b95a4",
+   148→   148→      "--color-edge": "#4c566a8c",
+   149→   149→      "--color-edge-soft": "#4c566a40",
+   150→   150→      "--color-accent": "#88c0d0",
+   151→   151→      "--color-accent-soft": "#88c0d02e",
+   152→   152→      "--color-danger": "#bf616a",
+   153→   153→    },
+   154→   154→    layout: "nord",
+   155→   155→  },
+   156→   156→  stremio: {
+   157→   157→    id: "stremio",
+   158→   158→    name: "Stremio",
+   159→   159→    blurb: "Purple accent, Indigo gradient, Narrow icon rail.",
+   160→   160→    previewImage: stremioPreview,
+   161→   161→    swatch: ["#0c0b11", "#1a173e", "#7b5bf5"],
+   162→   162→    tokens: {
+   163→   163→      "--color-canvas": "#0c0b11",
+   164→   164→      "--color-surface": "#181434",
+   165→   165→      "--color-elevated": "#1f1b3f",
+   166→   166→      "--color-raised": "#2a2358",
+   167→   167→      "--color-ink": "rgba(255,255,255,0.9)",
+   168→   168→      "--color-ink-muted": "rgba(255,255,255,0.6)",
+   169→   169→      "--color-ink-subtle": "rgba(255,255,255,0.35)",
+   170→   170→      "--color-edge": "rgba(255,255,255,0.14)",
+   171→   171→      "--color-edge-soft": "rgba(255,255,255,0.06)",
+   172→   172→      "--color-accent": "#7b5bf5",
+   173→   173→      "--color-accent-soft": "rgba(123,91,245,0.18)",
+   174→   174→      "--color-danger": "#dc2626",
+   175→   175→    },
+   176→   176→    background: {
+   177→   177→      image: "linear-gradient(41deg, #0c0b11 0%, #1a173e 100%)",
+   178→   178→      dim: 0,
+   179→   179→    },
+   180→   180→    layout: "stremio",
+   181→   181→    cardStyle: "stremio",
+   182→   182→    fontPair: "plus-jakarta",
+   183→   183→  },
+   184→   184→  crunch: {
+   185→   185→    id: "crunch",
+   186→   186→    name: "Crunchy",
+   187→   187→    blurb: "Charcoal chrome with a spice-orange accent. Bold and clean.",
+   188→   188→    previewImage: crunchPreview,
+   189→   189→    swatch: ["#000000", "#272727", "#ff640a"],
+   190→   190→    tokens: {
+   191→   191→      "--color-canvas": "#000000",
+   192→   192→      "--color-surface": "#151515",
+   193→   193→      "--color-elevated": "#272727",
+   194→   194→      "--color-raised": "#414141",
+   195→   195→      "--color-ink": "#ffffff",
+   196→   196→      "--color-ink-muted": "#bbbbbb",
+   197→   197→      "--color-ink-subtle": "#8c8c8c",
+   198→   198→      "--color-edge": "rgba(255,255,255,0.10)",
+   199→   199→      "--color-edge-soft": "rgba(255,255,255,0.05)",
+   200→   200→      "--color-accent": "#ff640a",
+   201→   201→      "--color-accent-soft": "rgba(255,100,10,0.18)",
+   202→   202→      "--color-danger": "#c13937",
+   203→   203→    },
+   204→   204→    background: {
+   205→   205→      image: "linear-gradient(180deg, #000 0%, #000 100%)",
+   206→   206→      dim: 0,
+   207→   207→    },
+   208→   208→    layout: "topdock",
+   209→   209→    cardStyle: "crunch",
+   210→   210→    buttonStyle: "crunch",
+   211→   211→    fontPair: "plus-jakarta",
+   212→   212→  },
+   213→   213→  "tokyo-night": {
+   214→   214→    id: "tokyo-night",
+   215→   215→    name: "Royal",
+   216→   216→    blurb: "Deep navy with a warm orange accent.",
+   217→   217→    previewImage: royalPreview,
+   218→   218→    swatch: ["#0c1118", "#1c2230", "#f08032"],
+   219→   219→    tokens: {
+   220→   220→      "--color-canvas": "#0c1118",
+   221→   221→      "--color-surface": "#141a24",
+   222→   222→      "--color-elevated": "#1c2230",
+   223→   223→      "--color-raised": "#262d3d",
+   224→   224→      "--color-ink": "#f5f6fa",
+   225→   225→      "--color-ink-muted": "#b8bcca",
+   226→   226→      "--color-ink-subtle": "#6d7384",
+   227→   227→      "--color-edge": "#2e3647a0",
+   228→   228→      "--color-edge-soft": "#2e36474d",
+   229→   229→      "--color-accent": "#f08032",
+   230→   230→      "--color-accent-soft": "#f080322e",
+   231→   231→      "--color-danger": "#ef5a5a",
+   232→   232→    },
+   233→   233→    layout: "royal",
+   234→   234→  },
+   235→   235→  dracula: {
+   236→   236→    id: "dracula",
+   237→   237→    name: "Dracula",
+   238→   238→    blurb: "Violet on graphite, bold accents. Easy on the eyes.",
+   239→   239→    previewImage: draculaPreview,
+   240→   240→    swatch: ["#282a36", "#44475a", "#bd93f9"],
+   241→   241→    tokens: {
+   242→   242→      "--color-canvas": "#282a36",
+   243→   243→      "--color-surface": "#21222c",
+   244→   244→      "--color-elevated": "#44475a",
+   245→   245→      "--color-raised": "#565969",
+   246→   246→      "--color-ink": "#f8f8f2",
+   247→   247→      "--color-ink-muted": "#d6d6d0",
+   248→   248→      "--color-ink-subtle": "#6272a4",
+   249→   249→      "--color-edge": "#6272a48c",
+   250→   250→      "--color-edge-soft": "#6272a440",
+   251→   251→      "--color-accent": "#bd93f9",
+   252→   252→      "--color-accent-soft": "#bd93f92e",
+   253→   253→      "--color-danger": "#ff5555",
+   254→   254→    },
+   255→   255→    layout: "dracula",
+   256→   256→  },
+   257→   257→  forest: {
+   258→   258→    id: "forest",
+   259→   259→    name: "Forest",
+   260→   260→    blurb: "Greens, low saturation.",
+   261→   261→    previewImage: forestPreview,
+   262→   262→    swatch: ["#1a221d", "#26312a", "#dde7df"],
+   263→   263→    tokens: {
+   264→   264→      "--color-canvas": "oklch(0.18 0.018 145)",
+   265→   265→      "--color-surface": "oklch(0.22 0.020 145)",
+   266→   266→      "--color-elevated": "oklch(0.26 0.024 145)",
+   267→   267→      "--color-raised": "oklch(0.31 0.026 145)",
+   268→   268→      "--color-ink": "oklch(0.97 0.012 140)",
+   269→   269→      "--color-ink-muted": "oklch(0.74 0.020 140)",
+   270→   270→      "--color-ink-subtle": "oklch(0.52 0.022 140)",
+   271→   271→      "--color-edge": "oklch(0.38 0.028 145 / 0.55)",
+   272→   272→      "--color-edge-soft": "oklch(0.38 0.028 145 / 0.25)",
+   273→   273→      "--color-accent": "oklch(0.80 0.15 145)",
+   274→   274→      "--color-accent-soft": "oklch(0.80 0.15 145 / 0.18)",
+   275→   275→      "--color-danger": "oklch(0.58 0.20 25)",
+   276→   276→    },
+   277→   277→    layout: "forest",
+   278→   278→  },
+   279→   279→  noir: {
+   280→   280→    id: "noir",
+   281→   281→    name: "Noir",
+   282→   282→    blurb: "Pure black. Clean.",
+   283→   283→    previewImage: noirPreview,
+   284→   284→    swatch: ["#000000", "#0a0a0a", "#ffffff"],
+   285→   285→    tokens: {
+   286→   286→      "--color-canvas": "#000000",
+   287→   287→      "--color-surface": "#070707",
+   288→   288→      "--color-elevated": "#0e0e0e",
+   289→   289→      "--color-raised": "#1a1a1a",
+   290→   290→      "--color-ink": "#f5f5f5",
+   291→   291→      "--color-ink-muted": "#9a9a9a",
+   292→   292→      "--color-ink-subtle": "#555555",
+   293→   293→      "--color-edge": "rgba(255,255,255,0.08)",
+   294→   294→      "--color-edge-soft": "rgba(255,255,255,0.03)",
+   295→   295→      "--color-accent": "#ffffff",
+   296→   296→      "--color-accent-soft": "rgba(255,255,255,0.10)",
+   297→   297→      "--color-danger": "#b94545",
+   298→   298→    },
+   299→   299→    background: {
+   300→   300→      image: "linear-gradient(180deg, #000 0%, #000 100%)",
+   301→   301→      dim: 0,
+   302→   302→    },
+   303→   303→    layout: "topdock",
+   304→   304→    cardStyle: "noir",
+   305→   305→    buttonStyle: "noir",
+   306→   306→    fontPair: "general-sans",
+   307→   307→  },
+   308→   308→};
+   309→   309→
+   310→   310→const elegantFinCss = `@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+   311→   311→
+   312→   312→/* ==========================================================================
+   313→   313→   ElegantFin for Harbor  (after lscambo13's ElegantFin Jellyfin theme)
+   314→   314→   Dark navy glass, one purple accent, 1em rounded cards, white shine-sweep,
+   315→   315→   Inter 425 body / 600 headings, calm 125ms motion, hairline + blur structure.
+   316→   316→   Injected raw into <style id="harbor-theme-css"> so !important + any selector wins.
+   317→   317→   ========================================================================== */
+   318→   318→
+   319→   319→:root {
+   320→   320→  --color-canvas: #111827;
+   321→   321→  --color-surface: #1f2937;
+   322→   322→  --color-elevated: #1e2836;
+   323→   323→  --color-raised: #374151;
+   324→   324→  --color-ink: #d1d5db;
+   325→   325→  --color-ink-muted: #9ca3af;
+   326→   326→  --color-ink-subtle: #6b7280;
+   327→   327→  --color-edge: #47505ce6;
+   328→   328→  --color-edge-soft: #47505c66;
+   329→   329→  --color-accent: #775bf4;
+   330→   330→  --color-accent-soft: #775bf42e;
+   331→   331→  --color-danger: #a91d1d;
+   332→   332→
+   333→   333→  --ef-accent-strong: rgba(119, 91, 244, 0.9);
+   334→   334→  --ef-ui-accent: #756fe2;
+   335→   335→  --ef-header-glass: rgba(30, 40, 54, 0.8);
+   336→   336→  --ef-drawer-glass: rgba(30, 40, 54, 0.92);
+   337→   337→  --ef-panel-glass: rgba(30, 40, 54, 0.95);
+   338→   338→  --ef-hairline: #47505c;
+   339→   339→  --ef-border-w: 0.06em;
+   340→   340→  --ef-shine: linear-gradient(
+   341→   341→    0deg,
+   342→   342→    transparent 0%,
+   343→   343→    rgba(255, 255, 255, 0.34) 45%,
+   344→   344→    rgba(255, 255, 255, 0.34) 55%,
+   345→   345→    transparent 100%
+   346→   346→  );
+   347→   347→  --ef-btn-green: #299a5d;
+   348→   348→  --ef-btn-green-edge: #32a769;
+   349→   349→  --ef-shadow: 0.1em 0.1em 0.15em rgba(0, 0, 0, 0.3);
+   350→   350→
+   351→   351→  --poster-radius: 1em;
+   352→   352→
+   353→   353→  --font-display: "Inter", system-ui, sans-serif;
+   354→   354→  --font-sans: "Inter", system-ui, sans-serif;
+   355→   355→}
+   356→   356→
+   357→   357→body {
+   358→   358→  font-weight: 425;
+   359→   359→  letter-spacing: 0.003em;
+   360→   360→}
+   361→   361→
+   362→   362→/* ==========================================================================
+   363→   363→   SIDEBAR / LEFT DRAWER  (glass rgba(30,40,54,.9)+blur10, right hairline, no radius)
+   364→   364→   ========================================================================== */
+   365→   365→aside[data-harbor-sidebar] {
+   366→   366→  background-color: var(--ef-drawer-glass) !important;
+   367→   367→  background-image: none !important;
+   368→   368→  backdrop-filter: blur(14px) saturate(120%);
+   369→   369→  -webkit-backdrop-filter: blur(14px) saturate(120%);
+   370→   370→  border-inline-end: var(--ef-border-w) solid var(--ef-hairline) !important;
+   371→   371→  border-radius: 0 !important;
+   372→   372→  position: fixed !important;
+   373→   373→  inset-block: 0 !important;
+   374→   374→  inset-inline-start: 0 !important;
+   375→   375→  z-index: 120 !important;
+   376→   376→  width: 260px !important;
+   377→   377→  transform: translateX(-103%);
+   378→   378→  transition: transform 170ms ease !important;
+   379→   379→  box-shadow: 0.5em 0 2.5em rgba(0, 0, 0, 0.5);
+   380→   380→}
+   381→   381→html[dir="rtl"] aside[data-harbor-sidebar] {
+   382→   382→  transform: translateX(103%);
+   383→   383→}
+   384→   384→html.ef-drawer-open aside[data-harbor-sidebar],
+   385→   385→html[dir="rtl"].ef-drawer-open aside[data-harbor-sidebar] {
+   386→   386→  transform: translateX(0);
+   387→   387→}
+   388→   388→aside[data-harbor-sidebar] [data-tauri-drag-region] > span {
+   389→   389→  font-family: "Inter", system-ui, sans-serif !important;
+   390→   390→  font-size: 26px !important;
+   391→   391→  font-weight: 600 !important;
+   392→   392→  letter-spacing: -0.02em !important;
+   393→   393→  transform: translateY(0) !important;
+   394→   394→  color: var(--color-ink) !important;
+   395→   395→}
+   396→   396→aside[data-harbor-sidebar] [data-tauri-drag-region] > span > span {
+   397→   397→  transform: none !important;
+   398→   398→  transform-origin: center !important;
+   399→   399→}
+   400→   400→[data-harbor-nav] {
+   401→   401→  border-radius: var(--largeRadius, 0.6em) !important;
+   402→   402→  font-weight: 500 !important;
+   403→   403→  letter-spacing: -0.005em;
+   404→   404→  color: var(--color-ink-muted);
+   405→   405→  transition: background-color 125ms ease, color 125ms ease, box-shadow 125ms ease !important;
+   406→   406→}
+   407→   407→[data-harbor-nav]:hover {
+   408→   408→  background-color: color-mix(in srgb, var(--color-raised) 42%, transparent) !important;
+   409→   409→  color: var(--color-ink) !important;
+   410→   410→}
+   411→   411→[data-harbor-nav][data-active] {
+   412→   412→  background-color: var(--color-accent-soft) !important;
+   413→   413→  color: var(--color-accent) !important;
+   414→   414→  box-shadow: inset 0 0 0 var(--ef-border-w) color-mix(in srgb, var(--color-accent) 55%, transparent) !important;
+   415→   415→}
+   416→   416→[data-harbor-nav][data-active]:hover {
+   417→   417→  background-color: color-mix(in srgb, var(--color-accent) 24%, transparent) !important;
+   418→   418→  color: var(--color-accent) !important;
+   419→   419→}
+   420→   420→aside[data-harbor-sidebar].w-\[72px\] [data-harbor-nav][data-active],
+   421→   421→html:not(.lg) [data-harbor-nav][data-active] {
+   422→   422→  box-shadow: inset 0 0 0 var(--ef-border-w) color-mix(in srgb, var(--color-accent) 55%, transparent) !important;
+   423→   423→}
+   424→   424→aside[data-harbor-sidebar] .h-px.bg-gradient-to-r {
+   425→   425→  background-image: linear-gradient(
+   426→   426→    to right,
+   427→   427→    transparent,
+   428→   428→    color-mix(in srgb, var(--ef-hairline) 70%, transparent) 50%,
+   429→   429→    transparent
+   430→   430→  ) !important;
+   431→   431→}
+   432→   432→aside[data-harbor-sidebar] > div:last-child .rounded-full.border,
+   433→   433→aside[data-harbor-sidebar] > div:last-child .bg-elevated\/50 {
+   434→   434→  background-color: color-mix(in srgb, var(--color-raised) 40%, transparent) !important;
+   435→   435→  border-color: color-mix(in srgb, var(--ef-hairline) 80%, transparent) !important;
+   436→   436→}
+   437→   437→
+   438→   438→/* ==========================================================================
+   439→   439→   TOP HEADER BAR  (glass it: blur10 + bottom hairline on the inner grid)
+   440→   440→   ========================================================================== */
+   441→   441→header.fixed.inset-x-0.top-0 > div {
+   442→   442→  background-color: transparent !important;
+   443→   443→  background-image: none !important;
+   444→   444→  backdrop-filter: none !important;
+   445→   445→  -webkit-backdrop-filter: none !important;
+   446→   446→  border-bottom: 0 !important;
+   447→   447→  padding-inline-start: 4.25rem !important;
+   448→   448→}
+   449→   449→.harbor-search-pill {
+   450→   450→  background-color: color-mix(in srgb, var(--color-raised) 45%, transparent) !important;
+   451→   451→  background-image: none !important;
+   452→   452→  border: var(--ef-border-w) solid color-mix(in srgb, #ffffff 16%, transparent) !important;
+   453→   453→  border-radius: 4em !important;
+   454→   454→  backdrop-filter: blur(5px);
+   455→   455→  -webkit-backdrop-filter: blur(5px);
+   456→   456→  opacity: 1 !important;
+   457→   457→  transition: background-color 125ms ease, border-color 125ms ease !important;
+   458→   458→}
+   459→   459→.harbor-search-pill:hover {
+   460→   460→  background-color: color-mix(in srgb, var(--color-raised) 62%, transparent) !important;
+   461→   461→  border-color: color-mix(in srgb, #ffffff 26%, transparent) !important;
+   462→   462→}
+   463→   463→.harbor-search-pill kbd {
+   464→   464→  border-color: color-mix(in srgb, var(--ef-hairline) 70%, transparent) !important;
+   465→   465→  background-color: color-mix(in srgb, var(--color-canvas) 55%, transparent) !important;
+   466→   466→}
+   467→   467→.harbor-win-control {
+   468→   468→  background-color: transparent !important;
+   469→   469→  border: 0 !important;
+   470→   470→  box-shadow: none !important;
+   471→   471→  border-radius: 999px !important;
+   472→   472→  color: var(--color-ink-muted) !important;
+   473→   473→  transition: background-color 125ms ease, color 125ms ease !important;
+   474→   474→}
+   475→   475→.harbor-win-control:hover {
+   476→   476→  background-color: rgba(255, 255, 255, 0.1) !important;
+   477→   477→  color: var(--color-ink) !important;
+   478→   478→}
+   479→   479→.harbor-win-close:hover {
+   480→   480→  background-color: var(--color-danger) !important;
+   481→   481→  color: #ffffff !important;
+   482→   482→}
+   483→   483→.harbor-together-btn:not(.harbor-wt-tab) {
+   484→   484→  background-color: transparent !important;
+   485→   485→  background-image: none !important;
+   486→   486→  border: 0 !important;
+   487→   487→  box-shadow: none !important;
+   488→   488→  border-radius: 999px !important;
+   489→   489→  color: var(--color-ink-muted) !important;
+   490→   490→  transition: background-color 125ms ease, color 125ms ease !important;
+   491→   491→}
+   492→   492→.harbor-together-btn:not(.harbor-wt-tab):hover {
+   493→   493→  background-color: rgba(255, 255, 255, 0.1) !important;
+   494→   494→  color: var(--color-ink) !important;
+   495→   495→}
+   496→   496→.harbor-together-surface {
+   497→   497→  background-color: var(--ef-panel-glass) !important;
+   498→   498→  background-image: none !important;
+   499→   499→  border-color: color-mix(in srgb, var(--ef-hairline) 90%, transparent) !important;
+   500→   500→  backdrop-filter: blur(24px) saturate(130%);
+   501→   501→  -webkit-backdrop-filter: blur(24px) saturate(130%);
+   502→   502→}
+   503→   503→.harbor-wt-tab {
+   504→   504→  background-color: var(--ef-panel-glass) !important;
+   505→   505→  color: var(--color-ink) !important;
+   506→   506→}
+   507→   507→.harbor-wt-modal .modal-panel,
+   508→   508→.harbor-wt-modal > div {
+   509→   509→  background-color: var(--ef-panel-glass) !important;
+   510→   510→  backdrop-filter: blur(24px) saturate(130%);
+   511→   511→  -webkit-backdrop-filter: blur(24px) saturate(130%);
+   512→   512→}
+   513→   513→
+   514→   514→/* ==========================================================================
+   515→   515→   HOME + DETAIL RAILS  (main transparent so gradient shows; detail main opaque)
+   516→   516→   ========================================================================== */
+   517→   517→main {
+   518→   518→  background-color: transparent !important;
+   519→   519→}
+   520→   520→main.absolute.inset-0 {
+   521→   521→  background-color: var(--color-canvas) !important;
+   522→   522→}
+   523→   523→.flex.flex-col.gap-5 > .flex > .flex > h3.truncate.font-medium.tracking-tight,
+   524→   524→h3.truncate.font-medium.tracking-tight {
+   525→   525→  font-family: "Inter", system-ui, sans-serif !important;
+   526→   526→  font-weight: 600 !important;
+   527→   527→  letter-spacing: -0.018em !important;
+   528→   528→  color: var(--color-ink) !important;
+   529→   529→}
+   530→   530→.group\/va {
+   531→   531→  color: var(--color-ink-subtle) !important;
+   532→   532→  transition: color 125ms ease !important;
+   533→   533→}
+   534→   534→.group\/va:hover {
+   535→   535→  color: var(--color-accent) !important;
+   536→   536→}
+   537→   537→.harbor-row-arrow {
+   538→   538→  background-color: color-mix(in srgb, var(--color-canvas) 82%, transparent) !important;
+   539→   539→  border: var(--ef-border-w) solid color-mix(in srgb, var(--ef-hairline) 70%, transparent) !important;
+   540→   540→  box-shadow: var(--ef-shadow) !important;
+   541→   541→  backdrop-filter: blur(10px) saturate(120%);
+   542→   542→  -webkit-backdrop-filter: blur(10px) saturate(120%);
+   543→   543→  transition: transform 125ms ease, background-color 125ms ease !important;
+   544→   544→}
+   545→   545→.harbor-row-arrow:hover {
+   546→   546→  background-color: color-mix(in srgb, var(--color-canvas) 96%, transparent) !important;
+   547→   547→  transform: scale(1.06) !important;
+   548→   548→}
+   549→   549→.harbor-service-tile {
+   550→   550→  background-color: color-mix(in srgb, var(--color-raised) 34%, transparent) !important;
+   551→   551→  border: var(--ef-border-w) solid color-mix(in srgb, var(--ef-hairline) 55%, transparent) !important;
+   552→   552→  border-radius: var(--largeRadius, 0.75em) !important;
+   553→   553→  box-shadow: var(--ef-shadow);
+   554→   554→  transition: background-color 125ms ease, border-color 125ms ease, transform 125ms ease !important;
+   555→   555→}
+   556→   556→.harbor-service-tile:hover {
+   557→   557→  background-color: color-mix(in srgb, var(--color-raised) 55%, transparent) !important;
+   558→   558→  border-color: color-mix(in srgb, var(--ef-hairline) 90%, transparent) !important;
+   559→   559→  transform: translateY(-1px);
+   560→   560→}
+   561→   561→
+   562→   562→/* ==========================================================================
+   563→   563→   POSTER CARDS  (1em radius, scale(1.02)/125ms lift, white vertical shine-sweep)
+   564→   564→   ========================================================================== */
+   565→   565→button.group > div.relative.w-full.transition-transform {
+   566→   566→  transition: transform 125ms ease !important;
+   567→   567→  will-change: transform;
+   568→   568→}
+   569→   569→button.group:hover > div.relative.w-full.transition-transform {
+   570→   570→  transform: scale(1.02) !important;
+   571→   571→}
+   572→   572→button.group:hover > div.relative.w-full.transition-transform,
+   573→   573→button.group:hover > div.relative[class*="translate3d"] {
+   574→   574→  --tw-translate-y: 0 !important;
+   575→   575→}
+   576→   576→.harbor-poster,
+   577→   577→.your-card {
+   578→   578→  border-radius: var(--poster-radius, 1em) !important;
+   579→   579→  overflow: hidden !important;
+   580→   580→}
+   581→   581→button.group .harbor-poster {
+   582→   582→  box-shadow:
+   583→   583→    var(--ef-shadow),
+   584→   584→    inset 0 0 0 var(--ef-border-w) color-mix(in srgb, #ffffff 8%, transparent) !important;
+   585→   585→  transition: box-shadow 125ms ease !important;
+   586→   586→}
+   587→   587→button.group:hover .harbor-poster {
+   588→   588→  box-shadow:
+   589→   589→    0.15em 0.2em 0.35em rgba(0, 0, 0, 0.4),
+   590→   590→    inset 0 0 0 var(--ef-border-w) color-mix(in srgb, #ffffff 12%, transparent) !important;
+   591→   591→}
+   592→   592→.harbor-poster::before {
+   593→   593→  content: none;
+   594→   594→}
+   595→   595→button.group:not([data-no-card-ring]):hover .harbor-card-ring::after {
+   596→   596→  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 70%, transparent) !important;
+   597→   597→}
+   598→   598→button.group > p.line-clamp-2 {
+   599→   599→  font-family: "Inter", system-ui, sans-serif !important;
+   600→   600→  font-weight: 500 !important;
+   601→   601→  color: var(--color-ink) !important;
+   602→   602→}
+   603→   603→.harbor-poster > .absolute.rounded-md.bg-canvas\/95 {
+   604→   604→  background-color: color-mix(in srgb, var(--ef-panel-glass) 95%, transparent) !important;
+   605→   605→  backdrop-filter: blur(5px);
+   606→   606→  -webkit-backdrop-filter: blur(5px);
+   607→   607→}
+   608→   608→.harbor-cinema-badge {
+   609→   609→  color: var(--color-accent) !important;
+   610→   610→  border: var(--ef-border-w) solid color-mix(in srgb, var(--color-accent) 45%, transparent) !important;
+   611→   611→}
+   612→   612→.harbor-poster .rounded-full.bg-canvas\/85 {
+   613→   613→  background-color: color-mix(in srgb, var(--ef-panel-glass) 85%, transparent) !important;
+   614→   614→}
+   615→   615→
+   616→   616→/* ==========================================================================
+   617→   617→   DETAIL PAGE  (Inter title, glass pills, green Play, flat-glass secondaries)
+   618→   618→   ========================================================================== */
+   619→   619→.harbor-bleed-stremio h1,
+   620→   620→.harbor-bleed-stremio .font-display,
+   621→   621→main.absolute .font-display {
+   622→   622→  font-family: "Inter", system-ui, sans-serif !important;
+   623→   623→  font-weight: 600 !important;
+   624→   624→  letter-spacing: -0.02em !important;
+   625→   625→}
+   626→   626→.harbor-bleed-stremio ~ * .rounded-full.border,
+   627→   627→main.absolute .mt-6 .rounded-full,
+   628→   628→main.absolute .mt-6 .rounded-md {
+   629→   629→  border-color: color-mix(in srgb, var(--ef-hairline) 80%, transparent) !important;
+   630→   630→}
+   631→   631→div.mt-9.flex.items-center.gap-3 > button:first-child {
+   632→   632→  background-color: var(--ef-btn-green) !important;
+   633→   633→  background-image: linear-gradient(
+   634→   634→    180deg,
+   635→   635→    color-mix(in srgb, #ffffff 16%, transparent),
+   636→   636→    transparent 55%
+   637→   637→  ) !important;
+   638→   638→  color: #ffffff !important;
+   639→   639→  border: var(--ef-border-w) solid var(--ef-btn-green-edge) !important;
+   640→   640→  box-shadow:
+   641→   641→    0 0.4em 1em rgba(41, 154, 93, 0.28),
+   642→   642→    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+   643→   643→  transition: transform 125ms ease, filter 125ms ease !important;
+   644→   644→}
+   645→   645→div.mt-9.flex.items-center.gap-3 > button:first-child:hover {
+   646→   646→  filter: brightness(1.06);
+   647→   647→  transform: scale(1.03) !important;
+   648→   648→}
+   649→   649→div.mt-9.flex.items-center.gap-3 > button:not(:first-child) {
+   650→   650→  background-color: color-mix(in srgb, var(--color-elevated) 78%, transparent) !important;
+   651→   651→  border: var(--ef-border-w) solid color-mix(in srgb, var(--ef-hairline) 85%, transparent) !important;
+   652→   652→  backdrop-filter: blur(5px);
+   653→   653→  -webkit-backdrop-filter: blur(5px);
+   654→   654→  box-shadow: var(--ef-shadow) !important;
+   655→   655→  transition: background-color 125ms ease, border-color 125ms ease, transform 125ms ease !important;
+   656→   656→}
+   657→   657→div.mt-9.flex.items-center.gap-3 > button:not(:first-child):hover {
+   658→   658→  background-color: color-mix(in srgb, var(--color-elevated) 95%, transparent) !important;
+   659→   659→  border-color: color-mix(in srgb, #ffffff 22%, transparent) !important;
+   660→   660→}
+   661→   661→main.absolute .border-b {
+   662→   662→  border-bottom-color: color-mix(in srgb, var(--ef-hairline) 60%, transparent) !important;
+   663→   663→}
+   664→   664→
+   665→   665→/* ==========================================================================
+   666→   666→   GLASS SURFACES / MODALS / OVERLAYS
+   667→   667→   ========================================================================== */
+   668→   668→.glass-card,
+   669→   669→.bg-surface:not(button):not(.rounded-full),
+   670→   670→.bg-elevated:not(button):not(.rounded-full) {
+   671→   671→  background-color: color-mix(in srgb, var(--ef-panel-glass) 72%, transparent) !important;
+   672→   672→  background-image: none !important;
+   673→   673→  border-color: color-mix(in srgb, var(--ef-hairline) 70%, transparent) !important;
+   674→   674→  box-shadow: var(--ef-shadow) !important;
+   675→   675→}
+   676→   676→.glass-card {
+   677→   677→  backdrop-filter: blur(10px) saturate(130%) !important;
+   678→   678→  -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
+   679→   679→}
+   680→   680→.absolute.bg-elevated:not(button),
+   681→   681→.fixed.bg-elevated:not(button),
+   682→   682→.absolute.bg-surface:not(button),
+   683→   683→.fixed.bg-surface:not(button) {
+   684→   684→  background-color: var(--color-elevated) !important;
+   685→   685→  backdrop-filter: none !important;
+   686→   686→  -webkit-backdrop-filter: none !important;
+   687→   687→}
+   688→   688→.modal-panel {
+   689→   689→  background-color: var(--ef-panel-glass) !important;
+   690→   690→  background-image: none !important;
+   691→   691→  border: var(--ef-border-w) solid color-mix(in srgb, var(--ef-hairline) 90%, transparent) !important;
+   692→   692→  border-radius: var(--largeRadius, 1em) !important;
+   693→   693→  backdrop-filter: blur(20px) saturate(130%) !important;
+   694→   694→  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+   695→   695→  box-shadow: 0 1.5em 3em rgba(0, 0, 0, 0.45) !important;
+   696→   696→}
+   697→   697→.harbor-search-backdrop {
+   698→   698→  background: color-mix(in srgb, var(--ef-drawer-glass) 90%, transparent) !important;
+   699→   699→  backdrop-filter: blur(20px) saturate(130%) !important;
+   700→   700→  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+
+[showing lines 1-700 of 1760; use offset=701 with limit to continue reading]

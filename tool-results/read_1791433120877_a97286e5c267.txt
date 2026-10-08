@@ -1,0 +1,952 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Player overlay (port of Harbor player.tsx + transport)
+     4→// HTML5 video + hls.js, subtitle engine (SRT/VTT/ASS via proxy), full keyboard shortcuts,
+     5→// continue-watching persistence, auto-next episode, stream switcher integration.
+     6→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     7→import Hls from "hls.js";
+     8→import {
+     9→  X, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Subtitles, Settings2,
+    10→  Loader2, AlertTriangle, ChevronLeft, SkipForward, RotateCcw, ArrowLeftRight, PictureInPicture2, Gauge,
+    11→  AudioLines, Layers, Plus, Search, Network,
+    12→} from "lucide-react";
+    13→import type { PlayerPayload } from "@/lib/harbor/store";
+    14→import { useNav, useSettings } from "@/lib/harbor/store";
+    15→import type { LoadedSubtitle, SubCue } from "@/lib/harbor/subtitles";
+    16→import { fetchAndParseSubtitle, findActiveCue, subLabel } from "@/lib/harbor/subtitles";
+    17→import { SubtitleManager, mergeSubtitlesUnique, subtitleDedupeKey } from "@/lib/harbor/subtitle-manager";
+    18→import { langMatches, langChip } from "@/lib/harbor/languages";
+    19→import { fetchStreams, fetchSubtitles } from "@/lib/harbor/api";
+    20→import { runPipeline } from "@/lib/harbor/scoring";
+    21→import { fetchMeta, defaultVideoId } from "@/lib/harbor/api";
+    22→import type { MetaVideo, RawSubtitle, SubtitleResult, Stream } from "@/lib/harbor/types";
+    23→import { upsertCw, pushHistory, resumeMsFor } from "@/lib/harbor/cw";
+    24→import { useTrakt } from "@/lib/harbor/trakt";
+    25→import { p2pStatus, p2pRemuxUrl, formatSpeed } from "@/lib/harbor/p2p";
+    26→import { cn } from "@/lib/utils";
+    27→import { useToast } from "@/hooks/use-toast";
+    28→import { PosterImage } from "../common/poster";
+    29→import { PickerOverlay } from "../views/picker-overlay";
+    30→
+    31→type Phase = "resolving" | "loading" | "playing" | "error";
+    32→
+    33→export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
+    34→  const pop = useNav((s) => s.pop);
+    35→  const replace = useNav((s) => s.replace);
+    36→  const settings = useSettings((s) => s.settings);
+    37→  const [current, setCurrent] = useState<PlayerPayload>(payload);
+    38→  const [phase, setPhase] = useState<Phase>(payload.url ? "loading" : "resolving");
+    39→  const [error, setError] = useState<string | null>(null);
+    40→  const [switcherOpen, setSwitcherOpen] = useState(false);
+    41→  const [resolveStatus, setResolveStatus] = useState<string>("Finding the best stream…");
+    42→
+    43→  // Stable callbacks — identity must never change, otherwise VideoStage re-attaches HLS every render
+    44→  const handlePhase = useCallback((p: "loading" | "playing") => setPhase(p), []);
+    45→  const handleError = useCallback((msg: string) => {
+    46→    setPhase("error");
+    47→    setError(msg);
+    48→  }, []);
+    49→
+    50→  // Resolve stream via addons when payload.url is empty (instant play path)
+    51→  useEffect(() => {
+    52→    if (current.url || phase !== "resolving") return;
+    53→    let alive = true;
+    54→    setResolveStatus("Finding the best stream…");
+    55→    (async () => {
+    56→      const { useAddons: addons } = await import("@/lib/harbor/store");
+    57→      try {
+    58→        // Series opened without an episode id (bare tt-id): stream addons need
+    59→        // "id:season:episode" — resolve the default video from meta first.
+    60→        let targetId = current.videoId ?? current.metaId;
+    61→        if (current.type === "series" && !targetId.includes(":")) {
+    62→          const meta = await fetchMeta("series", current.metaId).catch(() => null);
+    63→          const vid = defaultVideoId(meta);
+    64→          if (vid) {
+    65→            targetId = vid;
+    66→            if (alive) {
+    67→              const vidMeta = (meta?.videos ?? []).find((v) => v.id === vid);
+    68→              setCurrent((c) => ({
+    69→                ...c,
+    70→                videoId: vid,
+    71→                season: c.season ?? vidMeta?.season,
+    72→                episode: c.episode ?? vidMeta?.episode,
+    73→                episodeName: c.episodeName ?? vidMeta?.name ?? vidMeta?.title,
+    74→              }));
+    75→            }
+    76→          }
+    77→        }
+    78→        const results = await fetchStreams(addons.getState().addons, current.type, targetId);
+    79→        if (!alive) return;
+    80→        const ranked = runPipeline(results);
+    81→        // Prefer browser-playable candidates: direct URLs first, then torrents whose
+    82→        // parsed video codec isn't HEVC (browsers can't decode it — pick the best
+    83→        // H.264/VP9/AV1 release instead of a 4K HEVC one that would dead-end).
+    84→        const p2pCandidate = (s: Stream) =>
+    85→          !!s.infoHash && !s.url && s.parsed?.codec !== "HEVC";
+    86→        const best = ranked.find((s) => s.url) ?? ranked.find(p2pCandidate) ?? ranked[0];
+    87→        if (!best) {
+    88→          setPhase("error");
+    89→          setError("No streams found from your addons.");
+    90→          return;
+    91→        }
+    92→        if (best.url) {
+    93→          setCurrent((c) => ({
+    94→            ...c,
+    95→            url: best.url!,
+    96→            streamTitle: best.title ?? c.streamTitle,
+    97→            streamDescription: best.description,
+    98→          }));
+    99→          setPhase("loading");
+   100→          return;
+   101→        }
+   102→        // Best candidate is a torrent → try the server-side P2P engine before giving up
+   103→        if (!best.infoHash || !useSettings.getState().settings.p2pEnabled) {
+   104→          setPhase("error");
+   105→          setError(
+   106→            ranked.length > 0
+   107→              ? "No browser-playable stream found. Open the stream picker to choose manually — torrent streams play via P2P or unlock with debrid."
+   108→              : "No streams found from your addons.",
+   109→          );
+   110→          return;
+   111→        }
+   112→        const { p2pPrepare, p2pStatus, p2pPlan } = await import("@/lib/harbor/p2p");
+   113→        const infoHash = best.infoHash.toLowerCase();
+   114→        setResolveStatus("Joining the torrent swarm…");
+   115→        const prep = await p2pPrepare(infoHash, {
+   116→          fileIdx: best.fileIdx,
+   117→          filename: best.behaviorHints?.filename ?? best.parsed?.filename,
+   118→        });
+   119→        for (let i = 0; prep.pending && i < 40 && alive; i++) {
+   120→          await new Promise((r) => setTimeout(r, 2500));
+   121→          setResolveStatus((s) => (s.startsWith("Finding peers") ? s : `Finding peers… (${i * 2.5 | 0}s)`));
+   122→          const st = await p2pStatus(infoHash).catch(() => null);
+   123→          if (st?.peers) setResolveStatus(`Finding peers… (${st.peers} found)`);
+   124→          if (st?.ready) break;
+   125→        }
+   126→        if (!alive) return;
+   127→        const st = prep.pending ? await p2pStatus(infoHash).catch(() => null) : null;
+   128→        if (prep.pending && !st?.ready) {
+   129→          setPhase("error");
+   130→          setError(
+   131→            "No peers responded for the best torrent. Open the stream picker to pick another source, or connect debrid for instant cached streams.",
+   132→          );
+   133→          return;
+   134→        }
+   135→        const fileIdx = prep.pending
+   136→          ? (Number.isInteger(best.fileIdx)
+   137→              ? best.fileIdx!
+   138→              : (st?.files ?? []).length > 0
+   139→                ? (st!.files ?? []).reduce(
+   140→                    (a, b) => (b.length > a.length ? b : a),
+   141→                    (st!.files ?? [{ index: 0, name: "", length: 0 }])[0],
+   142→                  ).index
+   143→                : 0)
+   144→          : prep.fileIdx;
+   145→        const filename = best.behaviorHints?.filename ?? best.parsed?.filename;
+   146→        setResolveStatus("Checking video codecs…");
+   147→        const plan = await p2pPlan(infoHash, fileIdx, filename).catch(() => null);
+   148→        if (!alive) return;
+   149→        if (!plan) {
+   150→          setPhase("error");
+   151→          setError("Torrent engine could not serve this file. Try another stream in the picker.");
+   152→          return;
+   153→        }
+   154→        setCurrent((c) => ({
+   155→          ...c,
+   156→          url: plan.url,
+   157→          streamTitle: best.title ?? c.streamTitle,
+   158→          streamDescription: best.description,
+   159→          p2p: { key: plan.key, fileIdx: plan.fileIdx, infoHash, mode: plan.mode },
+   160→        }));
+   161→        setPhase("loading");
+   162→      } catch (e) {
+   163→        if (!alive) return;
+   164→        setPhase("error");
+   165→        setError(e instanceof Error ? e.message : "Failed to resolve streams");
+   166→      }
+   167→    })();
+   168→    return () => {
+   169→      alive = false;
+   170→    };
+   171→  }, [current.url, current.type, current.videoId, current.metaId, phase]);
+   172→
+   173→  const setPayload = useCallback((p: PlayerPayload) => {
+   174→    setCurrent(p);
+   175→    setPhase(p.url ? "loading" : "resolving");
+   176→    setError(null);
+   177→  }, []);
+   178→
+   179→  const openSwitcher = useCallback(() => setSwitcherOpen(true), []);
+   180→
+   181→  // Advance to the next episode in-place (Up Next card / auto-advance / "n" key).
+   182→  // Empty url re-enters the resolving path so addons fetch streams for the new episode.
+   183→  const handlePlayNext = useCallback(
+   184→    (next: { season: number; episode: number; videoId: string; episodeName?: string }) => {
+   185→      setCurrent((c) => ({
+   186→        ...c,
+   187→        url: "",
+   188→        season: next.season,
+   189→        episode: next.episode,
+   190→        videoId: next.videoId,
+   191→        episodeName: next.episodeName,
+   192→        streamTitle: undefined,
+   193→        streamDescription: undefined,
+   194→        resumeAt: 0,
+   195→      }));
+   196→      setPhase("resolving");
+   197→      setError(null);
+   198→    },
+   199→    [],
+   200→  );
+   201→
+   202→  return (
+   203→    <div className="fixed inset-0 z-[180] bg-black" role="dialog" aria-modal="true" aria-label={`Playing ${current.title}`}>
+   204→      {phase === "resolving" && (
+   205→        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+   206→          <div className="relative">
+   207→            <Loader2 className="w-12 h-12 text-accent animate-spin" />
+   208→          </div>
+   209→          <p className="text-sm text-ink-muted" aria-live="polite">{resolveStatus}</p>
+   210→        </div>
+   211→      )}
+   212→      {phase === "error" ? (
+   213→        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+   214→          <AlertTriangle className="w-12 h-12 text-danger" />
+   215→          <p className="text-sm text-ink-muted max-w-md">{error}</p>
+   216→          <div className="flex gap-3">
+   217→            <button
+   218→              type="button"
+   219→              onClick={() => setSwitcherOpen(true)}
+   220→              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-black hover:brightness-110"
+   221→            >
+   222→              Open stream picker
+   223→            </button>
+   224→            <button
+   225→              type="button"
+   226→              onClick={pop}
+   227→              className="rounded-xl bg-raised px-5 py-2.5 text-sm font-semibold text-ink hover:bg-raised/70"
+   228→            >
+   229→              Back
+   230→            </button>
+   231→          </div>
+   232→        </div>
+   233→      ) : (
+   234→        current.url && (
+   235→          <VideoStage
+   236→            key={current.url}
+   237→            payload={current}
+   238→            settings={settings}
+   239→            onPhase={handlePhase}
+   240→            onError={handleError}
+   241→            onPlayNext={handlePlayNext}
+   242→            onOpenSwitcher={openSwitcher}
+   243→          />
+   244→        )
+   245→      )}
+   246→
+   247→      {/* Top bar */}
+   248→      {phase !== "error" && (
+   249→        <div className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent px-4 py-3 pb-10 transition-opacity">
+   250→          <button
+   251→            type="button"
+   252→            onClick={() => {
+   253→              if (settings.playerConfirmLeave && !window.confirm("Leave playback?")) return;
+   254→              pop();
+   255→            }}
+   256→            className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-ink hover:bg-black/70"
+   257→            aria-label="Close player (Esc)"
+   258→          >
+   259→            <X className="w-5 h-5" />
+   260→          </button>
+   261→          <div className="min-w-0">
+   262→            <p className="harbor-clamp-1 text-sm font-semibold text-ink">{current.title}</p>
+   263→            {current.episode && (
+   264→              <p className="text-xs text-ink-muted">
+   265→                S{current.season}:E{current.episode}
+   266→                {current.episodeName ? ` · ${current.episodeName}` : ""}
+   267→              </p>
+   268→            )}
+   269→          </div>
+   270→          <button
+   271→            type="button"
+   272→            onClick={() => setSwitcherOpen(true)}
+   273→            className="ml-auto flex items-center gap-1.5 rounded-full bg-black/50 hover:bg-black/70 px-3 py-1.5 text-xs font-medium text-ink"
+   274→            title="Switch stream (W)"
+   275→          >
+   276→            <ArrowLeftRight className="w-3.5 h-3.5" /> Streams
+   277→          </button>
+   278→        </div>
+   279→      )}
+   280→
+   281→      {switcherOpen && (
+   282→        <PickerOverlay
+   283→          type={current.type}
+   284→          id={current.deepLink?.id ?? current.metaId}
+   285→          videoId={current.videoId ?? current.deepLink?.videoId}
+   286→          season={current.season}
+   287→          episode={current.episode}
+   288→        />
+   289→      )}
+   290→    </div>
+   291→  );
+   292→}
+   293→
+   294→// ---------------- Video stage ----------------
+   295→function VideoStage({
+   296→  payload,
+   297→  settings,
+   298→  onPhase,
+   299→  onError,
+   300→  onPlayNext,
+   301→  onOpenSwitcher,
+   302→}: {
+   303→  payload: PlayerPayload;
+   304→  settings: ReturnType<typeof useSettings.getState>["settings"];
+   305→  onPhase: (p: "loading" | "playing") => void;
+   306→  onError: (msg: string) => void;
+   307→  onPlayNext: (next: { season: number; episode: number; videoId: string; episodeName?: string }) => void;
+   308→  onOpenSwitcher: () => void;
+   309→}) {
+   310→  const { toast } = useToast();
+   311→  const videoRef = useRef<HTMLVideoElement>(null);
+   312→  const containerRef = useRef<HTMLDivElement>(null);
+   313→  const hlsRef = useRef<Hls | null>(null);
+   314→  // Single source of truth for subtitle rendering — the custom overlay. This
+   315→  // manager guarantees no native <track>/TextTrack layer ever paints alongside
+   316→  // it (the root cause of the duplicate-subtitles bug).
+   317→  const subManagerRef = useRef<SubtitleManager | null>(null);
+   318→  if (!subManagerRef.current) subManagerRef.current = new SubtitleManager();
+   319→  // Player-height-based subtitle scaling (measured via ResizeObserver)
+   320→  const [stageHeight, setStageHeight] = useState(0);
+   321→  const [ready, setReady] = useState(false);
+   322→  const [playing, setPlaying] = useState(false);
+   323→  const [muted, setMuted] = useState(false);
+   324→  const [volume, setVolume] = useState(1);
+   325→  const [time, setTime] = useState(0);
+   326→  const [duration, setDuration] = useState(0);
+   327→  const [buffering, setBuffering] = useState(true);
+   328→  const [fullscreen, setFullscreen] = useState(false);
+   329→  const [speed, setSpeed] = useState(1);
+   330→  const [controlsVisible, setControlsVisible] = useState(true);
+   331→  const [volumeHudVisible, setVolumeHudVisible] = useState(false);
+   332→  const volumeHudTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   333→  const [subMenuOpen, setSubMenuOpen] = useState(false);
+   334→  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+   335→  // P2P engine: live swarm stats + one-shot remux fallback when the native stream can't demux
+   336→  const [p2pStats, setP2pStats] = useState<{ progress: number; peers: number; downloadSpeed: number; ready: boolean } | null>(null);
+   337→  const [srcOverride, setSrcOverride] = useState<string | null>(null);
+   338→  const remuxTriedRef = useRef(false);
+   339→  const [subtitles, setSubtitles] = useState<LoadedSubtitle[]>([]);
+   340→  // Full ranked subtitle pool + how many are loaded — powers the "Load more" affordance
+   341→  const subPoolRef = useRef<RawSubtitle[]>([]); // ranked by preferred languages
+   342→  const subEffectiveRef = useRef<RawSubtitle[]>([]); // currently displayed ranking (lang filter)
+   343→  const subAttemptedRef = useRef(0);
+   344→  const [subPoolSize, setSubPoolSize] = useState(0);
+   345→  const [subLoadingMore, setSubLoadingMore] = useState(false);
+   346→  const [subLangFilter, setSubLangFilter] = useState<string | null>(null);
+   347→  // Free-text search over the ranked pool (label / language / provider) — composes
+   348→  // with the language chips: chip re-ranks, search then narrows.
+   349→  const [subSearch, setSubSearch] = useState(""); // committed (drives the pool view)
+   350→  const [subSearchInput, setSubSearchInput] = useState(""); // typing value
+   351→  const subViewTokenRef = useRef(0); // invalidates stale parse batches when the view changes
+   352→  const subSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   353→  // Language chips derived from the pool: chip code + available count
+   354→  const subLangChips = useMemo(() => {
+   355→    const counts = new Map<string, number>();
+   356→    for (const s of subPoolRef.current) {
+   357→      const chip = langChip(s.lang);
+   358→      counts.set(chip, (counts.get(chip) ?? 0) + 1);
+   359→    }
+   360→    return Array.from(counts.entries())
+   361→      .sort((a, b) => b[1] - a[1])
+   362→      .slice(0, 6);
+   363→  }, [subPoolSize, subLangFilter]);
+   364→  // How many entries the CURRENT view (chip re-rank + search filter) contains
+   365→  const [subEffectiveCount, setSubEffectiveCount] = useState(0);
+   366→  const subtitlesRef = useRef<LoadedSubtitle[]>([]);
+   367→  subtitlesRef.current = subtitles; // latest committed list for stable index math
+   368→  const [activeSub, setActiveSub] = useState<number>(-1); // -1 = off
+   369→  const [subCue, setSubCue] = useState<SubCue | null>(null);
+   370→  const [availableTracks, setAvailableTracks] = useState<{ label: string }[]>([]);
+   371→  const [levels, setLevels] = useState<{ index: number; label: string }[]>([]);
+   372→  const [levelSel, setLevelSel] = useState<number>(-1); // -1 = adaptive (auto)
+   373→  const [autoLevel, setAutoLevel] = useState<number>(-1); // level currently playing in auto mode
+   374→  const [activeAudio, setActiveAudio] = useState(0);
+   375→  const [bufferedEnd, setBufferedEnd] = useState(0);
+   376→  const [nextEp, setNextEp] = useState<{
+   377→    season: number;
+   378→    episode: number;
+   379→    videoId: string;
+   380→    episodeName?: string;
+   381→  } | null>(null);
+   382→  const [upNextDismissed, setUpNextDismissed] = useState(false);
+   383→  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   384→  const seekHandled = useRef(false);
+   385→  // Trakt scrobble state (dedupe: one scrobble per action per 10s)
+   386→  const scrobbleStartSent = useRef(false);
+   387→  const scrobbleLastSent = useRef<Record<"start" | "pause" | "stop", number>>({
+   388→    start: 0,
+   389→    pause: 0,
+   390→    stop: 0,
+   391→  });
+   392→
+   393→  const resumeAt = useRef(
+   394→    payload.resumeAt ??
+   395→      (settings.resumePlayback && payload.metaId
+   396→        ? resumeMsFor(payload.metaId, payload.videoId) / 1000
+   397→        : 0),
+   398→  );
+   399→
+   400→  // ---- P2P swarm stats polling ----
+   401→  useEffect(() => {
+   402→    if (!payload.p2p) {
+   403→      setP2pStats(null);
+   404→      return;
+   405→    }
+   406→    let alive = true;
+   407→    const key = payload.p2p.key;
+   408→    const tick = async () => {
+   409→      try {
+   410→        const st = await p2pStatus(key);
+   411→        if (!alive) return;
+   412→        setP2pStats({
+   413→          progress: st.progress ?? 0,
+   414→          peers: st.peers ?? 0,
+   415→          downloadSpeed: st.downloadSpeed ?? 0,
+   416→          ready: st.ready === true,
+   417→        });
+   418→      } catch {
+   419→        if (alive) setP2pStats(null);
+   420→      }
+   421→    };
+   422→    void tick();
+   423→    const iv = setInterval(tick, 2500);
+   424→    return () => {
+   425→      alive = false;
+   426→      clearInterval(iv);
+   427→    };
+   428→  }, [payload.p2p?.key]);
+   429→
+   430→  // ---- Attach source (HLS or native) ----
+   431→  useEffect(() => {
+   432→    const video = videoRef.current;
+   433→    const url = srcOverride ?? payload.url;
+   434→    if (!video || !url) return;
+   435→    let cancelled = false;
+   436→    const isHls = /\.m3u8(\?|$)/i.test(url) || url.includes("m3u8");
+   437→
+   438→    const tryPlay = () => {
+   439→      video.play().catch(() => {
+   440→        /* autoplay blocked; user gesture needed */
+   441→      });
+   442→    };
+   443→
+   444→    if (isHls && !video.canPlayType("application/vnd.apple.mpegurl")) {
+   445→      const hls = new Hls({
+   446→        enableWorker: true,
+   447→        maxBufferLength: 30,
+   448→        // Subtitle rendering belongs to our custom overlay ONLY — hls.js must
+   449→        // never flip embedded subtitle tracks to showing on its own.
+   450→        renderTextTracksNatively: false,
+   451→      });
+   452→      hlsRef.current = hls;
+   453→      hls.loadSource(url);
+   454→      hls.attachMedia(video);
+   455→      hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
+   456→        if (cancelled) return;
+   457→        // Quality levels (video renditions) — dedupe by height, sort hi-fi first
+   458→        const seen = new Set<number>();
+   459→        const lvls: { index: number; label: string; h: number }[] = [];
+   460→        (data?.levels ?? []).forEach((l, i) => {
+   461→          const h = typeof l.height === "number" && l.height > 0 ? l.height : 0;
+   462→          const label = h > 0 ? `${h}p` : `${Math.round(l.bitrate / 1000)} kbps`;
+   463→          const key = h > 0 ? h : Math.round(l.bitrate / 1000);
+   464→          if (seen.has(key)) return;
+   465→          seen.add(key);
+   466→          lvls.push({ index: i, label, h });
+   467→        });
+   468→        lvls.sort((a, b) => b.h - a.h);
+   469→        setLevels(lvls.map(({ index, label }) => ({ index, label })));
+   470→        // Alternative audio tracks served by the HLS manifest
+   471→        const tracks = hls.audioTracks ?? [];
+   472→        if (tracks.length > 1) {
+   473→          setAvailableTracks(tracks.map((t, i) => ({ label: t.name || t.lang || `Audio ${i + 1}` })));
+   474→        }
+   475→        onPhase("loading");
+   476→        tryPlay();
+   477→      });
+   478→      hls.on(Hls.Events.LEVEL_SWITCHED, (_evt, d) => {
+   479→        if (!cancelled) setAutoLevel(d.level);
+   480→      });
+   481→      hls.on(Hls.Events.ERROR, (_evt, data) => {
+   482→        if (cancelled || !data.fatal) return;
+   483→        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+   484→          hls.startLoad();
+   485→        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+   486→          hls.recoverMediaError();
+   487→        } else {
+   488→          onError("Stream failed to load. It may be offline or blocked by CORS.");
+   489→        }
+   490→      });
+   491→    } else {
+   492→      video.src = url;
+   493→      onPhase("loading");
+   494→      tryPlay();
+   495→    }
+   496→
+   497→    return () => {
+   498→      cancelled = true;
+   499→      if (hlsRef.current) {
+   500→        hlsRef.current.destroy();
+   501→        hlsRef.current = null;
+   502→      }
+   503→    };
+   504→  }, [payload.url, srcOverride, onPhase, onError]);
+   505→
+   506→  // ---- SubtitleManager lifecycle ----
+   507→  // Attach on mount, keep native layers dead, destroy on unmount. The stage
+   508→  // remounts on stream source change (key={url} in PlayerOverlay), so unmount
+   509→  // cleanup also covers source switches and episode changes.
+   510→  useEffect(() => {
+   511→    const video = videoRef.current;
+   512→    const mgr = subManagerRef.current;
+   513→    if (!video || !mgr) return;
+   514→    mgr.attach(video);
+   515→    // hls.js / the UA can add TextTracks mid-flight — kill them the moment
+   516→    // they appear so the custom overlay stays the only renderer.
+   517→    const onTracksChanged = () => mgr.sweep();
+   518→    video.textTracks?.addEventListener?.("addtrack", onTracksChanged);
+   519→    video.textTracks?.addEventListener?.("removetrack", onTracksChanged);
+   520→    return () => {
+   521→      video.textTracks?.removeEventListener?.("addtrack", onTracksChanged);
+   522→      video.textTracks?.removeEventListener?.("removetrack", onTracksChanged);
+   523→      mgr.destroy();
+   524→      subManagerRef.current = null;
+   525→    };
+   526→  }, []);
+   527→
+   528→  // Sweep + dev assertion whenever the subtitle state graph changes: track
+   529→  // selection (incl. subtitles off), language change (new list), fullscreen
+   530→  // in/out (UA may rebuild media tracks), and source overrides (remux path).
+   531→  useEffect(() => {
+   532→    const mgr = subManagerRef.current;
+   533→    if (!mgr) return;
+   534→    mgr.sweep();
+   535→    if (process.env.NODE_ENV !== "production") {
+   536→      const video = videoRef.current;
+   537→      let nativeShowing = 0;
+   538→      if (video?.textTracks) {
+   539→        for (let i = 0; i < video.textTracks.length; i++) {
+   540→          const t = video.textTracks[i];
+   541→          if (t && (t.mode === "showing" || t.mode === "hidden") && t.kind !== "metadata") nativeShowing++;
+   542→        }
+   543→      }
+   544→      const overlayActive = activeSub >= 0 && !!subtitles[activeSub];
+   545→      const strayOverlays = containerRef.current?.querySelectorAll(".harbor-subtitle").length ?? 0;
+   546→      if (nativeShowing > 0 || (overlayActive && strayOverlays > 1) || (!overlayActive && strayOverlays > 0)) {
+   547→        console.warn(
+   548→          `[Harbor] subtitle layer assertion: nativeShowing=${nativeShowing} overlayActive=${overlayActive} overlayEls=${strayOverlays} — exactly ONE layer is allowed`,
+   549→        );
+   550→      }
+   551→    }
+   552→  }, [activeSub, subtitles, fullscreen, srcOverride]);
+   553→
+   554→  // Player-height-driven subtitle scaling (fullscreen / small viewports scale)
+   555→  useEffect(() => {
+   556→    const el = containerRef.current;
+   557→    if (!el || typeof ResizeObserver === "undefined") return;
+   558→    const ro = new ResizeObserver((entries) => {
+   559→      const h = entries[0]?.contentRect.height ?? 0;
+   560→      if (h > 0) setStageHeight(h);
+   561→    });
+   562→    ro.observe(el);
+   563→    return () => ro.disconnect();
+   564→  }, []);
+   565→
+   566→  // ---- Resume ----
+   567→  useEffect(() => {
+   568→    const video = videoRef.current;
+   569→    if (!video) return;
+   570→    if (resumeAt.current > 1 && !seekHandled.current) {
+   571→      const seek = () => {
+   572→        if (!seekHandled.current && video.duration > 0 && resumeAt.current < video.duration - 5) {
+   573→          video.currentTime = resumeAt.current;
+   574→        }
+   575→        seekHandled.current = true;
+   576→      };
+   577→      if (video.readyState >= 1) seek();
+   578→      else video.addEventListener("loadedmetadata", seek, { once: true });
+   579→    }
+   580→  }, [ready]);
+   581→
+   582→  // ---- Media event handlers ----
+   583→  useEffect(() => {
+   584→    const video = videoRef.current;
+   585→    if (!video) return;
+   586→    const onTime = () => {
+   587→      setTime(video.currentTime);
+   588→      if (video.duration > 0) {
+   589→        setDuration(video.duration);
+   590→        // persist CW every 5s
+   591→        saveProgressThrottled(payload, video.currentTime, video.duration, settings);
+   592→      }
+   593→    };
+   594→    const onLoaded = () => {
+   595→      setDuration(video.duration);
+   596→      setReady(true);
+   597→      setBuffering(false);
+   598→      // populate audio tracks
+   599→      updateTrackList(video, setAvailableTracks);
+   600→    };
+   601→    const onPlay = () => setPlaying(true);
+   602→    const onPause = () => setPlaying(false);
+   603→    const onWaiting = () => setBuffering(true);
+   604→    const onPlaying = () => {
+   605→      setBuffering(false);
+   606→      onPhase("playing");
+   607→    };
+   608→    // Named onVideoError so it never shadows the onError prop from the closure
+   609→    const onVideoError = () => {
+   610→      // P2P native stream failed to demux (e.g. unknown container) → one-shot ffmpeg remux retry
+   611→      if (payload.p2p && payload.p2p.mode !== "remux" && !remuxTriedRef.current && payload.url) {
+   612→        remuxTriedRef.current = true;
+   613→        setSrcOverride(p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx));
+   614→        setBuffering(true);
+   615→        return;
+   616→      }
+   617→      onError("This stream can't be played in the browser (codec or CORS). Try another stream via the stream picker.");
+   618→    };
+   619→    const onVolume = () => {
+   620→      setMuted(video.muted);
+   621→      setVolume(video.volume);
+   622→      setVolumeHudVisible(true);
+   623→      if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current);
+   624→      volumeHudTimer.current = setTimeout(() => setVolumeHudVisible(false), 1400);
+   625→    };
+   626→    const onProgress = () => {
+   627→      const b = video.buffered;
+   628→      if (b && b.length > 0) setBufferedEnd(b.end(b.length - 1));
+   629→    };
+   630→    video.addEventListener("timeupdate", onTime);
+   631→    video.addEventListener("loadedmetadata", onLoaded);
+   632→    video.addEventListener("play", onPlay);
+   633→    video.addEventListener("pause", onPause);
+   634→    video.addEventListener("waiting", onWaiting);
+   635→    video.addEventListener("playing", onPlaying);
+   636→    video.addEventListener("error", onVideoError);
+   637→    video.addEventListener("volumechange", onVolume);
+   638→    video.addEventListener("progress", onProgress);
+   639→    return () => {
+   640→      video.removeEventListener("timeupdate", onTime);
+   641→      video.removeEventListener("loadedmetadata", onLoaded);
+   642→      video.removeEventListener("play", onPlay);
+   643→      video.removeEventListener("pause", onPause);
+   644→      video.removeEventListener("waiting", onWaiting);
+   645→      video.removeEventListener("playing", onPlaying);
+   646→      video.removeEventListener("error", onVideoError);
+   647→      video.removeEventListener("volumechange", onVolume);
+   648→      video.removeEventListener("progress", onProgress);
+   649→    };
+   650→  }, [payload, settings, onPhase, onError]);
+   651→
+   652→  // ---- Finalize watch progress on unmount + when tab is hidden/closed (Harbor flush parity) ----
+   653→  useEffect(() => {
+   654→    const flush = () => {
+   655→      const video = videoRef.current;
+   656→      if (video && video.duration > 0) {
+   657→        saveProgress(payload, video.currentTime, video.duration, settings, true);
+   658→      }
+   659→    };
+   660→    const onVisibility = () => {
+   661→      if (document.visibilityState === "hidden") flush();
+   662→    };
+   663→    document.addEventListener("visibilitychange", onVisibility);
+   664→    window.addEventListener("pagehide", flush);
+   665→    return () => {
+   666→      document.removeEventListener("visibilitychange", onVisibility);
+   667→      window.removeEventListener("pagehide", flush);
+   668→      flush();
+   669→    };
+   670→  }, []);
+   671→
+   672→  // ---- Trakt scrobble (fire-and-forget; demo/unmatched streams never scrobble) ----
+   673→  useEffect(() => {
+   674→    const video = videoRef.current;
+   675→    if (!video) return;
+   676→    if (!/^tt\d+$/.test(payload.metaId)) return;
+   677→    const type: "movie" | "episode" = payload.type === "series" ? "episode" : "movie";
+   678→    if (type === "episode" && (payload.season === undefined || payload.episode === undefined)) return;
+   679→
+   680→    scrobbleStartSent.current = false;
+   681→    scrobbleLastSent.current = { start: 0, pause: 0, stop: 0 };
+   682→
+   683→    const send = (action: "start" | "pause" | "stop") => {
+   684→      const now = Date.now();
+   685→      if (now - scrobbleLastSent.current[action] < 10_000) return; // dedupe per action
+   686→      scrobbleLastSent.current[action] = now;
+   687→      if (action === "start") scrobbleStartSent.current = true;
+   688→      const scrobblePayload = {
+   689→        progress: video.duration > 0 ? Math.min(100, Math.max(0, (video.currentTime / video.duration) * 100)) : 0,
+   690→        type,
+   691→        imdbId: payload.metaId,
+   692→        season: payload.season,
+   693→        episode: payload.episode,
+   694→      };
+   695→      void useTrakt.getState().scrobble(action, scrobblePayload);
+   696→      // Fan out to vault-linked services (Trakt + Simkl activation-code links)
+   697→      void import("@/lib/harbor/linking").then(({ scrobbleToLinkedServices }) =>
+   698→        scrobbleToLinkedServices(action, scrobblePayload),
+   699→      );
+   700→    };
+   701→
+   702→    let playStart = 0;
+   703→    let cumulativeMs = 0;
+   704→    const foldElapsed = () => {
+   705→      if (playStart > 0) {
+   706→        cumulativeMs += Date.now() - playStart;
+   707→        playStart = 0;
+   708→      }
+   709→    };
+   710→
+   711→    const onPlaying = () => {
+   712→      if (playStart === 0) playStart = Date.now();
+   713→      const total = cumulativeMs + (Date.now() - playStart);
+   714→      if (total > 3000 && !scrobbleStartSent.current) send("start");
+   715→    };
+   716→    const onPause = () => {
+   717→      foldElapsed();
+   718→      if (video.ended) return; // ended handler sends the final stop
+   719→      if (scrobbleStartSent.current) send("pause");
+   720→    };
+   721→    const onEnded = () => {
+   722→      foldElapsed();
+   723→      if (scrobbleStartSent.current) send("stop");
+   724→    };
+   725→    const onPageHide = () => {
+   726→      if (scrobbleStartSent.current) send("stop");
+   727→    };
+   728→    const onVisibility = () => {
+   729→      if (document.visibilityState === "hidden" && scrobbleStartSent.current) send("stop");
+   730→    };
+   731→
+   732→    video.addEventListener("playing", onPlaying);
+   733→    video.addEventListener("pause", onPause);
+   734→    video.addEventListener("ended", onEnded);
+   735→    window.addEventListener("pagehide", onPageHide);
+   736→    document.addEventListener("visibilitychange", onVisibility);
+   737→    return () => {
+   738→      // Unmount or stream switch: close the scrobble session
+   739→      if (scrobbleStartSent.current) send("stop");
+   740→      video.removeEventListener("playing", onPlaying);
+   741→      video.removeEventListener("pause", onPause);
+   742→      video.removeEventListener("ended", onEnded);
+   743→      window.removeEventListener("pagehide", onPageHide);
+   744→      document.removeEventListener("visibilitychange", onVisibility);
+   745→    };
+   746→  }, [payload]);
+   747→
+   748→  // ---- Subtitle cue rendering ----
+   749→  useEffect(() => {
+   750→    const video = videoRef.current;
+   751→    if (!video) return;
+   752→    const onTime = () => {
+   753→      if (activeSub < 0 || subtitles[activeSub] === undefined) {
+   754→        setSubCue(null);
+   755→        return;
+   756→      }
+   757→      setSubCue(findActiveCue(subtitles[activeSub].cues, video.currentTime));
+   758→    };
+   759→    video.addEventListener("timeupdate", onTime);
+   760→    return () => video.removeEventListener("timeupdate", onTime);
+   761→  }, [activeSub, subtitles]);
+   762→
+   763→  // ---- Auto-load preferred subtitles ----
+   764→  // Fetches every installed subtitles addon + built-in mirrors, ranks by preferred
+   765→  // language, then incrementally loads the top of the pool ("Load more" extends).
+   766→  useEffect(() => {
+   767→    if (payload.type === "movie" || payload.type === "series") {
+   768→      let alive = true;
+   769→      subPoolRef.current = [];
+   770→      subAttemptedRef.current = 0;
+   771→      setSubPoolSize(0);
+   772→      setSubEffectiveCount(0);
+   773→      setSubtitles([]);
+   774→      setActiveSub(-1);
+   775→      (async () => {
+   776→        try {
+   777→          const { useAddons: addons } = await import("@/lib/harbor/store");
+   778→          const subs = await fetchSubtitles(
+   779→            addons.getState().addons,
+   780→            payload.type,
+   781→            payload.metaId,
+   782→            payload.videoId ?? payload.deepLink?.videoId,
+   783→          );
+   784→          if (!alive) return;
+   785→          // Read live store state, NOT the render closure: when the player mounts
+   786→          // via a deep link at app boot, child effects run BEFORE AppShell's
+   787→          // settings hydration effect, so the closure can still hold defaults.
+   788→          const live = useSettings.getState().settings;
+   789→          const preferred = live.preferredSubLangs;
+   790→          const sorted = [...subs].sort((a, b) => subScore(b, preferred) - subScore(a, preferred));
+   791→          subPoolRef.current = sorted;
+   792→          subEffectiveRef.current = sorted;
+   793→          setSubPoolSize(sorted.length);
+   794→          setSubEffectiveCount(sorted.length);
+   795→          const batch = sorted.slice(0, 8);
+   796→          subAttemptedRef.current = batch.length;
+   797→          const loaded = await parseSubBatch(batch);
+   798→          if (!alive || loaded.length === 0) return;
+   799→          // Idempotent commit: dedupe by stable key against whatever is committed
+   800→          setSubtitles((prev) => mergeSubtitlesUnique(prev, loaded));
+   801→          if (!live.subtitlesOffByDefault) setActiveSub(0);
+   802→        } catch {
+   803→          /* subtitles optional */
+   804→        }
+   805→      })();
+   806→      return () => {
+   807→        alive = false;
+   808→      };
+   809→    }
+   810→  }, [payload.metaId, payload.videoId]);
+   811→
+   812→  // Rebuild the displayed subtitle view from the ranked pool:
+   813→  // 1) language chip re-ranks matches first, 2) free-text search narrows.
+   814→  // Commits are token-guarded so a fast retyping session can't let an older
+   815→  // batch clobber a newer view.
+   816→  const applySubView = useCallback(async (chip: string | null, search: string) => {
+   817→    const token = ++subViewTokenRef.current;
+   818→    setSubLangFilter(chip);
+   819→    setSubSearch(search);
+   820→    const query = search.trim().toLowerCase();
+   821→    const pool = subPoolRef.current;
+   822→    const afterChip = chip
+   823→      ? pool
+   824→          .map((s, i) => ({ s, i, match: langChip(s.lang) === chip ? 0 : 1 }))
+   825→          .sort((a, b) => a.match - b.match || a.i - b.i)
+   826→          .map((x) => x.s)
+   827→      : pool;
+   828→    const effective = query
+   829→      ? afterChip.filter((s) =>
+   830→          `${subLabel(s)} ${s.lang ?? ""} ${s.addonName ?? s.source ?? ""}`
+   831→            .toLowerCase()
+   832→            .includes(query),
+   833→        )
+   834→      : afterChip;
+   835→    subEffectiveRef.current = effective;
+   836→    setSubEffectiveCount(effective.length);
+   837→    subAttemptedRef.current = 0;
+   838→    setSubtitles([]);
+   839→    setActiveSub(-1);
+   840→    const batch = effective.slice(0, 8);
+   841→    subAttemptedRef.current = batch.length;
+   842→    if (batch.length === 0) return;
+   843→    setSubLoadingMore(true);
+   844→    const loaded = await parseSubBatch(batch);
+   845→    if (token !== subViewTokenRef.current) return; // superseded by a newer view
+   846→    if (loaded.length > 0) {
+   847→      setSubtitles((prev) => mergeSubtitlesUnique(prev, loaded));
+   848→      setActiveSub(0);
+   849→    }
+   850→    setSubLoadingMore(false);
+   851→  }, []);
+   852→
+   853→  // Language chip click: keep the committed search, change the chip.
+   854→  const applySubFilter = useCallback(
+   855→    (chip: string | null) => {
+   856→      void applySubView(chip, subSearch);
+   857→    },
+   858→    [applySubView, subSearch],
+   859→  );
+   860→
+   861→  // Debounced search input: ~280ms after typing stops, re-derive the view.
+   862→  const onSubSearchInput = useCallback(
+   863→    (value: string) => {
+   864→      setSubSearchInput(value);
+   865→      if (subSearchTimer.current) clearTimeout(subSearchTimer.current);
+   866→      subSearchTimer.current = setTimeout(() => {
+   867→        void applySubView(subLangFilter, value);
+   868→      }, 280);
+   869→    },
+   870→    [applySubView, subLangFilter],
+   871→  );
+   872→
+   873→  useEffect(() => {
+   874→    return () => {
+   875→      if (subSearchTimer.current) clearTimeout(subSearchTimer.current);
+   876→    };
+   877→  }, []);
+   878→
+   879→  const loadMoreSubtitles = useCallback(async () => {
+   880→    const pool = subEffectiveRef.current;
+   881→    const attempted = subAttemptedRef.current;
+   882→    if (subLoadingMore || attempted >= pool.length) return;
+   883→    setSubLoadingMore(true);
+   884→    const batch = pool.slice(attempted, attempted + 8);
+   885→    const loaded = await parseSubBatch(batch);
+   886→    subAttemptedRef.current = attempted + batch.length;
+   887→    if (loaded.length > 0) setSubtitles((prev) => mergeSubtitlesUnique(prev, loaded));
+   888→    setSubLoadingMore(false);
+   889→  }, [subLoadingMore]);
+   890→
+   891→  // ---- Up Next: resolve the next episode for tracked series ----
+   892→  useEffect(() => {
+   893→    setNextEp(null);
+   894→    if (payload.type !== "series" || !/^tt\d+$/.test(payload.metaId)) return;
+   895→    if (payload.season === undefined || payload.episode === undefined) return;
+   896→    let alive = true;
+   897→    (async () => {
+   898→      try {
+   899→        const meta = await fetchMeta("series", payload.metaId);
+   900→        if (!alive || !meta?.videos) return;
+   901→        const vids = meta.videos.filter(
+   902→          (v) => typeof v.season === "number" && typeof v.episode === "number",
+   903→        );
+   904→        const s = payload.season as number;
+   905→        const e = payload.episode as number;
+   906→        let next = vids.find((v) => v.season === s && v.episode === e + 1);
+   907→        if (!next) next = vids.find((v) => v.season === s + 1 && v.episode === 1);
+   908→        if (alive && next) {
+   909→          setNextEp({
+   910→            season: next.season as number,
+   911→            episode: next.episode as number,
+   912→            videoId: next.id,
+   913→            episodeName: next.name ?? next.title,
+   914→          });
+   915→        }
+   916→      } catch {
+   917→        /* next-episode info is optional */
+   918→      }
+   919→    })();
+   920→    return () => {
+   921→      alive = false;
+   922→    };
+   923→  }, [payload.metaId, payload.videoId, payload.type, payload.season, payload.episode]);
+   924→
+   925→  const playNext = useCallback(() => {
+   926→    if (!nextEp) return;
+   927→    onPlayNext(nextEp);
+   928→  }, [nextEp, onPlayNext]);
+   929→
+   930→  // Auto-advance when playback ends (honors the autoPlayNextEpisode setting)
+   931→  useEffect(() => {
+   932→    const video = videoRef.current;
+   933→    if (!video) return;
+   934→    const onEnded = () => {
+   935→      if (nextEp && settings.autoPlayNextEpisode && !upNextDismissed) onPlayNext(nextEp);
+   936→    };
+   937→    video.addEventListener("ended", onEnded);
+   938→    return () => video.removeEventListener("ended", onEnded);
+   939→  }, [nextEp, upNextDismissed, settings.autoPlayNextEpisode, onPlayNext]);
+   940→
+   941→  // ---- Fullscreen tracking ----
+   942→  useEffect(() => {
+   943→    const onFs = () => setFullscreen(!!document.fullscreenElement);
+   944→    document.addEventListener("fullscreenchange", onFs);
+   945→    return () => document.removeEventListener("fullscreenchange", onFs);
+   946→  }, []);
+   947→
+   948→  // ---- Controls auto-hide ----
+   949→  const bumpControls = useCallback(() => {
+   950→    setControlsVisible(true);
+
+[showing lines 1-950 of 1829; use offset=951 with limit to continue reading]
