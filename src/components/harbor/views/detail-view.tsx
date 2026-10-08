@@ -758,7 +758,8 @@ function TmdbRecsRail({ items }: { items: Meta[] }) {
         <h2 className="md-title-large text-ink">{tr("recommendedTitle")}</h2>
         <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{tr("viaTmdb")}</span>
       </div>
-      <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 md:px-8">
+      {/* Hover headroom: pt-3/-mt-3 keeps the header→card gap while giving the hover lift room inside the scroll clip */}
+      <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
         {items.map((m) => (
           <div key={`${m.type}-${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
             <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
@@ -825,7 +826,8 @@ function SimilarRail({
           ))}
         </div>
       ) : items.length === 0 ? null : (
-        <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 md:px-8">
+        /* Hover headroom: same pt-3/-mt-3 contract as TmdbRecsRail above */
+        <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
           {items.map((m) => (
             <div key={`${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
               <MetaCard

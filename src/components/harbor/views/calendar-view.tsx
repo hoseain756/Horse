@@ -383,7 +383,7 @@ export function CalendarView() {
             {anime.loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-ink-subtle" />}
           </div>
           {anime.entries.length > 0 ? (
-            <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2">
+            <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2 pt-2 -mt-2">
               {anime.entries.map((s) => (
                 <AnimeAiringCard
                   key={`al-${s.media.id}-${s.episode}-${s.airingAt}`}
@@ -416,7 +416,7 @@ export function CalendarView() {
               New episodes this week
             </h2>
           </div>
-          <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2">
+          <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2 pt-2 -mt-2">
             {newThisWeek.map((m) => (
               <button
                 key={`${m.id}`}

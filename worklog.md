@@ -1428,3 +1428,19 @@ Work Log:
 
 Stage Summary:
 - All content cards across the app now show poster + title only; the release date is gone from under the titles. Dates still available where they belong (detail page meta row, search rows).
+---
+Task ID: card-hover-clip (user: hover grows card + glow — liked — but the top edge gets cut)
+Agent: main (orchestrator)
+Task: Fix hover clipping on poster cards (scale 1.03 + lift −4px + glow get their top shaved) without touching the liked effect.
+
+Work Log:
+- ROOT CAUSE: every card row is a horizontal scroller (`overflow-x-auto`); per CSS a non-visible overflow-x forces overflow-y to compute to AUTO (the `overflow-y-visible` class on the Rail was a no-op) → the scroll box clips vertically. `.harbor-poster:hover` needs ~7-8px above the card (lift 4 + scale overshoot ~3 + 1px ring) but the Rail gave pt-1 (4px), home Top-10 pt-2 (8px), and the two detail rails + two calendar rows gave ZERO → tops shaved on hover.
+- FIX (rhythm-neutral headroom, 6 scrollers): padding-top added INSIDE each scroll box, compensated by an equal negative margin-top so every header→card gap is pixel-identical to before:
+  - common/rail.tsx (ALL rails): pt-1 → pt-3 + -mt-2 (14px gap preserved), removed the misleading overflow-y-visible, documented the "hover headroom contract" in a comment.
+  - home-view.tsx Top10Row: pt-2 → pt-3 + -mt-1 (18px gap preserved).
+  - detail-view.tsx TmdbRecsRail + SimilarRail: 0 → pt-3 + -mt-3 (12px gap preserved). (SimilarRail comment must be a `/* */` JS comment, NOT a `{/* */}` JSX comment — it sits in ternary expression position; the intermediate JSX-comment state caused a transient SWP parse error at 829:14, fixed in the same round.)
+  - calendar-view.tsx airing + new-episode rows: 0 → pt-2 + -mt-2 (scale-1.04 rows, ~3.4px extent).
+- VERIFY (agent-browser): rest headroom 12px; hover (matrix(1.03,0,0,1.03,0,-4) confirmed) leaves +6px headroom on home rail, +6px at 1280 desktop, +5px on detail "More like this" (was clipped at 0 before); screenshots show Reacher/Neagley hovered with glow ring and the poster top edge + ★-badge fully intact; grids untouched (no clip ancestors); header→card gaps unchanged (collapse math verified live: 12/−12, 12/−4 pairs). Fresh console: only HMR info; lint 0 errors; dev.log clean. Stale Turbopack/console lesson reused: verify via live computed styles, not console history.
+
+Stage Summary:
+- The liked hover effect (grow + glow) is preserved byte-for-byte; every poster card now has reserved headroom inside its scroll clip so the lifted/scaled top edge never gets cut — on home rails, Top 10, detail recommendations, and calendar rows, at every breakpoint, with zero layout rhythm change.

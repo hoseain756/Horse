@@ -72,9 +72,14 @@ export function Rail({
         )}
       </div>
       <div className="relative">
+        {/* Hover headroom contract: overflow-x:auto forces overflow-y to clip, so
+            .harbor-poster:hover (lift −4px + scale 1.03 ≈ 8px above the card) needs
+            real padding INSIDE the scroller. pt-3 + -mt-2 = same visual rhythm as the
+            old pt-1 (10−8+12 = 14px header→card gap) with 12px of headroom — without
+            it the poster's top edge gets shaved on hover. */}
         <div
           ref={ref}
-          className="harbor-scroll-x overflow-x-auto overflow-y-visible flex gap-3 px-4 md:px-8 pb-3 pt-1"
+          className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 md:px-8 pb-3 pt-3 -mt-2"
           style={{ scrollbarWidth: "none" }}
         >
           {children}

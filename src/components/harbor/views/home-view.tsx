@@ -198,7 +198,8 @@ function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void 
         <h2 className="md-title-large text-ink">Top 10 Today</h2>
         <span className="md-body-small text-ink-subtle">trending on Stremio</span>
       </div>
-      <div className="harbor-scroll-x overflow-x-auto flex items-end gap-1 px-4 md:px-8 pb-3 pt-2">
+      {/* Hover headroom: pt-3/-mt-1 keeps the 18px header→card gap while giving the hover lift room inside the scroll clip */}
+      <div className="harbor-scroll-x overflow-x-auto flex items-end gap-1 px-4 md:px-8 pb-3 pt-3 -mt-1">
         {metas.map((m, i) => (
           <div key={m.id} className="shrink-0 flex items-end group/top10">
             <span
