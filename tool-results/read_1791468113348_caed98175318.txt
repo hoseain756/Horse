@@ -1,0 +1,842 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→// Harbor Web — Detail view (Task 30 premium redesign)
+     4→     4→// Visual language: Apple TV+ / Disney+ / Netflix-style title page.
+     5→     5→//   1. Hero artwork CARD at the top with the official title logo embedded in
+     6→     6→//      its bottom scrim — zero floating chips/badges/buttons on the artwork.
+     7→     7→//   2. Single-line, non-wrapping metadata row directly below the card:
+     8→     8→//      [Rating badge] • [Year] • [Duration] • [Genre tag] (+ cert / source).
+     9→     9→//   3. Synopsis right beneath the metadata row (muted, generous line-height).
+    10→    10→//   4. Centered action row: primary "Watch Now" CTA + compact expandable
+    11→    11→//      menu (watchlist / streams / share) + circular custom-lists button.
+    12→    12→//   5. Immersive chrome: the glass dock + floating search are hidden for this
+    13→    13→//      page (app-shell immersiveDetail); a semi-transparent back button floats
+    14→    14→//      at the top (owned here so deep-linked roots get one too).
+    15→    15→// Business logic (meta loading, resume, watchlist, picker push) is unchanged
+    16→    16→// from the Harbor port — this is a presentation refactor.
+    17→    17→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+    18→    18→import { AnimatePresence, motion } from "framer-motion";
+    19→    19→import {
+    20→    20→  ArrowLeft, Play, Plus, Check, Star, RotateCcw, Layers, ChevronDown, Share2,
+    21→    21→} from "lucide-react";
+    22→    22→import type { Meta, MetaVideo } from "@/lib/harbor/types";
+    23→    23→import { fetchMeta, fetchAddonMeta, fetchCinemetaCatalog } from "@/lib/harbor/api";
+    24→    24→import { parseRuntimeToSeconds } from "@/lib/harbor/playback-timeline";
+    25→    25→import { useAddons, useNav, useSettings } from "@/lib/harbor/store";
+    26→    26→import { isInWatchlist, toggleWatchlist, resumeMsFor, getCwEntry, episodeWatchedSet } from "@/lib/harbor/cw";
+    27→    27→import { PosterImage } from "../common/poster";
+    28→    28→import { MetaCard } from "../common/meta-card";
+    29→    29→import { AddToListButton } from "../chrome/add-to-list";
+    30→    30→import { useTmdbEnrichment } from "../chrome/tmdb-enrich";
+    31→    31→import { RatingsRow } from "../chrome/ratings-row";
+    32→    32→import { useT } from "@/hooks/use-t";
+    33→    33→import { useToast } from "@/hooks/use-toast";
+    34→    34→import { cn } from "@/lib/utils";
+    35→    35→
+    36→    36→/* ---------- small presentational atoms ---------- */
+    37→    37→
+    38→    38→/** Subtle bullet divider for the single-line metadata row. */
+    39→    39→function MetaBullet() {
+    40→    40→  return (
+    41→    41→    <span aria-hidden className="shrink-0 select-none text-[11px] leading-none text-ink-subtle/60">
+    42→    42→      •
+    43→    43→    </span>
+    44→    44→  );
+    45→    45→}
+    46→    46→
+    47→    47→/** Semi-transparent top back button (owned by the detail page so it exists
+    48→    48→ *  even when a title is deep-linked as the root nav frame). RTL-mirrors. */
+    49→    49→function DetailBackButton() {
+    50→    50→  const tr = useT();
+    51→    51→  const pop = useNav((s) => s.pop);
+    52→    52→  const resetTo = useNav((s) => s.resetTo);
+    53→    53→  const depth = useNav((s) => s.stack.length);
+    54→    54→  const goBack = useCallback(() => {
+    55→    55→    if (depth <= 1) resetTo({ kind: "view", view: "home" });
+    56→    56→    else pop();
+    57→    57→  }, [depth, pop, resetTo]);
+    58→    58→  return (
+    59→    59→    <button
+    60→    60→      type="button"
+    61→    61→      onClick={goBack}
+    62→    62→      className="harbor-tv-focus fixed top-4 start-4 z-40 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/55 ps-3.5 pe-4 text-sm font-medium text-white backdrop-blur-md transition-all hover:scale-[1.03] hover:bg-black/75 active:scale-95 md-state"
+    63→    63→      aria-label={tr("goBack")}
+    64→    64→    >
+    65→    65→      <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
+    66→    66→      {tr("back")}
+    67→    67→    </button>
+    68→    68→  );
+    69→    69→}
+    70→    70→
+    71→    71→export function DetailView({ type, id }: { type: string; id: string }) {
+    72→    72→  const tr = useT();
+    73→    73→  const { toast } = useToast();
+    74→    74→  const push = useNav((s) => s.push);
+    75→    75→  const addons = useAddons((s) => s.addons);
+    76→    76→  const addonsLoaded = useAddons((s) => s.loaded);
+    77→    77→  const settings = useSettings((s) => s.settings);
+    78→    78→  // TMDB enrichment (logo, certification, recommendations) — fails soft
+    79→    79→  const tmdb = useTmdbEnrichment(type, id, settings.region);
+    80→    80→
+    81→    81→  const [meta, setMeta] = useState<Meta | null>(null);
+    82→    82→  const [loading, setLoading] = useState(true);
+    83→    83→  const [error, setError] = useState<string | null>(null);
+    84→    84→  const [inList, setInList] = useState(false);
+    85→    85→  const [resume, setResume] = useState(0);
+    86→    86→  const [cwEntry, setCwEntry] = useState<ReturnType<typeof getCwEntry>>(null);
+    87→    87→
+    88→    88→  useEffect(() => {
+    89→    89→    let alive = true;
+    90→    90→    setLoading(true);
+    91→    91→    setError(null);
+    92→    92→    setMeta(null);
+    93→    93→    (async () => {
+    94→    94→      try {
+    95→    95→        let result = await fetchMeta(type, id);
+    96→    96→        // If cinemeta misses, try addon metas
+    97→    97→        if (!result && addonsLoaded) {
+    98→    98→          for (const addon of addons.filter((a) => a.enabled)) {
+    99→    99→            try {
+   100→   100→              const m = await fetchAddonMeta(addon, type, id);
+   101→   101→              if (m) {
+   102→   102→                result = m;
+   103→   103→                break;
+   104→   104→              }
+   105→   105→            } catch {
+   106→   106→              /* try next */
+   107→   107→            }
+   108→   108→          }
+   109→   109→        }
+   110→   110→        if (!alive) return;
+   111→   111→        if (!result) {
+   112→   112→          setError(tr("titleNotFound"));
+   113→   113→        } else {
+   114→   114→          setMeta(result);
+   115→   115→          setInList(isInWatchlist(id));
+   116→   116→          setResume(resumeMsFor(id));
+   117→   117→          setCwEntry(getCwEntry(id));
+   118→   118→        }
+   119→   119→      } catch (e) {
+   120→   120→        if (!alive) return;
+   121→   121→        setError(e instanceof Error ? e.message : tr("fetchFailed"));
+   122→   122→      } finally {
+   123→   123→        if (alive) setLoading(false);
+   124→   124→      }
+   125→   125→    })();
+   126→   126→    return () => {
+   127→   127→      alive = false;
+   128→   128→    };
+   129→   129→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   130→   130→  }, [type, id, addons, addonsLoaded]);
+   131→   131→
+   132→   132→  // Next episode to resume (series)
+   133→   133→  const nextVideo: MetaVideo | null = useMemo(() => {
+   134→   134→    if (!meta || meta.type !== "series" || !meta.videos?.length) return null;
+   135→   135→    if (cwEntry?.season && cwEntry?.episode) {
+   136→   136→      const exact = meta.videos.find(
+   137→   137→        (v) => v.season === cwEntry.season && v.episode === cwEntry.episode,
+   138→   138→      );
+   139→   139→      if (exact && resume > 0) return exact;
+   140→   140→    }
+   141→   141→    return null;
+   142→   142→  }, [meta, cwEntry, resume]);
+   143→   143→
+   144→   144→  const onPlay = useCallback(
+   145→   145→    (video?: MetaVideo) => {
+   146→   146→      if (!meta) return;
+   147→   147→      // Duration hint for the playback timeline (approximate until the real
+   148→   148→      // container/ffprobe duration lands): TMDB runtime first (minutes), then
+   149→   149→      // the Stremio meta runtime string. Series: per-episode runtime when the
+   150→   150→      // addon provides one, else the show average / TMDB episode_run_time.
+   151→   151→      const tmdbRuntimeMin =
+   152→   152→        meta.type === "series"
+   153→   153→          ? (tmdb.details?.episode_run_time?.[0] ?? null)
+   154→   154→          : (tmdb.details?.runtime ?? null);
+   155→   155→      const runtimeSeconds =
+   156→   156→        parseRuntimeToSeconds(video?.duration ?? null) ??
+   157→   157→        (tmdbRuntimeMin != null ? Math.round(tmdbRuntimeMin * 60) : null) ??
+   158→   158→        parseRuntimeToSeconds(meta.runtime);
+   159→   159→      if (settings.instantPlay) {
+   160→   160→        push({
+   161→   161→          kind: "player",
+   162→   162→          payload: {
+   163→   163→            url: "", // resolved by picker
+   164→   164→            title: meta.name,
+   165→   165→            type: meta.type,
+   166→   166→            metaId: meta.id,
+   167→   167→            poster: meta.poster,
+   168→   168→            season: video?.season,
+   169→   169→            episode: video?.episode,
+   170→   170→            videoId: video?.id,
+   171→   171→            episodeName: video?.name ?? video?.title,
+   172→   172→            deepLink: { type: meta.type, id: meta.id, videoId: video?.id },
+   173→   173→            runtimeSeconds: runtimeSeconds ?? undefined,
+   174→   174→          },
+   175→   175→        });
+   176→   176→      } else {
+   177→   177→        push({
+   178→   178→          kind: "picker",
+   179→   179→          type: meta.type,
+   180→   180→          id: meta.id,
+   181→   181→          videoId: video?.id,
+   182→   182→          season: video?.season,
+   183→   183→          episode: video?.episode,
+   184→   184→          runtimeSeconds: runtimeSeconds ?? undefined,
+   185→   185→        });
+   186→   186→      }
+   187→   187→    },
+   188→   188→    [meta, tmdb.details, push, settings.instantPlay],
+   189→   189→  );
+   190→   190→
+   191→   191→  /* ---------- expandable secondary menu ---------- */
+   192→   192→  const [menuOpen, setMenuOpen] = useState(false);
+   193→   193→  const menuWrapRef = useRef<HTMLDivElement>(null);
+   194→   194→
+   195→   195→  // Close on outside pointer + Escape; return focus to the trigger on Esc.
+   196→   196→  useEffect(() => {
+   197→   197→    if (!menuOpen) return;
+   198→   198→    const onDown = (e: PointerEvent) => {
+   199→   199→      if (menuWrapRef.current && !menuWrapRef.current.contains(e.target as Node)) {
+   200→   200→        setMenuOpen(false);
+   201→   201→      }
+   202→   202→    };
+   203→   203→    const onKey = (e: KeyboardEvent) => {
+   204→   204→      if (e.key === "Escape") {
+   205→   205→        e.stopPropagation();
+   206→   206→        setMenuOpen(false);
+   207→   207→        menuWrapRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+   208→   208→      }
+   209→   209→    };
+   210→   210→    window.addEventListener("pointerdown", onDown);
+   211→   211→    window.addEventListener("keydown", onKey, true);
+   212→   212→    return () => {
+   213→   213→      window.removeEventListener("pointerdown", onDown);
+   214→   214→      window.removeEventListener("keydown", onKey, true);
+   215→   215→    };
+   216→   216→  }, [menuOpen]);
+   217→   217→
+   218→   218→  const openStreams = useCallback(() => {
+   219→   219→    setMenuOpen(false);
+   220→   220→    if (!meta) return;
+   221→   221→    if (meta.type === "series" && nextVideo) {
+   222→   222→      push({
+   223→   223→        kind: "picker",
+   224→   224→        type: meta.type,
+   225→   225→        id: meta.id,
+   226→   226→        videoId: nextVideo.id,
+   227→   227→        season: nextVideo.season,
+   228→   228→        episode: nextVideo.episode,
+   229→   229→      });
+   230→   230→    } else {
+   231→   231→      push({ kind: "picker", type: meta.type, id: meta.id });
+   232→   232→    }
+   233→   233→  }, [meta, nextVideo, push]);
+   234→   234→
+   235→   235→  const toggleWatchlistFromMenu = useCallback(() => {
+   236→   236→    if (!meta) return;
+   237→   237→    setInList(
+   238→   238→      toggleWatchlist({
+   239→   239→        id: meta.id,
+   240→   240→        type: meta.type,
+   241→   241→        name: meta.name,
+   242→   242→        poster: meta.poster,
+   243→   243→        releaseInfo: meta.releaseInfo,
+   244→   244→        imdbRating: meta.imdbRating,
+   245→   245→      }),
+   246→   246→    );
+   247→   247→  }, [meta]);
+   248→   248→
+   249→   249→  const onShare = useCallback(async () => {
+   250→   250→    setMenuOpen(false);
+   251→   251→    if (!meta) return;
+   252→   252→    const url = window.location.href;
+   253→   253→    try {
+   254→   254→      if (typeof navigator.share === "function") {
+   255→   255→        await navigator.share({ title: meta.name, url });
+   256→   256→        return; // native sheet finished (dismiss throws AbortError → caught below)
+   257→   257→      }
+   258→   258→    } catch (e) {
+   259→   259→      if (e instanceof DOMException && e.name === "AbortError") return;
+   260→   260→      // fall through to the clipboard fallback
+   261→   261→    }
+   262→   262→    try {
+   263→   263→      await navigator.clipboard.writeText(url);
+   264→   264→      toast({ title: tr("linkCopied") });
+   265→   265→    } catch {
+   266→   266→      toast({ title: tr("copyFailed") });
+   267→   267→    }
+   268→   268→  }, [meta, toast, tr]);
+   269→   269→
+   270→   270→  // The back button is fixed chrome of this page — render in every state.
+   271→   271→  const back = <DetailBackButton />;
+   272→   272→
+   273→   273→  if (loading) {
+   274→   274→    return (
+   275→   275→      <div className="px-4 pt-[72px] pb-16 md:px-8 md:pt-20">
+   276→   276→        {back}
+   277→   277→        {/* hero card skeleton */}
+   278→   278→        <div
+   279→   279→          className="harbor-skeleton mx-auto aspect-[16/11] max-w-5xl rounded-[28px] sm:aspect-[16/8] md:aspect-[21/8] md:rounded-[36px]"
+   280→   280→          aria-hidden
+   281→   281→        />
+   282→   282→        {/* metadata row skeleton */}
+   283→   283→        <div className="mt-5 flex justify-center" aria-hidden>
+   284→   284→          <div className="harbor-skeleton h-6 w-72 rounded-full" />
+   285→   285→        </div>
+   286→   286→        {/* synopsis skeleton */}
+   287→   287→        <div className="mx-auto mt-4 max-w-xl space-y-2" aria-hidden>
+   288→   288→          <div className="harbor-skeleton mx-auto h-4 w-full rounded-lg" />
+   289→   289→          <div className="harbor-skeleton mx-auto h-4 w-3/4 rounded-lg" />
+   290→   290→        </div>
+   291→   291→        {/* action row skeleton */}
+   292→   292→        <div className="mt-7 flex items-center justify-center gap-3" aria-hidden>
+   293→   293→          <div className="harbor-skeleton h-[52px] w-44 rounded-full" />
+   294→   294→          <div className="harbor-skeleton h-[52px] w-[52px] rounded-full" />
+   295→   295→          <div className="harbor-skeleton h-[52px] w-[52px] rounded-full" />
+   296→   296→        </div>
+   297→   297→        <div className="sr-only">{tr("loadingDetails")}</div>
+   298→   298→      </div>
+   299→   299→    );
+   300→   300→  }
+   301→   301→
+   302→   302→  if (error || !meta) {
+   303→   303→    return (
+   304→   304→      <div className="mx-auto max-w-xl px-4 pt-28 pb-16 text-center md:pt-32">
+   305→   305→        {back}
+   306→   306→        <div className="rounded-2xl border border-danger/40 bg-danger/10 px-5 py-4 text-sm text-danger">
+   307→   307→          {error ?? tr("titleNotFound")}
+   308→   308→        </div>
+   309→   309→      </div>
+   310→   310→    );
+   311→   311→  }
+   312→   312→
+   313→   313→  const watched = episodeWatchedSet();
+   314→   314→
+   315→   315→  /* ---- single-line metadata row data (requirement 2) ---- */
+   316→   316→  const imdbScore =
+   317→   317→    meta.imdbRating && parseFloat(meta.imdbRating) > 0 ? meta.imdbRating : null;
+   318→   318→  const year = meta.releaseInfo?.trim() || null;
+   319→   319→  const runtime = meta.runtime?.trim() || null;
+   320→   320→  const genre = meta.genres?.find((g) => g && g.trim().length > 0) ?? null;
+   321→   321→  const hasAnyMeta = imdbScore || year || runtime || genre;
+   322→   322→
+   323→   323→  return (
+   324→   324→    <div className="pb-16">
+   325→   325→      {back}
+   326→   326→
+   327→   327→      {/* ================= 1 · HERO ARTWORK CARD =================
+   328→   328→          The official logo lives INSIDE the card's bottom scrim. No chips,
+   329→   329→          ratings, text or buttons float over the artwork anymore. */}
+   330→   330→      <section className="px-4 pt-[72px] md:px-8 md:pt-20" aria-label={meta.name}>
+   331→   331→        <div className="harbor-pop-in relative mx-auto aspect-[16/11] max-w-5xl overflow-hidden rounded-[28px] border border-edge-soft bg-raised shadow-[0_36px_90px_-36px_rgba(0,0,0,0.9)] sm:aspect-[16/8] md:aspect-[21/8] md:rounded-[36px]">
+   332→   332→          <PosterImage
+   333→   333→            src={tmdb.backdrop ?? meta.background ?? meta.poster}
+   334→   334→            alt={meta.name}
+   335→   335→            className="absolute inset-0"
+   336→   336→            landscape
+   337→   337→          />
+   338→   338→          {/* Bottom scrim — legibility bed for the embedded logo */}
+   339→   339→          <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
+   340→   340→          {/* Embedded official title logo (sr-only h1 keeps document outline) */}
+   341→   341→          <div className="absolute inset-x-0 bottom-0 flex items-end justify-center px-5 pb-5 md:pb-9">
+   342→   342→            {tmdb.logo || meta.logo ? (
+   343→   343→              <>
+   344→   344→                <h1 className="sr-only">{meta.name}</h1>
+   345→   345→                <img
+   346→   346→                  src={tmdb.logo ?? meta.logo}
+   347→   347→                  alt=""
+   348→   348→                  className="max-h-14 w-auto max-w-[78%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.95)] transition-transform duration-500 sm:max-h-16 md:max-h-24"
+   349→   349→                  loading="lazy"
+   350→   350→                />
+   351→   351→              </>
+   352→   352→            ) : (
+   353→   353→              <h1 className="font-display text-center text-3xl font-bold tracking-tight text-white drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)] md:text-5xl">
+   354→   354→                {meta.name}
+   355→   355→              </h1>
+   356→   356→            )}
+   357→   357→          </div>
+   358→   358→        </div>
+   359→   359→      </section>
+   360→   360→
+   361→   361→      {/* ============ 2 · SINGLE-LINE METADATA ROW ============
+   362→   362→          One horizontal, non-wrapping line directly below the card.
+   363→   363→          Scrolls horizontally on the narrowest screens — never wraps. */}
+   364→   364→      {hasAnyMeta && (
+   365→   365→        <div className="mx-auto mt-4 max-w-3xl">
+   366→   366→          {/* Outer scroller + inner w-max row: centers when it fits, scrolls
+   367→   367→              from the true start edge when it doesn't (no justify-center
+   368→   368→              scroll-trap). Single line — never wraps. */}
+   369→   369→          <div className="no-scrollbar overflow-x-auto">
+   370→   370→            <div className="flex w-max min-w-full flex-nowrap items-center justify-center gap-2.5 px-4 py-0.5 md:px-6">
+   371→   371→              {imdbScore && (
+   372→   372→                <span
+   373→   373→                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-2.5 py-1 text-[13px] font-bold text-amber-300 tabular-nums"
+   374→   374→                  title="IMDb"
+   375→   375→                >
+   376→   376→                  <Star className="h-3.5 w-3.5 fill-amber-300" aria-hidden />
+   377→   377→                  {imdbScore}
+   378→   378→                </span>
+   379→   379→              )}
+   380→   380→              {imdbScore && year && <MetaBullet />}
+   381→   381→              {year && (
+   382→   382→                <span className="shrink-0 text-[13px] font-semibold text-ink md:text-sm">
+   383→   383→                  {year}
+   384→   384→                </span>
+   385→   385→              )}
+   386→   386→              {year && runtime && <MetaBullet />}
+   387→   387→              {runtime && (
+   388→   388→                <span
+   389→   389→                  dir="ltr" /* addon runtime strings are latin ("58 min", "1h 52m") — isolate so RTL can't reorder to "min 58" */
+   390→   390→                  className="shrink-0 text-[13px] font-medium text-ink-muted tabular-nums md:text-sm"
+   391→   391→                >
+   392→   392→                  {runtime}
+   393→   393→                </span>
+   394→   394→              )}
+   395→   395→              {runtime && genre && <MetaBullet />}
+   396→   396→              {genre && (
+   397→   397→                <span className="shrink-0 rounded-full border border-edge-soft bg-raised/70 px-2.5 py-1 text-[12px] font-medium text-ink-muted md:text-[13px]">
+   398→   398→                  {genre}
+   399→   399→                </span>
+   400→   400→              )}
+   401→   401→              {tmdb.certification && (
+   402→   402→                <>
+   403→   403→                  <MetaBullet />
+   404→   404→                  <span
+   405→   405→                    className="shrink-0 rounded-[5px] border border-ink-subtle/40 px-1.5 py-px text-[11px] font-black tracking-wide text-ink-muted"
+   406→   406→                    title={tr("contentRating")}
+   407→   407→                  >
+   408→   408→                    {tmdb.certification}
+   409→   409→                  </span>
+   410→   410→                </>
+   411→   411→              )}
+   412→   412→              {meta.addonOrigin && (
+   413→   413→                <>
+   414→   414→                  <MetaBullet />
+   415→   415→                  <span className="shrink-0 text-[12px] text-ink-subtle md:text-[13px]">
+   416→   416→                    {/* tr() without vars returns the raw template (keeps the
+   417→   417→                        {name} placeholder) so RichVia can bidi-isolate the name */}
+   418→   418→                    <RichVia name={meta.addonOrigin.name} template={tr("viaAddon")} />
+   419→   419→                  </span>
+   420→   420→                </>
+   421→   421→              )}
+   422→   422→            </div>
+   423→   423→          </div>
+   424→   424→          {/* Provider rating chips (deep links) — subtle, centered; hidden
+   425→   425→              entirely when ratings are off / no provider data. */}
+   426→   426→          <div className="mt-2 flex justify-center px-4 md:px-6">
+   427→   427→            <RatingsRow
+   428→   428→              type={meta.type}
+   429→   429→              imdbId={/^tt\d+$/.test(meta.id) ? meta.id : undefined}
+   430→   430→              title={meta.name}
+   431→   431→              year={meta.releaseInfo}
+   432→   432→              genres={meta.genres}
+   433→   433→              country={meta.country}
+   434→   434→            />
+   435→   435→          </div>
+   436→   436→        </div>
+   437→   437→      )}
+   438→   438→
+   439→   439→      {/* ================== 3 · SYNOPSIS ================== */}
+   440→   440→      {meta.description && (
+   441→   441→        <p className="mx-auto mt-4 max-w-2xl px-4 text-center text-sm leading-[1.8] text-ink-muted md:px-6 md:text-[15px]">
+   442→   442→          {meta.description}
+   443→   443→        </p>
+   444→   444→      )}
+   445→   445→
+   446→   446→      {/* ========== 4 · CENTERED ACTION CONTROLS + EXPANDABLE MENU ========== */}
+   447→   447→      <div className="mx-auto mt-6 flex items-center justify-center gap-2.5 px-4 md:gap-3">
+   448→   448→        {/* Primary CTA */}
+   449→   449→        {meta.type === "series" && nextVideo && resume > 0 ? (
+   450→   450→          <button
+   451→   451→            type="button"
+   452→   452→            onClick={() => onPlay(nextVideo)}
+   453→   453→            className="md-btn md-btn-filled md-state harbor-tv-focus !h-[52px] !rounded-full !px-5 !text-[15px] shadow-[0_14px_36px_-14px_var(--md-sys-color-primary)] transition-transform hover:scale-[1.03] active:scale-[0.97] sm:!px-7 md:!px-9"
+   454→   454→          >
+   455→   455→            <RotateCcw className="md-btn-icon" aria-hidden />
+   456→   456→            {tr("resumeSE", { s: nextVideo.season ?? 1, e: nextVideo.episode ?? 1 })}
+   457→   457→          </button>
+   458→   458→        ) : (
+   459→   459→          <button
+   460→   460→            type="button"
+   461→   461→            onClick={() => onPlay(nextVideo ?? undefined)}
+   462→   462→            className="md-btn md-btn-filled md-state harbor-tv-focus !h-[52px] !rounded-full !px-6 !text-[15px] shadow-[0_14px_36px_-14px_var(--md-sys-color-primary)] transition-transform hover:scale-[1.03] active:scale-[0.97] sm:!px-8 md:!px-10"
+   463→   463→          >
+   464→   464→            <Play className="md-btn-icon fill-current" aria-hidden />
+   465→   465→            {tr("watchNow")}
+   466→   466→          </button>
+   467→   467→        )}
+   468→   468→
+   469→   469→        {/* Secondary expandable menu (spinner/dropdown button) */}
+   470→   470→        <div ref={menuWrapRef} className="relative">
+   471→   471→          <button
+   472→   472→            type="button"
+   473→   473→            onClick={() => setMenuOpen((v) => !v)}
+   474→   474→            aria-haspopup="menu"
+   475→   475→            aria-expanded={menuOpen}
+   476→   476→            aria-label={tr("moreOptions")}
+   477→   477→            className="harbor-tv-focus flex h-[52px] w-[52px] items-center justify-center rounded-full border border-edge-soft bg-raised/80 text-ink backdrop-blur-md transition-all hover:scale-[1.04] hover:bg-raised active:scale-95 md-state"
+   478→   478→          >
+   479→   479→            <motion.span
+   480→   480→              animate={{ rotate: menuOpen ? 180 : 0 }}
+   481→   481→              transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
+   482→   482→              className="flex"
+   483→   483→            >
+   484→   484→              <ChevronDown className="h-5 w-5" aria-hidden />
+   485→   485→            </motion.span>
+   486→   486→          </button>
+   487→   487→
+   488→   488→          <AnimatePresence>
+   489→   489→            {menuOpen && (
+   490→   490→              <motion.div
+   491→   491→                role="menu"
+   492→   492→                aria-label={tr("moreOptions")}
+   493→   493→                initial={{ opacity: 0, x: "-50%", y: -8, scale: 0.95 }}
+   494→   494→                animate={{ opacity: 1, x: "-50%", y: 0, scale: 1 }}
+   495→   495→                exit={{ opacity: 0, x: "-50%", y: -6, scale: 0.97 }}
+   496→   496→                transition={{ duration: 0.19, ease: [0.2, 0, 0, 1] }}
+   497→   497→                className="absolute top-full left-1/2 z-40 mt-2 w-60 origin-top overflow-hidden rounded-2xl border border-edge-soft bg-elevated/95 shadow-[var(--md-sys-elevation-3)] backdrop-blur-xl"
+   498→   498→              >
+   499→   499→                <ul className="p-1.5">
+   500→   500→                  <li>
+   501→   501→                    <button
+   502→   502→                      type="button"
+   503→   503→                      role="menuitem"
+   504→   504→                      onClick={() => {
+   505→   505→                        toggleWatchlistFromMenu();
+   506→   506→                        setMenuOpen(false);
+   507→   507→                      }}
+   508→   508→                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
+   509→   509→                    >
+   510→   510→                      {inList ? (
+   511→   511→                        <Check className="h-4 w-4 text-accent" aria-hidden />
+   512→   512→                      ) : (
+   513→   513→                        <Plus className="h-4 w-4" aria-hidden />
+   514→   514→                      )}
+   515→   515→                      {inList ? tr("inWatchlistItem") : tr("addToWatchlist")}
+   516→   516→                    </button>
+   517→   517→                  </li>
+   518→   518→                  <li>
+   519→   519→                    <button
+   520→   520→                      type="button"
+   521→   521→                      role="menuitem"
+   522→   522→                      onClick={openStreams}
+   523→   523→                      title={tr("streamsHint")}
+   524→   524→                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
+   525→   525→                    >
+   526→   526→                      <Layers className="h-4 w-4" aria-hidden />
+   527→   527→                      {tr("availableStreams")}
+   528→   528→                    </button>
+   529→   529→                  </li>
+   530→   530→                  <li>
+   531→   531→                    <button
+   532→   532→                      type="button"
+   533→   533→                      role="menuitem"
+   534→   534→                      onClick={onShare}
+   535→   535→                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
+   536→   536→                    >
+   537→   537→                      <Share2 className="h-4 w-4" aria-hidden />
+   538→   538→                      {tr("share")}
+   539→   539→                    </button>
+   540→   540→                  </li>
+   541→   541→                </ul>
+   542→   542→              </motion.div>
+   543→   543→            )}
+   544→   544→          </AnimatePresence>
+   545→   545→        </div>
+   546→   546→
+   547→   547→        {/* Custom user lists — compact circular icon variant (Task 30) */}
+   548→   548→        <AddToListButton
+   549→   549→          variant="icon"
+   550→   550→          item={{
+   551→   551→            id: meta.id,
+   552→   552→            type: meta.type,
+   553→   553→            name: meta.name,
+   554→   554→            poster: meta.poster,
+   555→   555→            releaseInfo: meta.releaseInfo,
+   556→   556→            imdbRating: meta.imdbRating,
+   557→   557→          }}
+   558→   558→        />
+   559→   559→      </div>
+   560→   560→
+   561→   561→      {/* Cast & crew — quiet centered lines under the action row */}
+   562→   562→      {(meta.cast?.length || meta.director?.length) && (
+   563→   563→        <div className="mx-auto mt-8 flex max-w-2xl flex-col items-center gap-2 px-4 text-center md:px-6">
+   564→   564→          {meta.director && meta.director.length > 0 && (
+   565→   565→            <p className="text-[13px] leading-relaxed">
+   566→   566→              <span className="me-2 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+   567→   567→                {tr("director")}
+   568→   568→              </span>
+   569→   569→              <span className="font-medium text-ink">{meta.director.slice(0, 2).join(", ")}</span>
+   570→   570→            </p>
+   571→   571→          )}
+   572→   572→          {meta.cast && meta.cast.length > 0 && (
+   573→   573→            <p className="text-[13px] leading-relaxed">
+   574→   574→              <span className="me-2 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+   575→   575→                {tr("starring")}
+   576→   576→              </span>
+   577→   577→              <span className="font-medium text-ink harbor-clamp-2">{meta.cast.slice(0, 4).join(", ")}</span>
+   578→   578→            </p>
+   579→   579→          )}
+   580→   580→        </div>
+   581→   581→      )}
+   582→   582→
+   583→   583→      {/* Episodes */}
+   584→   584→      {meta.type === "series" && <EpisodeList meta={meta} watched={watched} onPlay={onPlay} />}
+   585→   585→
+   586→   586→      {/* TMDB recommendations (fail-soft — hidden when TMDB is off) */}
+   587→   587→      {tmdb.recommendations.length > 0 && <TmdbRecsRail items={tmdb.recommendations} />}
+   588→   588→
+   589→   589→      {/* More like this — genre-based discovery via the Cinemeta top catalog */}
+   590→   590→      <SimilarRail type={meta.type} genres={meta.genres} currentId={meta.id} />
+   591→   591→
+   592→   592→      {/* Movie: default video behavior — Cinemeta movies have behaviorHints.defaultVideoId or just play id */}
+   593→   593→      {meta.type === "movie" && !meta.genres?.length && (
+   594→   594→        <div className="mx-auto mt-8 max-w-2xl px-4 text-center md:px-6">
+   595→   595→          <p className="text-xs text-ink-subtle">{tr("pressPlayHint")}</p>
+   596→   596→        </div>
+   597→   597→      )}
+   598→   598→    </div>
+   599→   599→  );
+   600→   600→}
+   601→   601→
+   602→   602→/** "via {addon}" with the addon name bidi-isolated (latin token in AR text).
+   603→   603→ *  `template` is the raw localized string still containing {name}. */
+   604→   604→function RichVia({ name, template }: { name: string; template: string }) {
+   605→   605→  const parts = template.split("{name}");
+   606→   606→  return (
+   607→   607→    <>
+   608→   608→      {parts[0]}
+   609→   609→      <bdi>{name}</bdi>
+   610→   610→      {parts[1]}
+   611→   611→    </>
+   612→   612→  );
+   613→   613→}
+   614→   614→
+   615→   615→// ---------- Episode list ----------
+   616→   616→function EpisodeList({
+   617→   617→  meta,
+   618→   618→  watched,
+   619→   619→  onPlay,
+   620→   620→}: {
+   621→   621→  meta: Meta;
+   622→   622→  watched: Set<string>;
+   623→   623→  onPlay: (video: MetaVideo) => void;
+   624→   624→}) {
+   625→   625→  const tr = useT();
+   626→   626→  const videos = useMemo(() => {
+   627→   627→    const vids = [...(meta.videos ?? [])];
+   628→   628→    // group by season
+   629→   629→    return vids;
+   630→   630→  }, [meta.videos]);
+   631→   631→
+   632→   632→  const seasons = useMemo(() => {
+   633→   633→    const set = new Set<number>();
+   634→   634→    for (const v of videos) {
+   635→   635→      if (typeof v.season === "number") set.add(v.season);
+   636→   636→    }
+   637→   637→    return Array.from(set).sort((a, b) => a - b);
+   638→   638→  }, [videos]);
+   639→   639→
+   640→   640→  const [season, setSeason] = useState<number | null>(null);
+   641→   641→  const [sortDesc, setSortDesc] = useState(false);
+   642→   642→
+   643→   643→  // Default to latest season when none selected (render-time derivation, no effect)
+   644→   644→  const effectiveSeason = season ?? (seasons.length > 0 ? seasons[seasons.length - 1] : null);
+   645→   645→
+   646→   646→  const seasonVideos = useMemo(() => {
+   647→   647→    const list = videos.filter((v) => v.season === effectiveSeason);
+   648→   648→    return sortDesc ? [...list].reverse() : list;
+   649→   649→  }, [videos, effectiveSeason, sortDesc]);
+   650→   650→
+   651→   651→  if (videos.length === 0) {
+   652→   652→    return (
+   653→   653→      <div className="mx-auto mt-10 max-w-3xl px-4 text-sm text-ink-subtle md:px-8">
+   654→   654→        {tr("noEpisodes")}
+   655→   655→      </div>
+   656→   656→    );
+   657→   657→  }
+   658→   658→
+   659→   659→  return (
+   660→   660→    <div className="mx-auto mt-12 max-w-3xl px-4 md:px-8">
+   661→   661→      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+   662→   662→        <h2 className="md-title-large text-ink">{tr("episodesTitle")}</h2>
+   663→   663→        <button
+   664→   664→          type="button"
+   665→   665→          onClick={() => setSortDesc((v) => !v)}
+   666→   666→          className="md-chip md-state harbor-tv-focus"
+   667→   667→        >
+   668→   668→          {sortDesc ? tr("newestFirst") : tr("oldestFirst")}
+   669→   669→        </button>
+   670→   670→      </div>
+   671→   671→
+   672→   672→      {/* Season selector chips (horizontally scrollable for long-running shows) */}
+   673→   673→      {seasons.length > 1 && (
+   674→   674→        <div
+   675→   675→          className="no-scrollbar mb-3 flex gap-1.5 overflow-x-auto pb-2"
+   676→   676→          role="group"
+   677→   677→          aria-label={tr("selectSeason")}
+   678→   678→        >
+   679→   679→          {seasons.map((s) => {
+   680→   680→            const active = s === effectiveSeason;
+   681→   681→            return (
+   682→   682→              <button
+   683→   683→                key={s}
+   684→   684→                type="button"
+   685→   685→                onClick={() => setSeason(s)}
+   686→   686→                aria-pressed={active}
+   687→   687→                className={cn(
+   688→   688→                  "md-chip md-state harbor-tv-focus shrink-0",
+   689→   689→                  active && "md-chip-selected",
+   690→   690→                )}
+   691→   691→              >
+   692→   692→                {tr("seasonN", { n: s })}
+   693→   693→              </button>
+   694→   694→            );
+   695→   695→          })}
+   696→   696→        </div>
+   697→   697→      )}
+   698→   698→
+   699→   699→      <div className="harbor-scroll max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
+   700→   700→        {seasonVideos.map((v) => {
+   701→   701→          const isWatched = watched.has(v.id) || watched.has(`${meta.id}:${v.season}:${v.episode}`);
+   702→   702→          return (
+   703→   703→            <button
+   704→   704→              key={v.id}
+   705→   705→              type="button"
+   706→   706→              onClick={() => onPlay(v)}
+   707→   707→              className={cn(
+   708→   708→                "md-state group/ep harbor-tv-focus relative flex w-full items-center gap-4 rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft p-3 text-left",
+   709→   709→                isWatched ? "bg-elevated/40 opacity-60" : "bg-elevated",
+   710→   710→              )}
+   711→   711→            >
+   712→   712→              {/* Accent start bar on hover */}
+   713→   713→              <span
+   714→   714→                aria-hidden
+   715→   715→                className="absolute start-0 top-3 bottom-3 w-[3px] rounded-full bg-accent opacity-0 transition-opacity group-hover/ep:opacity-100"
+   716→   716→              />
+   717→   717→              <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-xl bg-raised md:h-20 md:w-36">
+   718→   718→                <PosterImage src={v.thumb} alt={v.name ?? v.title ?? ""} className="absolute inset-0" landscape />
+   719→   719→                {isWatched && (
+   720→   720→                  <span className="absolute top-1 end-1 flex h-5 w-5 items-center justify-center rounded-full border border-accent/50 bg-accent-soft backdrop-blur-sm">
+   721→   721→                    <Check className="h-3 w-3 text-accent" />
+   722→   722→                  </span>
+   723→   723→                )}
+   724→   724→              </div>
+   725→   725→              <div className="min-w-0 flex-1">
+   726→   726→                {/* dir=auto: latin titles render "E1 Title"; Arabic titles render
+   727→   727→                    RTL with the latin E-prefix bidi-isolated (bdi) */}
+   728→   728→                <p dir="auto" className="harbor-clamp-1 md-title-small text-ink">
+   729→   729→                  <bdi className="me-2 text-ink-subtle">E{v.episode}</bdi>
+   730→   730→                  {v.name ?? v.title ?? tr("episodeN", { n: v.episode ?? 0 })}
+   731→   731→                </p>
+   732→   732→                {v.released && <p className="md-body-small mt-0.5 text-ink-subtle">{new Date(v.released).toLocaleDateString()}</p>}
+   733→   733→                {(v.overview ?? v.description) && (
+   734→   734→                  <p className="md-body-small harbor-clamp-2 mt-1 leading-relaxed text-ink-muted">
+   735→   735→                    {v.overview ?? v.description}
+   736→   736→                  </p>
+   737→   737→                )}
+   738→   738→              </div>
+   739→   739→              <Play className="h-4 w-4 shrink-0 text-accent transition-transform group-hover/ep:scale-110" aria-hidden />
+   740→   740→            </button>
+   741→   741→          );
+   742→   742→        })}
+   743→   743→      </div>
+   744→   744→    </div>
+   745→   745→  );
+   746→   746→}
+   747→   747→
+   748→   748→// ---------- TMDB recommendations rail (Feature: TMDB enrichment) ----------
+   749→   749→
+   750→   750→function TmdbRecsRail({ items }: { items: Meta[] }) {
+   751→   751→  const tr = useT();
+   752→   752→  const push = useNav((s) => s.push);
+   753→   753→  if (items.length === 0) return null;
+   754→   754→  return (
+   755→   755→    <section className="mt-12" aria-label={tr("recommendedByTmdb")}>
+   756→   756→      <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
+   757→   757→        <Layers className="h-5 w-5 text-accent" aria-hidden />
+   758→   758→        <h2 className="md-title-large text-ink">{tr("recommendedTitle")}</h2>
+   759→   759→        <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{tr("viaTmdb")}</span>
+   760→   760→      </div>
+   761→   761→      <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 md:px-8">
+   762→   762→        {items.map((m) => (
+   763→   763→          <div key={`${m.type}-${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
+   764→   764→            <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
+   765→   765→          </div>
+   766→   766→        ))}
+   767→   767→      </div>
+   768→   768→    </section>
+   769→   769→  );
+   770→   770→}
+   771→   771→
+   772→   772→// ---------- More like this rail (genre-based, Cinemeta top catalog) ----------
+   773→   773→
+   774→   774→function SimilarRail({
+   775→   775→  type,
+   776→   776→  genres,
+   777→   777→  currentId,
+   778→   778→}: {
+   779→   779→  type: string;
+   780→   780→  genres?: string[];
+   781→   781→  currentId: string;
+   782→   782→}) {
+   783→   783→  const tr = useT();
+   784→   784→  const push = useNav((s) => s.push);
+   785→   785→  const genre = genres?.find((g) => g && g.trim().length > 0);
+   786→   786→  // Data is keyed by the genre it was fetched for, so a genre change renders a
+   787→   787→  // skeleton without a synchronous setState inside the effect.
+   788→   788→  const [data, setData] = useState<{ genre: string; items: Meta[] } | null>(null);
+   789→   789→
+   790→   790→  useEffect(() => {
+   791→   791→    if (!genre) return;
+   792→   792→    let alive = true;
+   793→   793→    (async () => {
+   794→   794→      try {
+   795→   795→        const res = await fetchCinemetaCatalog(
+   796→   796→          type === "series" ? "series" : "movie",
+   797→   797→          "top",
+   798→   798→          { genre },
+   799→   799→        );
+   800→   800→        if (!alive) return;
+   801→   801→        setData({ genre, items: res.filter((m) => m.id !== currentId).slice(0, 14) });
+   802→   802→      } catch {
+   803→   803→        if (alive) setData({ genre, items: [] });
+   804→   804→      }
+   805→   805→    })();
+   806→   806→    return () => {
+   807→   807→      alive = false;
+   808→   808→    };
+   809→   809→  }, [type, genre, currentId]);
+   810→   810→
+   811→   811→  if (!genre) return null;
+   812→   812→  const items: Meta[] | null = data && data.genre === genre ? data.items : null;
+   813→   813→
+   814→   814→  return (
+   815→   815→    <section className="mt-12" aria-label={tr("moreLikeThis")}>
+   816→   816→      <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
+   817→   817→        <Layers className="h-5 w-5 text-accent" aria-hidden />
+   818→   818→        <h2 className="md-title-large text-ink">{tr("moreLikeThis")}</h2>
+   819→   819→        <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{genre}</span>
+   820→   820→      </div>
+   821→   821→      {items === null ? (
+   822→   822→        <div className="flex gap-3 overflow-hidden px-4 md:px-8" aria-hidden>
+   823→   823→          {Array.from({ length: 8 }).map((_, i) => (
+   824→   824→            <div key={i} className="harbor-skeleton aspect-[2/3] w-[112px] shrink-0 rounded-xl md:w-[136px]" />
+   825→   825→          ))}
+   826→   826→        </div>
+   827→   827→      ) : items.length === 0 ? null : (
+   828→   828→        <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 md:px-8">
+   829→   829→          {items.map((m) => (
+   830→   830→            <div key={`${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
+   831→   831→              <MetaCard
+   832→   832→                meta={m}
+   833→   833→                onOpen={() => push({ kind: "detail", type: m.type || type, id: m.id })}
+   834→   834→              />
+   835→   835→            </div>
+   836→   836→          ))}
+   837→   837→        </div>
+   838→   838→      )}
+   839→   839→    </section>
+   840→   840→  );
+   841→   841→}
+   842→   842→

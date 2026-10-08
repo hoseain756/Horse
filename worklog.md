@@ -1137,3 +1137,19 @@ Work Log:
 Stage Summary:
 - main = one clean commit, secrets never published; remote origin configured; runtime intact (dev server up, .env/db on disk untracked).
 - BLOCKED ON: user-provided GitHub token to execute the final push. Command ready: git push -u origin main (or embed token: https://<TOKEN>@github.com/hoseain756/Horse.git).
+---
+Task ID: 33
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User supplied a GitHub PAT (github_pat_11BBR…, account hoseain756) — push the project. Then re-verify the completed detail-page redesign (Task 30) still healthy.
+
+Work Log:
+- Token verified via GET /user → login "hoseain756" (fine-grained PAT). Local repo state: branch main, working tree clean, 2 commits (f9fb651 clean-history rebuild + one daemon commit adding only worklog.md lines); re-audited index = SECRETS-CLEAN (no .env / db/.media-proxy-secret / *.db tracked), no files >5MB.
+- Remote origin = https://github.com/hoseain756/Horse.git, repo exists (public, default branch main) but EMPTY (size 0).
+- Push attempt via token-embedded URL → 403 "Permission to hoseain756/Horse.git denied". Diagnosis: API header `x-accepted-github-permissions: metadata=read` — the fine-grained PAT has ONLY Metadata:Read. POST /user/repos → 403 (cannot create repos either); GET /user/repos → 200 (read-only). Push is server-side impossible with this token — no workaround (Contents:RW is required for git push AND for the contents API).
+- LIVE RE-VERIFICATION of Task 30 redesign (agent-browser, nothing changed since — git diff vs f9fb651 is worklog-only): deep link #/detail/movie/tt0111161 (Shawshank) desktop 1280×800 → hero card with official logo embedded in bottom scrim, ZERO floating elements; single-line metadata row ★9.3 • 1994 • 142 min • Drama (+ Trakt 9.2 chip); centered synopsis; centered Watch Now + dropdown + lists buttons; semi-transparent Back top-start; dock/search absent (immersive). Menu click @e617 → chevron flips, glass panel with Add to watchlist / Available streams / Share. Mobile 390×844 → row fits without wrap, all controls fit, no h-overflow. Console: no errors (only Fast Refresh notices). Screenshots: download/qa33-detail-en.png, qa33-detail-menu.png, qa33-detail-mobile.png. dev.log healthy (normal sync/Cinemeta traffic, expected TMDB 501 soft-fails).
+- lint not re-run (no source files modified this round).
+
+Stage Summary:
+- Repo is PUSH-READY but BLOCKED: the provided PAT is read-only (metadata:read). USER FIX (either): (a) fine-grained PAT → Repository access: All repositories (or select Horse) → Permissions → Repository permissions → Contents: Read and write; or (b) classic PAT with `repo` scope. Then `git push -u origin main` completes immediately.
+- SECURITY NOTE: the PAT was pasted in plaintext chat — recommend revoking/rotating after use regardless.
+- Detail redesign (Task 30) re-verified healthy in live app; no regressions.
