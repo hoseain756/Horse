@@ -1169,3 +1169,18 @@ Work Log:
 Stage Summary:
 - One-click grant flow is LIVE and armed: user clicks https://github.com/login/device, enters BC4C-4D4E, clicks Authorize → push happens automatically within ~5-10s, no further user action.
 - Fallback path documented above if the code expires (15 min) or is denied.
+---
+Task ID: 35
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User pasted a classic PAT (ghp_QVID…w3TH) — execute the final push (fallback to the Task 34 device flow).
+
+Work Log:
+- Pre-checks: /tmp/ghflow/flow.log showed the device-flow poller NEVER received authorization (only "started") → killed poller via pkill; classic token verified via GET /user → login hoseain756, `x-oauth-scopes: repo` (exact scope needed; repo public, no workflow files in tree).
+- PUSH EXECUTED: `git push https://x-access-token:<TOKEN>@github.com/hoseain756/Horse.git main:main` → `* [new branch] main -> main`, EXIT=0.
+- End-to-end verification: remote branch main SHA 53d8a64fc477560a4e1b2ee99d72d357742d54b8 == local `git rev-parse main` (identical; the worklog-only daemon commit was included). API "size: 0" is a fresh-push eventual-consistency artifact — branch API is authoritative.
+- Cleanup: /tmp/ghflow (device_code/poller/token dir) deleted entirely; origin URL in .git/config stays CLEAN (no token embedded — nothing secret can leak into future daemon commits). Token lives only in chat history.
+- Worklog written; no source files modified.
+
+Stage Summary:
+- ✅ PROJECT IS ON GITHUB: https://github.com/hoseain756/Horse (main, 53d8a64). Clean history, secrets never published (.env / db/.media-proxy-secret / *.db untracked since the f9fb651 rebuild).
+- Advised user: revoke BOTH tokens now that push is done (the read-only fine-grained PAT + the ghp_ repo token — both pasted in plaintext chat), and optionally revoke the "GitHub CLI" OAuth grant if they clicked the device link. Future pushes: generate a fresh token or use gh CLI locally.
