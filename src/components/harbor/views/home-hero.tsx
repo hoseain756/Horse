@@ -52,8 +52,8 @@ const JUMP_MS = 350; // --hero-jump-ms
 const REDUCED_MS = 200; // --hero-reduced-ms
 const JUMP_SHIFT = 22; // --hero-jump-shift (px)
 const CONTENT_DRIFT = 12; // --hero-content-drift (px)
-const IND_REST_SCALE = 0.25; // --hero-ind-rest-scale (7dp dot ÷ 28px bar)
-const IND_REST_OP = 0.4; // --hero-ind-rest-op (inactive bar opacity)
+const IND_DOT = 8; // --hero-ind-dot at --ind-scale 1 (fallback; resolved px measured per gesture)
+const IND_ACTIVE_W = 32; // --hero-ind-active-w fallback (reference: 4× the dot)
 /** Must match the CSS swap point for the portrait/backdrop art layers. */
 const MD_MIN = "(min-width: 600px)";
 /** Hero aspect used for backdrop→portrait crops (height = width × ratio). */
@@ -73,8 +73,6 @@ function readMotionTokens(): void {
   tokenVals.reducedMs = ms("--hero-reduced-ms", REDUCED_MS);
   tokenVals.jumpShift = ms("--hero-jump-shift", JUMP_SHIFT);
   tokenVals.contentDrift = ms("--hero-content-drift", CONTENT_DRIFT);
-  tokenVals.indRestScale = ms("--hero-ind-rest-scale", IND_REST_SCALE);
-  tokenVals.indRestOp = ms("--hero-ind-rest-op", IND_REST_OP);
 }
 const tokenVals: {
   snapMs: number;
@@ -82,16 +80,12 @@ const tokenVals: {
   reducedMs: number;
   jumpShift: number;
   contentDrift: number;
-  indRestScale: number;
-  indRestOp: number;
 } = {
   snapMs: SNAP_MS,
   jumpMs: JUMP_MS,
   reducedMs: REDUCED_MS,
   jumpShift: JUMP_SHIFT,
   contentDrift: CONTENT_DRIFT,
-  indRestScale: IND_REST_SCALE,
-  indRestOp: IND_REST_OP,
 };
 
 // ---------- session caches ----------
@@ -433,7 +427,10 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const fadeAnimRef = useRef<Animation | null>(null); // settle fade
   const jumpAnimRef = useRef<Animation[]>([]);
   const jumpElsRef = useRef<{ from: HTMLDivElement | null; to: HTMLDivElement | null }>({ from: null, to: null });
-  const dotBarRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const dotBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  /** Resolved indicator slot sizes (px) — measured once per gesture so the
+   *  drag-synced width morph respects the --ind-scale ladder. */
+  const indSizesRef = useRef<{ dot: number; active: number } | null>(null);
   const lingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -671,14 +668,12 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     };
   }, [jump, idleSoon]);
 
-  // Hand the dot bars back to CSS after per-frame drag writes; transitions
-  // resume from the inline value toward the new aria-current state.
+  // Hand the dot slots back to CSS after per-frame drag width writes;
+  // transitions resume from the cleared (aria-current) state toward the new
+  // active slot with zero pop.
   useLayoutEffect(() => {
-    for (const el of dotBarRefs.current) {
-      if (el) {
-        el.style.transform = "";
-        el.style.opacity = "";
-      }
+    for (const el of dotBtnRefs.current) {
+      if (el) el.style.width = "";
     }
   }, [settle, idx]);
 
@@ -742,24 +737,21 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       content.style.opacity = String(Math.max(0, 1 - Math.abs(p)));
       content.style.transform = `translate3d(${-p * tokenVals.contentDrift}px, 0, 0)`;
     }
-    // indicator: morph candidate + current with drag progress (width AND
-    // opacity — the layered look stays seam-free mid-gesture)
+    // indicator: morph the candidate + current SLOT WIDTHS with drag progress
+    // (the row always reserves the pill's room — gaps stay clean mid-gesture)
     const n = totalRef.current;
     if (n > 1) {
       const step = x * dirRef.current < 0 ? 1 : -1;
       const prog = Math.min(1, Math.abs(p));
       const cand = ((((idxRef.current + step) % n) + n) % n) % n;
-      const candEl = dotBarRefs.current[cand];
-      const curEl = dotBarRefs.current[idxRef.current];
-      const rs = tokenVals.indRestScale;
-      const ro = tokenVals.indRestOp;
-      if (candEl) {
-        candEl.style.transform = `scaleX(${rs + (1 - rs) * prog})`;
-        candEl.style.opacity = String(ro + (1 - ro) * prog);
+      const candBtn = dotBtnRefs.current[cand];
+      const curBtn = dotBtnRefs.current[idxRef.current];
+      const sizes = indSizesRef.current;
+      if (candBtn && sizes) {
+        candBtn.style.width = `${sizes.dot + (sizes.active - sizes.dot) * prog}px`;
       }
-      if (curEl && curEl !== candEl) {
-        curEl.style.transform = `scaleX(${1 - (1 - rs) * prog})`;
-        curEl.style.opacity = String(1 - (1 - ro) * prog);
+      if (curBtn && curBtn !== candBtn && sizes) {
+        curBtn.style.width = `${sizes.active - (sizes.active - sizes.dot) * prog}px`;
       }
     }
   }, []);
@@ -789,6 +781,18 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     fadeAnimRef.current = null;
     const content = contentRef.current;
     if (content) content.style.opacity = getComputedStyle(content).opacity;
+    // resolve indicator slot sizes for this gesture (min across non-current
+    // buttons — immune to a hover-swelled button)
+    {
+      const restWidths = dotBtnRefs.current
+        .map((b, i) => (b && i !== idxRef.current ? parseFloat(getComputedStyle(b).width) : Infinity))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      const curBtn = dotBtnRefs.current[idxRef.current];
+      const activeW = curBtn ? parseFloat(getComputedStyle(curBtn).width) : NaN;
+      const dot = restWidths.length ? Math.min(...restWidths) : IND_DOT;
+      const active = Number.isFinite(activeW) && activeW >= dot ? activeW : IND_ACTIVE_W;
+      indSizesRef.current = { dot, active };
+    }
     setSettle(0);
     wRef.current = track.clientWidth;
     try {
@@ -1134,18 +1138,15 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
               <button
                 key={s.meta.id}
                 type="button"
+                ref={(el) => {
+                  dotBtnRefs.current[i] = el;
+                }}
                 aria-label={goToSlideLabel(i + 1, lang)}
                 aria-current={i === currentTarget}
                 onClick={() => goTo(i)}
                 className="home-hero-dot-btn harbor-tv-focus"
               >
-                <span
-                  ref={(el) => {
-                    dotBarRefs.current[i] = el;
-                  }}
-                  className="home-hero-dot-bar"
-                  aria-hidden
-                />
+                <span className="home-hero-dot-bar" aria-hidden />
               </button>
             ))}
             {/* WCAG 2.2.2 pause mechanism: visually hidden (reference design
