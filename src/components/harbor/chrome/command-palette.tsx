@@ -2,7 +2,8 @@
 
 // Harbor Web — VS Code-style command palette (Round 8; Round 9 added remote
 // content search: Cinemeta movies/series + installed addon catalogs, plus a
-// "Search everywhere" hand-off to the full search overlay).
+// "Search everywhere" hand-off to the floating search bar — the single
+// search surface).
 // Module-level zustand store so app-shell hotkeys can toggle it without prop drilling.
 // Suppressed while a player overlay is active; always runs-and-closes.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -38,6 +39,7 @@ import {
 import type { Settings } from "@/lib/harbor/settings";
 import { searchCinemeta, searchAddonCatalogs } from "@/lib/harbor/api";
 import type { Meta } from "@/lib/harbor/types";
+import { focusFloatingSearch } from "./floating-search";
 import { NAV_ITEMS, navItemsFor, navLabel } from "./nav-items";
 import { getWatchlist, getCwCards, getHistory } from "@/lib/harbor/cw";
 import { THEME_PRESETS } from "@/lib/harbor/themes";
@@ -63,8 +65,6 @@ export const useCommandPalette = create<CommandPaletteState>((set, get) => ({
   open: false,
   openPalette: () => {
     if (playerOverlayActive()) return; // never surface the palette over playback
-    // Avoid double overlays: the existing "/" hotkey also opens the SearchOverlay.
-    useNav.getState().setSearchOpen(false);
     set({ open: true });
   },
   close: () => set({ open: false }),
@@ -277,7 +277,8 @@ function buildActionItems(settings: Settings, canInstall: boolean): PaletteItem[
       keywords: "find movies shows search ai titles",
       action: { t: "action", id: "search" },
       run: () => {
-        useNav.getState().setSearchOpen(true);
+        // Single search surface: focus the floating glass bar.
+        focusFloatingSearch();
       },
     },
   ];
@@ -608,7 +609,7 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
   }, [query, pool, recents, settings, canInstall, remoteResults, libraryKeys]);
 
   // Round 9: when a >= 2-char query matched nothing locally or remotely and
-  // that search has finished, offer a hand-off to the full search overlay
+  // that search has finished, offer a hand-off to the floating search bar
   // instead of a dead end (replaces the "No matches" block).
   const searchEverywhereItem = useMemo<PaletteItem | null>(() => {
     const q = query.trim();
@@ -622,10 +623,10 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
       accent: true,
       kbd: "↵",
       // Order matters (runItem closes the palette before run()): dispatch
-      // stores the pending prefill, THEN the overlay opens and consumes it.
+      // stores the pending prefill, THEN focus lands on the bar and consumes it.
       run: () => {
         window.dispatchEvent(new CustomEvent("harbor:prefill-search", { detail: q }));
-        useNav.getState().setSearchOpen(true);
+        focusFloatingSearch();
       },
     };
   }, [query, searching, doneQuery, itemsBase]);

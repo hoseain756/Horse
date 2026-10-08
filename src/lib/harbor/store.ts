@@ -28,8 +28,7 @@ export type View =
   | "library"
   | "addons"
   | "wrapped"
-  | "settings"
-  | "search";
+  | "settings";
 
 export type Frame =
   | { kind: "view"; view: View }
@@ -111,12 +110,10 @@ type NavState = {
   stack: Frame[];
   backStack: Frame[];
   forwardStack: Frame[];
-  searchOpen: boolean;
   push: (f: Frame) => void;
   pop: () => void;
   replace: (f: Frame) => void;
   resetTo: (f: Frame) => void;
-  setSearchOpen: (open: boolean) => void;
   top: () => Frame | undefined;
 };
 
@@ -124,7 +121,6 @@ export const useNav = create<NavState>((set, get) => ({
   stack: [{ kind: "view", view: "home" }],
   backStack: [],
   forwardStack: [],
-  searchOpen: false,
   push: (f) => {
     const { stack, backStack } = get();
     set({
@@ -150,7 +146,6 @@ export const useNav = create<NavState>((set, get) => ({
     set({ stack: [...stack.slice(0, -1), f], backStack, forwardStack: [] });
   },
   resetTo: (f) => set({ stack: [f], backStack: [], forwardStack: [] }),
-  setSearchOpen: (open) => set({ searchOpen: open }),
   top: () => {
     const { stack } = get();
     return stack[stack.length - 1];

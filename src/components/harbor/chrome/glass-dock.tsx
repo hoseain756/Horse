@@ -32,7 +32,6 @@ function tabIdForView(view: View): DockTabId {
     case "kids":
       return "kids";
     case "home":
-    case "search":
       return "home";
     default:
       // settings + every Quick Access destination

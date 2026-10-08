@@ -147,9 +147,9 @@ export function UserChip({ variant = "sidebar" }: { variant?: "sidebar" | "setti
           onClick={() => setModalOpen(true)}
           className={cn(
             inline &&
-              "md-state harbor-tv-focus flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-full)] bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] px-3 py-2 md-body-small text-ink-muted hover:!text-ink transition-colors",
+              "glass-surface glass-hover md-state harbor-tv-focus flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-full)] px-3 py-2 md-body-small text-ink-muted hover:!text-ink transition-colors",
             !inline &&
-              "md-state harbor-tv-focus mx-3 mb-3 hidden md:flex items-center gap-2.5 rounded-[var(--md-sys-shape-corner-large)] bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] px-3 py-2.5 md-body-medium text-ink-muted hover:!text-ink transition-colors",
+              "glass-surface glass-hover md-state harbor-tv-focus mx-3 mb-3 hidden md:flex items-center gap-2.5 rounded-[var(--md-sys-shape-corner-large)] px-3 py-2.5 md-body-medium text-ink-muted hover:!text-ink transition-colors",
           )}
         >
           <LogIn className="w-4 h-4 shrink-0" />
@@ -159,7 +159,7 @@ export function UserChip({ variant = "sidebar" }: { variant?: "sidebar" | "setti
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="md-icon-btn md:hidden mx-3 mb-3 !w-12 !h-12 rounded-[var(--md-sys-shape-corner-large)] bg-[var(--md-sys-color-surface-container)] text-ink-muted"
+            className="glass-surface md-icon-btn md:hidden mx-3 mb-3 !w-12 !h-12 rounded-[var(--md-sys-shape-corner-large)] text-ink-muted"
             aria-label="Sign in to Stremio"
           >
             <LogIn className="w-4 h-4" />
@@ -178,7 +178,7 @@ export function UserChip({ variant = "sidebar" }: { variant?: "sidebar" | "setti
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         className={cn(
-          "md-state harbor-tv-focus flex items-center gap-2.5 rounded-[var(--md-sys-shape-corner-large)] bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] px-2.5 py-2 text-start transition-colors",
+          "glass-surface glass-hover md-state harbor-tv-focus flex items-center gap-2.5 rounded-[var(--md-sys-shape-corner-large)] px-2.5 py-2 text-start transition-colors",
           !inline && "w-full",
         )}
         aria-expanded={menuOpen}

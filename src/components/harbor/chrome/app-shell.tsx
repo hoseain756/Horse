@@ -12,7 +12,6 @@ import { useCloudSync, installCloudSyncListeners } from "@/lib/harbor/cloud-sync
 import { usePwa } from "@/lib/harbor/pwa";
 import { GlassDock } from "./glass-dock";
 import { ArabicTextLayer } from "./ar-text-layer";
-import { SearchOverlay } from "./search-overlay";
 import { FloatingSearch, focusFloatingSearch } from "./floating-search";
 import { CommandPalette, useCommandPalette } from "./command-palette";
 import { ShortcutsOverlay, useShortcutsHelp } from "./shortcuts-overlay";
@@ -196,7 +195,8 @@ export function AppShell() {
     document.documentElement.dir = rtl ? "rtl" : "ltr";
   }, [settings.uiLanguage]);
 
-  // Global keyboard: browser back via Backspace/Alt+Left; command palette via Ctrl/Cmd+K and "/"
+  // Global keyboard: browser back via Backspace/Alt+Left; floating search via
+  // Ctrl/Cmd+K and "/"; palette via Ctrl/Cmd+Shift+P; help via "?"
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -399,8 +399,7 @@ export function AppShell() {
       {playerActive && overlayFrame.kind === "player" && (
         <PlayerOverlay payload={overlayFrame.payload} />
       )}
-      <SearchOverlay />
-      {showChrome && <FloatingSearch />}
+      <FloatingSearch />
       <CommandPalette />
       <ShortcutsOverlay />
       {sharedTheme && (

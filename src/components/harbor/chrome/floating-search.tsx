@@ -1,20 +1,24 @@
 "use client";
 
-// Harbor Web — Floating search bar (Feature: always-available search entry)
-// M3 search bar: corner-full glass pill (translucency is Harbor's identity),
-// 48dp mobile / 56dp md+ idle height, on-surface-variant leading icon, .md-icon-btn
-// trailing clear (28dp), dropdown = M3 search results view (surface-container,
-// corner-large→extra-large, elevation-3, .md-state rows).
-// Fixed top-center glassmorphism bar with instant grouped results.
-//  - "/" or Ctrl/Cmd+K focus it (see app-shell), Esc closes the dropdown.
-//  - Idle: compact glass pill; focus: expands smoothly (width transition).
-//  - Dropdown: debounced searches (Cinemeta + installed addons; TMDB multi-search
-//    and People group join automatically once tmdbEnabled), recents, trending.
-//  - Full keyboard navigation (↑/↓/Enter), ARIA combobox/listbox semantics,
-//    RTL-safe (logical properties + centered anchor), reduced-motion aware,
-//    backdrop-filter fallback via .harbor-glass-fallback.
+// Harbor Web — Floating search bar (THE single search surface)
+// M3 search bar in the shared glass language: corner-full glass pill (same
+// --glass-* recipe as the bottom nav), 48dp mobile trigger / 56dp md+ idle
+// height, .md-icon-btn trailing clear (28dp), results view = glass card.
+//  - "/" or Ctrl/Cmd+K focus it (see app-shell); Esc closes. One search
+//    component, one entry point per platform — there is no other search UI.
+//  - Desktop (md+): docked centered glass bar with an instant grouped
+//    dropdown (movies / series / go-to / people / addons, recents, trending),
+//    full keyboard navigation (↑/↓/Enter), ARIA combobox/listbox semantics.
+//  - Phones (<md): the 48dp glass icon expands THIS bar into a full-screen
+//    glass sheet with the same grouped results (mobile face of the same node).
+//  - Command palette hands its query off via the "harbor:prefill-search"
+//    event; this bar consumes it (the old full-screen overlay is removed).
+//  - Debounced searches (Cinemeta + installed addons; TMDB multi-search and
+//    People group join automatically once tmdbEnabled), RTL-safe (logical
+//    properties + centered anchor), reduced-motion aware, backdrop-filter
+//    fallback via the shared .fs-results media rules.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Clock, Loader2, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowRight, Clock, Loader2, Search, TrendingUp, X } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { installedAddons } from "@/lib/harbor/store";
 import { HUB_ENTRIES, hubLabel, hubDesc, type HubEntry } from "./nav-items";
@@ -40,7 +44,7 @@ export function focusFloatingSearch() {
   window.dispatchEvent(new CustomEvent("harbor:focus-floating-search"));
 }
 
-export function readRecents(): string[] {
+function readRecents(): string[] {
   if (typeof window === "undefined") return [];
   try {
     const arr = JSON.parse(window.localStorage.getItem(RECENTS_KEY) ?? "[]") as unknown;
@@ -50,7 +54,7 @@ export function readRecents(): string[] {
   }
 }
 
-export function writeRecent(q: string) {
+function writeRecent(q: string) {
   if (typeof window === "undefined") return;
   const trimmed = q.trim();
   if (!trimmed) return;
@@ -66,14 +70,12 @@ export function writeRecent(q: string) {
 type FlatRow =
   | { kind: "meta"; id: string; meta: Meta; group: string }
   | { kind: "person"; id: string; name: string; sub?: string | null; img?: string | null; url?: string }
-  | { kind: "action"; id: string; action: "ai" | "see-all" }
   | { kind: "recent"; id: string; query: string }
   | { kind: "destination"; id: string; entry: HubEntry };
 
 /** Quick Access destinations matching the query (EN + Arabic labels/keywords).
- *  Second way to reach the pages moved from the sidebar into Settings.
- *  Exported for the full-screen SearchOverlay (round-22 parity). */
-export function matchingDestinations(q: string, lang: string): HubEntry[] {
+ *  Second way to reach the pages moved from the sidebar into Settings. */
+function matchingDestinations(q: string, lang: string): HubEntry[] {
   const needle = q.trim().toLowerCase();
   if (needle.length < 2) return [];
   const ar = /^ar(-|_|$)/i.test(lang);
@@ -86,8 +88,20 @@ export function matchingDestinations(q: string, lang: string): HubEntry[] {
 
 export function FloatingSearch() {
   const push = useNav((s) => s.push);
-  const openFullSearch = useNav((s) => s.setSearchOpen);
+  const stack = useNav((s) => s.stack);
   const uiLanguage = useSettings((s) => s.settings.uiLanguage);
+
+  // Immersive surfaces (title detail / picker / player) hide the idle bar —
+  // mirroring app-shell's showChrome — but an ALREADY-OPEN search stays up so
+  // the "/" hotkey still reaches the single search surface from anywhere.
+  const suppressed = useMemo(() => {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const f = stack[i];
+      if (f.kind === "player" || f.kind === "picker" || f.kind === "detail") return true;
+      return false;
+    }
+    return false;
+  }, [stack]);
 
   const [expanded, setExpanded] = useState(false);
   const [hidden, setHidden] = useState(false); // scroll-direction visibility
@@ -103,16 +117,35 @@ export function FloatingSearch() {
   const runToken = useRef(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null); // md+ bar input
+  const mobileInputRef = useRef<HTMLInputElement>(null); // mobile sheet input
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Focus bridge + outside click + Esc handled here
+  // Focus whichever input is on its active face (desktop bar / mobile sheet).
+  const focusActiveInput = useCallback(() => {
+    const desktop = window.matchMedia("(min-width: 768px)").matches;
+    (desktop ? inputRef : mobileInputRef).current?.focus();
+  }, []);
+
+  // Expand + reveal + focus — shared by the hotkey bridge, the phone trigger
+  // and the palette hand-off (one entry, same behavior everywhere).
+  const expandAndFocus = useCallback(() => {
+    setExpanded(true);
+    setHidden(false); // hotkey reveal: never focus an off-screen bar
+    setTimeout(() => setRecents(readRecents()), 0);
+    setTimeout(() => focusActiveInput(), 20);
+  }, [focusActiveInput]);
+
+  // Focus bridge + palette prefill hand-off + outside click (desktop).
   useEffect(() => {
-    const onFocus = () => {
-      setExpanded(true);
-      setHidden(false); // hotkey reveal: never focus an off-screen bar
-      setRecents(readRecents());
-      setTimeout(() => inputRef.current?.focus(), 20);
+    const onFocus = () => expandAndFocus();
+    const onPrefill = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail !== "string") return;
+      const q = detail.trim().slice(0, 100);
+      if (!q) return;
+      setQuery(q);
+      expandAndFocus();
     };
     const onPointer = (e: MouseEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) {
@@ -121,12 +154,30 @@ export function FloatingSearch() {
       }
     };
     window.addEventListener("harbor:focus-floating-search", onFocus);
+    window.addEventListener("harbor:prefill-search", onPrefill);
     document.addEventListener("mousedown", onPointer);
     return () => {
       window.removeEventListener("harbor:focus-floating-search", onFocus);
+      window.removeEventListener("harbor:prefill-search", onPrefill);
       document.removeEventListener("mousedown", onPointer);
     };
-  }, []);
+  }, [expandAndFocus]);
+
+  // Mobile full-screen face: lock body scroll while the sheet is open (narrow
+  // viewports only — the desktop dropdown never modally covers the page).
+  useEffect(() => {
+    if (!expanded) return;
+    const mq = window.matchMedia("(max-width: 767.98px)");
+    const apply = () => {
+      document.body.style.overflow = mq.matches ? "hidden" : "";
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      document.body.style.overflow = "";
+    };
+  }, [expanded]);
 
   // Scroll-direction visibility: scrolling DOWN hides the bar (content first),
   // scrolling UP (or returning near the top) reveals it again. While the bar
@@ -225,26 +276,19 @@ export function FloatingSearch() {
     };
   }, [query, runInstant]);
 
+  const collapse = useCallback(() => {
+    setExpanded(false);
+    setActiveIdx(-1);
+  }, []);
+
   const openMeta = useCallback(
     (m: Meta) => {
       writeRecent(query || m.name);
       setRecents(readRecents());
-      setExpanded(false);
-      setActiveIdx(-1);
+      collapse();
       push({ kind: "detail", type: m.type, id: m.id });
     },
-    [push, query],
-  );
-
-  const openFull = useCallback(
-    (q: string) => {
-      writeRecent(q);
-      setExpanded(false);
-      setActiveIdx(-1);
-      window.dispatchEvent(new CustomEvent("harbor:prefill-search", { detail: q }));
-      openFullSearch(true);
-    },
-    [openFullSearch],
+    [push, query, collapse],
   );
 
   // Flatten the dropdown for keyboard navigation
@@ -261,7 +305,6 @@ export function FloatingSearch() {
     for (const e of matchingDestinations(q, uiLanguage)) out.push({ kind: "destination", id: `dest:${e.id}`, entry: e });
     for (const m of people) out.push({ kind: "person", id: `p:${m.id}`, name: m.name, sub: m.known_for_department, img: m.profile_path, url: m.url });
     for (const m of addonHits.slice(0, MAX_PER_GROUP)) out.push({ kind: "meta", id: `a:${m.id}`, meta: m, group: "From your addons" });
-    if (q.length >= 2) out.push({ kind: "action", id: "see-all", action: "see-all" });
     return out;
   }, [query, movies, series, addonHits, people, recents, trending, uiLanguage]);
 
@@ -280,17 +323,16 @@ export function FloatingSearch() {
       if (row?.kind === "meta") openMeta(row.meta);
       else if (row?.kind === "recent") {
         setQuery(row.query);
-        inputRef.current?.focus();
+        focusActiveInput();
       } else if (row?.kind === "destination") {
-        setExpanded(false);
-        setActiveIdx(-1);
+        collapse();
         push({ kind: "view", view: row.entry.view });
-      } else if (row?.kind === "action" && row.action === "see-all") {
-        openFull(query);
       } else if (row?.kind === "person" && row.url) {
         window.open(row.url, "_blank", "noopener");
       } else if (query.trim()) {
-        openFull(query);
+        // One search surface now: Enter opens the best quick match.
+        const first = rows.find((r): r is Extract<FlatRow, { kind: "meta" }> => r.kind === "meta");
+        if (first) openMeta(first.meta);
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -298,9 +340,10 @@ export function FloatingSearch() {
       if (query) {
         setQuery("");
       } else {
-        setExpanded(false);
-        setActiveIdx(-1);
+        collapse();
+        focusActiveInput();
         inputRef.current?.blur();
+        mobileInputRef.current?.blur();
       }
     }
   };
@@ -316,13 +359,18 @@ export function FloatingSearch() {
   const searching = phase === "searching";
   const showDropdown = expanded;
 
+  // All hooks above; only the idle presentation is suppressed on immersive
+  // surfaces (an open search sheet/bar always renders).
+  if (suppressed && !expanded) return null;
+
   return (
     <div
       ref={wrapRef}
       className={cn(
         // Fixed top. PHONES: 48×48 glass trigger at the top inline-END corner
-        // (over the hero, safe-area offset) that opens the full-screen search
-        // view; md+: docked centered bar (unchanged). z: --z-search-bar map.
+        // (over the hero, safe-area offset) that expands THIS bar into the
+        // full-screen glass search sheet; md+: docked centered bar. z:
+        // --z-search-bar map.
         "fixed z-[var(--z-search-bar)] top-[max(0.75rem,env(safe-area-inset-top))]",
         "end-3 md:end-auto md:left-1/2 md:-translate-x-1/2",
         "w-12 md:w-60",
@@ -335,25 +383,26 @@ export function FloatingSearch() {
       )}
       aria-hidden={hidden || undefined}
     >
-      {/* PHONE TRIGGER — root-cause fix: the old collapsed bar had NO tap
-          handler on <md (input was pointer-events-none + w-0, icon decorative),
-          so tapping it did nothing and search was keyboard-only ("/", Ctrl+K).
-          This real button opens the M3 search view synchronously inside the
-          tap gesture so mobile browsers honor the input focus. */}
+      {/* PHONE TRIGGER — 48dp glass icon (shared glass recipe). Expands this
+          bar into the full-screen glass sheet synchronously inside the tap
+          gesture so mobile browsers honor the input focus. */}
       <button
         type="button"
-        onClick={() => openFullSearch(true)}
-        className="md:hidden md-state harbor-tv-focus flex h-12 w-12 items-center justify-center rounded-full harbor-glass border border-edge-soft shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]"
+        onClick={expandAndFocus}
+        className="md:hidden md-state harbor-tv-focus flex h-12 w-12 items-center justify-center rounded-full glass-surface shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]"
         aria-label="Search"
+        aria-expanded={expanded}
+        aria-haspopup="listbox"
+        aria-controls="harbor-float-search-list"
       >
         <Search className="h-5 w-5 text-ink" aria-hidden />
       </button>
 
-      {/* md+ docked bar (behavior unchanged) */}
+      {/* md+ docked bar — shared glass recipe, same values as the bottom nav */}
       <div
         className={cn(
-          // M3 search bar shape: corner-full. Glass translucency kept (Harbor identity).
-          "harbor-glass hidden md:flex items-center gap-2 rounded-full border border-edge-soft",
+          // M3 search bar shape: corner-full. Shared glass tokens (nav parity).
+          "glass-surface hidden md:flex items-center gap-2 rounded-full",
           "shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]",
           "transition-shadow duration-300",
           expanded && "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.75)]",
@@ -374,7 +423,7 @@ export function FloatingSearch() {
             onFocus={() => {
               setExpanded(true);
               setHidden(false);
-              setRecents(readRecents());
+              setTimeout(() => setRecents(readRecents()), 0);
             }}
             onKeyDown={onInputKeyDown}
             placeholder="Search…"
@@ -387,19 +436,6 @@ export function FloatingSearch() {
             tabIndex={expanded ? 0 : -1}
           />
           {searching && <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" aria-hidden />}
-          {/* AI mode hand-off (full overlay keeps the AI flow) */}
-          <button
-            type="button"
-            tabIndex={expanded ? 0 : -1}
-            onClick={() => openFull(query)}
-            className={cn(
-              "hidden md:flex shrink-0 items-center gap-1 rounded-full border border-edge-soft px-2 py-1 text-[10px] font-semibold text-ink-muted hover:text-accent hover:border-accent/50 transition-colors",
-              !expanded && "opacity-0 pointer-events-none",
-            )}
-            title="AI search: describe what you feel like watching"
-          >
-            <Sparkles className="w-3 h-3" /> AI
-          </button>
           <kbd
             className={cn(
               "harbor-kbd shrink-0 hidden md:inline-flex",
@@ -414,8 +450,7 @@ export function FloatingSearch() {
               type="button"
               onClick={() => {
                 setQuery("");
-                setExpanded(false);
-                setActiveIdx(-1);
+                collapse();
               }}
               className="md-state md-icon-btn shrink-0 w-7! h-7!"
               aria-label="Clear search"
@@ -426,7 +461,9 @@ export function FloatingSearch() {
         </div>
       </div>
 
-      {/* Dropdown (md+ only — phones use the full-screen search view) */}
+      {/* Results — ONE node, two faces (no second search UI): md+ = anchored
+          glass dropdown card (M3 results view); phones = full-screen glass
+          sheet with its own header. Shared rows/keyboard nav/ARIA below. */}
       {showDropdown && (
         <div
           id="harbor-float-search-list"
@@ -434,13 +471,43 @@ export function FloatingSearch() {
           aria-label="Search suggestions"
           ref={listRef}
           className={cn(
-            // M3 search results view: surface-container, corner-large → extra-large on md+, elevation-3
-            "absolute top-[calc(100%+8px)] inset-x-0 overflow-hidden harbor-pop-in hidden md:block",
-            "bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-corner-large)] md:rounded-[var(--md-sys-shape-corner-extra-large)]",
-            "shadow-[var(--md-sys-elevation-3)]",
+            "harbor-pop-in flex flex-col overflow-hidden fs-results",
+            // Mobile: full-screen sheet over the page.
+            "fixed inset-0 z-[var(--z-search-bar)]",
+            // md+: anchored dropdown under the bar (glass card).
+            "md:absolute md:inset-auto md:top-[calc(100%+8px)] md:inset-x-0 md:z-auto md:block md:rounded-[var(--md-sys-shape-corner-extra-large)] md:shadow-[var(--md-sys-elevation-3)]",
           )}
         >
-          <div className="max-h-[min(58vh,26rem)] overflow-y-auto harbor-scroll overscroll-contain p-1.5">
+          {/* Mobile sheet header: glass pill with input + close (md-hidden) */}
+          <div className="md:hidden shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+            <div className="glass-surface flex items-center gap-2 rounded-full h-12 px-3 shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]">
+              <Search className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
+              <input
+                ref={mobileInputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onInputKeyDown}
+                placeholder="Search…"
+                aria-label="Search movies, series, people and addons"
+                aria-autocomplete="list"
+                aria-controls="harbor-float-search-list"
+                className="min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted outline-none"
+              />
+              {searching && (
+                <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" aria-hidden />
+              )}
+              <button
+                type="button"
+                onClick={collapse}
+                className="md-state md-icon-btn shrink-0 w-7! h-7!"
+                aria-label="Close search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto harbor-scroll overscroll-contain md:max-h-[min(58vh,26rem)] md:flex-none p-1.5">
             {phase === "error" && query.trim().length >= 2 && (
               <p className="px-3 py-3 text-xs text-danger">
                 Search failed — check your connection and try again.
@@ -452,7 +519,7 @@ export function FloatingSearch() {
               <>
                 {recents.length > 0 && (
                   <FloatingGroup label="Recent">
-                    {recents.map((r, i) => {
+                    {recents.map((r) => {
                       const idx = rows.findIndex((row) => row.id === `recent:${r}`);
                       return (
                         <RowShell
@@ -462,7 +529,7 @@ export function FloatingSearch() {
                           onHover={() => setActiveIdx(idx)}
                           onClick={() => {
                             setQuery(r);
-                            inputRef.current?.focus();
+                            focusActiveInput();
                           }}
                           className="rounded-full"
                         >
@@ -528,8 +595,7 @@ export function FloatingSearch() {
                             active={activeIdx === idx}
                             onHover={() => setActiveIdx(idx)}
                             onClick={() => {
-                              setExpanded(false);
-                              setActiveIdx(-1);
+                              collapse();
                               push({ kind: "view", view: row.entry.view });
                             }}
                           >
@@ -572,24 +638,8 @@ export function FloatingSearch() {
                 <ResultGroup label="From your addons" metas={addonHits} rows={rows} activeIdx={activeIdx} setActiveIdx={setActiveIdx} onOpen={openMeta} />
                 {!hasResults && phase !== "searching" && (
                   <p className="px-3 py-4 text-xs text-ink-subtle text-center">
-                    No quick matches — press Enter for full results.
+                    No quick matches — try a different query.
                   </p>
-                )}
-                {/* See all results row */}
-                {rows.find((r) => r.id === "see-all") && (
-                  <RowShell
-                    id={`fs-opt-${rows.findIndex((r) => r.id === "see-all")}`}
-                    active={activeIdx === rows.findIndex((r) => r.id === "see-all")}
-                    onHover={() => setActiveIdx(rows.findIndex((r) => r.id === "see-all"))}
-                    onClick={() => openFull(query)}
-                    className="mt-1 border-t border-edge-soft rounded-t-none"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5 text-accent" aria-hidden />
-                    <span className="text-xs font-semibold text-ink">
-                      See all results for “{query.trim()}”
-                    </span>
-                    <span className="ms-auto text-[10px] text-ink-subtle hidden md:inline">Enter</span>
-                  </RowShell>
                 )}
               </>
             )}

@@ -348,7 +348,13 @@ body {
   }
 }
 
-/* Common buttons (corner-full, label-large, 40dp, state layers).
+/* Common buttons — GLASS language (shared --glass-* tokens, see "Shared glass
+   design language"). Every M3 control is a glass pill: translucent fill + 1px
+   light stroke; primary actions tint the same recipe with the theme accent,
+   destructive ones with error. Per the perf rule buttons NEVER carry their own
+   backdrop-filter — the glass look is fill+stroke, and the recipe's blur is
+   reserved for large surfaces (dock, search bar, dialogs). Sizes, labels,
+   icons and state-layer machinery are unchanged.
    BUGFIX (shared): every variant class below ALSO carries the base layout
    declarations. Historically variants only painted colors, so any button that
    used `md-btn-filled` without `md-btn` rendered as a square UA rectangle with
@@ -375,53 +381,122 @@ body {
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
   white-space: nowrap;
   cursor: pointer;
-  border: none;
-  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+  /* Glass stroke slot: variants recolor it; the base keeps geometry identical. */
+  border: 1px solid transparent;
+  transition:
+    transform 150ms var(--glass-ease),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
+/* Nav parity states: subtle scale on press, visible focus ring, dimmed when
+   disabled (same values the .md-state machinery and the dock use). */
+.md-btn:active,
+.md-btn-filled:active,
+.md-btn-tonal:active,
+.md-btn-elevated:active,
+.md-btn-outlined:active,
+.md-btn-text:active,
+.md-btn-danger:active {
+  transform: scale(var(--glass-press-scale));
+}
+.md-btn:focus-visible,
+.md-btn-filled:focus-visible,
+.md-btn-tonal:focus-visible,
+.md-btn-elevated:focus-visible,
+.md-btn-outlined:focus-visible,
+.md-btn-text:focus-visible,
+.md-btn-danger:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+.md-btn:disabled,
+.md-btn-filled:disabled,
+.md-btn-tonal:disabled,
+.md-btn-elevated:disabled,
+.md-btn-outlined:disabled,
+.md-btn-text:disabled,
+.md-btn-danger:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* Primary action: glass tinted with the theme accent (readable, clearly the
+   main action). Hover = the same tint raised a step, no heavy shadow. */
 .md-btn-filled {
-  background: var(--md-sys-color-primary);
+  background: var(--glass-accent-fill);
+  border-color: var(--glass-accent-border);
   color: var(--md-sys-color-on-primary);
 }
 .md-btn-filled:hover {
-  box-shadow: var(--md-sys-elevation-1);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 94%, transparent);
 }
+
+/* Secondary/tonal: neutral glass (translucent fill + light stroke); the
+   on-secondary-container label keeps the variant's identity. */
 .md-btn-tonal {
-  background: var(--md-sys-color-secondary-container);
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
   color: var(--md-sys-color-on-secondary-container);
 }
+.md-btn-tonal:hover {
+  background: var(--glass-active-fill);
+}
+
+/* Elevated: flattened to neutral glass (nav language has no heavy shadow). */
 .md-btn-elevated {
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
   color: var(--md-sys-color-primary);
-  box-shadow: var(--md-sys-elevation-1);
 }
 .md-btn-elevated:hover {
-  box-shadow: var(--md-sys-elevation-2);
+  background: var(--glass-active-fill);
 }
+
+/* Outlined: neutral glass + the shared light stroke (was outline color). */
 .md-btn-outlined {
-  background: transparent;
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
   color: var(--md-sys-color-primary);
-  border: 1px solid var(--md-sys-color-outline);
 }
+.md-btn-outlined:hover {
+  background: var(--glass-active-fill);
+}
+
+/* Text: the softest glass — faint fill, no stroke, primary label. */
 .md-btn-text {
-  background: transparent;
+  background: var(--glass-fill-soft);
+  border-color: transparent;
   color: var(--md-sys-color-primary);
   padding: 0 0.75rem;
+}
+.md-btn-text:hover {
+  background: var(--glass-fill);
 }
 /* Text buttons keep their compact padding even standalone (no base class). */
 button.md-btn-text:not(.md-btn) {
   height: 2.25rem;
 }
+
+/* Destructive: clear error tint on the same glass recipe. */
 .md-btn-danger {
-  background: var(--md-sys-color-error);
+  background: var(--glass-danger-fill);
+  border-color: var(--glass-danger-border);
   color: var(--md-sys-color-on-error);
 }
+.md-btn-danger:hover {
+  background: color-mix(in srgb, var(--md-sys-color-error) 94%, transparent);
+}
+
 .md-btn .md-btn-icon {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
 }
 
-/* Icon buttons (40dp pill hit area ≥48 with padding by callers) */
+/* Icon buttons (40dp pill hit area ≥48 with padding by callers) — circular
+   glass. Nested inside glass/opaque surfaces the stroke drops away and only a
+   faint fill remains (matches the dock's active-pill nesting language). */
 .md-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -429,26 +504,61 @@ button.md-btn-text:not(.md-btn) {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: var(--md-sys-shape-corner-full);
-  border: none;
-  background: transparent;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill-soft);
   color: var(--md-sys-color-on-surface-variant);
   cursor: pointer;
+  transition:
+    transform 150ms var(--glass-ease),
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.md-dialog .md-icon-btn,
+.md-sheet .md-icon-btn,
+.md-snackbar .md-icon-btn,
+.glass-dock .md-icon-btn,
+.glass-surface .md-icon-btn {
+  background: var(--glass-fill-soft);
+  border-color: transparent;
+}
+.md-icon-btn:active,
+.md-icon-btn-filled:active,
+.md-icon-btn-tonal:active,
+.md-icon-btn-outlined:active {
+  transform: scale(var(--glass-press-scale));
+}
+.md-icon-btn:focus-visible,
+.md-icon-btn-filled:focus-visible,
+.md-icon-btn-tonal:focus-visible,
+.md-icon-btn-outlined:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+.md-icon-btn:disabled,
+.md-icon-btn-filled:disabled,
+.md-icon-btn-tonal:disabled,
+.md-icon-btn-outlined:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 .md-icon-btn-filled {
-  background: var(--md-sys-color-primary);
+  background: var(--glass-accent-fill);
+  border-color: var(--glass-accent-border);
   color: var(--md-sys-color-on-primary);
 }
 .md-icon-btn-tonal {
-  background: var(--md-sys-color-secondary-container);
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
   color: var(--md-sys-color-on-secondary-container);
 }
 .md-icon-btn-outlined {
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid var(--glass-border);
   color: var(--md-sys-color-primary);
-  background: transparent;
+  background: var(--glass-fill);
 }
 
-/* FAB (56dp, corner-large, primary-container) + extended FAB */
+/* FAB (56dp, corner-large, accent-tinted glass) + extended FAB. The M3
+   elevation stays (FABs float over rich content); fill/border are glass. */
 .md-fab {
   display: inline-flex;
   align-items: center;
@@ -458,18 +568,32 @@ button.md-btn-text:not(.md-btn) {
   height: 3.5rem;
   padding: 0 1rem;
   border-radius: var(--md-sys-shape-corner-large);
-  background: var(--md-sys-color-primary-container);
+  background: var(--glass-fab-fill);
   color: var(--md-sys-color-on-primary-container);
+  border: 1px solid var(--glass-border);
   box-shadow: var(--md-sys-elevation-3);
-  border: none;
   cursor: pointer;
-  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+  transition:
+    transform 150ms var(--glass-ease),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 .md-fab:hover {
   box-shadow: var(--md-sys-elevation-4);
 }
+.md-fab:active {
+  transform: scale(var(--glass-press-scale));
+}
+.md-fab:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+.md-fab:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
 
-/* Chips (assist/filter/suggestion — 32dp pill, outline, label-large) */
+/* Chips (assist/filter/suggestion — 32dp pill, glass, label-large). Selected
+   state = the nav's active-pill fill + primary label (toggle/segmented). */
 .md-chip {
   display: inline-flex;
   align-items: center;
@@ -477,19 +601,34 @@ button.md-btn-text:not(.md-btn) {
   height: 2rem;
   padding: 0 0.75rem;
   border-radius: var(--md-sys-shape-corner-full);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  background: transparent;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill-soft);
   color: var(--md-sys-color-on-surface-variant);
   font-family: var(--font-sans-var);
   font-size: var(--md-sys-typescale-label-large-size);
   font-weight: var(--md-sys-typescale-label-large-weight);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    transform 150ms var(--glass-ease),
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.md-chip:active {
+  transform: scale(var(--glass-press-scale));
+}
+.md-chip:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+.md-chip:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 .md-chip-selected {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-  border-color: transparent;
+  background: var(--glass-active-fill);
+  color: var(--md-sys-color-primary);
+  border-color: var(--glass-border);
 }
 
 /* Cards: filled / elevated / outlined (corner-medium) */
@@ -1018,28 +1157,115 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
   border: 1px solid color-mix(in oklab, var(--color-accent-var) 30%, transparent);
 }
 
-/* ============ Floating search glass (Feature: floating search bar) ============ */
-/* Theme-aware glassmorphism: translucent canvas + blur + saturation boost.
-   @supports fallback: without backdrop-filter we raise the fill opacity so
-   text contrast never depends on blur support. */
-.harbor-glass {
-  background: color-mix(in oklab, var(--color-canvas-var) 78%, transparent);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+/* ============================================================
+   Shared glass design language (single source of truth)
+   Extracted verbatim from the floating glass dock (bottom nav):
+   translucent fill + 1px light stroke + background blur with a
+   saturation boost, stadium/pill shape, NO heavy shadow, opaque
+   fallback when backdrop-filter is unsupported.
+   The dock, the floating search bar and every button recipe
+   consume these tokens — tune them HERE and the whole app stays
+   consistent. Never hardcode these values in components.
+   (Pill shape: --md-sys-shape-corner-full / --nav-radius = 9999px.)
+   ============================================================ */
+:root {
+  --glass-fill: rgba(255, 255, 255, 0.07);
+  --glass-fill-soft: rgba(255, 255, 255, 0.05); /* text buttons, nested controls */
+  --glass-border: rgba(191, 230, 242, 0.35);
+  --glass-active-fill: rgba(255, 255, 255, 0.16); /* nav pill / selected toggle */
+  --glass-accent-fill: color-mix(in srgb, var(--md-sys-color-primary) 88%, transparent);
+  --glass-accent-border: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
+  --glass-fab-fill: color-mix(in srgb, var(--md-sys-color-primary-container) 85%, transparent);
+  --glass-danger-fill: color-mix(in srgb, var(--md-sys-color-error) 88%, transparent);
+  --glass-danger-border: color-mix(in srgb, var(--md-sys-color-error) 45%, transparent);
+  --glass-blur: 12px;
+  --glass-saturate: 1.35;
+  --glass-shadow: none;
+  --glass-fallback: var(--md-sys-color-surface-container-high);
+  --glass-press-scale: 0.96;
+  --glass-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+/* Light themes: derive fill/border from the theme so contrast stays
+   readable over bright posters (same shape and proportions as dark). */
+html[data-appearance="light"] {
+  --glass-fill: rgba(255, 255, 255, 0.6);
+  --glass-fill-soft: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(9, 42, 54, 0.16);
+  --glass-active-fill: rgba(9, 42, 54, 0.09);
+}
+/* Kids Mode: friendlier tonal glass (colors only; the ≤8% size bump is
+   nav-scoped via --nav-kids in the dock section below). */
+html[data-kids="on"] {
+  --glass-fill: rgba(255, 255, 255, 0.12);
+  --glass-fill-soft: rgba(255, 255, 255, 0.09);
+  --glass-active-fill: rgba(255, 255, 255, 0.24);
+  --glass-border: rgba(255, 214, 235, 0.4);
+}
+html[data-kids="on"][data-appearance="light"] {
+  --glass-fill: rgba(255, 255, 255, 0.78);
+  --glass-fill-soft: rgba(255, 255, 255, 0.62);
+  --glass-active-fill: rgba(244, 114, 182, 0.18);
+  --glass-border: rgba(244, 114, 182, 0.35);
+}
+
+/* The one glass recipe. Composition: translucent fill + light stroke +
+   blur(+saturation). @supports fallback swaps in an opaque surface so text
+   contrast never depends on blur support. Containers set their own radius. */
+.glass-surface {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .harbor-glass {
-    background: color-mix(in oklab, var(--color-canvas-var) 96%, transparent);
+  .glass-surface {
+    background: var(--glass-fallback);
   }
 }
-/* Subtle top-edge highlight for the glass surface */
-.harbor-glass::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
-  pointer-events: none;
+/* Hover step for standalone glass pills (CTAs): the nav's active fill. */
+.glass-hover:hover {
+  background: var(--glass-active-fill);
+}
+/* Accent + danger tints of the same recipe (primary / destructive actions).
+   Pair with the matching on-* text color at the call site. */
+.glass-surface-accent {
+  background: var(--glass-accent-fill) !important;
+  border-color: var(--glass-accent-border) !important;
+}
+.glass-surface-danger {
+  background: var(--glass-danger-fill) !important;
+  border-color: var(--glass-danger-border) !important;
+}
+/* Perf guard (requirement: never stack blurred layers): inside an
+   already-blurred or opaque elevated surface the glass look degrades to
+   fill+border only — no second backdrop-filter, no wasted GPU work. */
+.glass-dock .glass-surface,
+.md-dialog .glass-surface,
+.md-sheet .glass-surface,
+.md-snackbar .glass-surface,
+.glass-surface .glass-surface {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Floating search results — ONE node, two faces (floating-search.tsx):
+   phones = full-screen sheet on the solid canvas; md+ = the shared glass
+   dropdown card (same recipe as the dock / search bar). */
+.fs-results {
+  background: var(--color-canvas-var);
+}
+@media (min-width: 768px) {
+  .fs-results {
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .fs-results {
+      background: var(--glass-fallback);
+    }
+  }
 }
 
 /* ============ Round 8 polish ============ */
@@ -1099,29 +1325,23 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
   --nav-bottom-offset: calc(16px * var(--nav-zoom));
   --nav-padding: calc(8px * var(--nav-zoom));
   --nav-radius: 9999px;
-  --nav-glass-fill: rgba(255, 255, 255, 0.07);
-  --nav-glass-border: rgba(191, 230, 242, 0.35);
-  --nav-blur: 12px;
-  --nav-shadow: none;
-  --nav-active-fill: rgba(255, 255, 255, 0.16);
+  /* Glass COLORS live in the shared token set (--glass-* , "Shared glass
+     design language" section above) — the dock consumes them unchanged;
+     only nav-scoped icon colors remain here. */
   --nav-icon-active: #f5f5f5;
   --nav-icon-inactive: rgba(255, 255, 255, 0.75);
-  /* Derived helpers (implementation support) */
-  --nav-motion-ease: cubic-bezier(0.2, 0, 0, 1);
-  --nav-glass-fallback: var(--md-sys-color-surface-container-high);
   /* Content clearance = nav height + bottom offset + safe area + 16px
      (requirement 7) — consumed by app-shell's main bottom padding. */
   --nav-clearance: calc(var(--nav-height) + var(--nav-bottom-offset) + env(safe-area-inset-bottom) + 16px);
 
   /* --- z-index token map (round-22 documentation) ---
      content(auto) < hero overlays(2, --hero-*) < --z-nav < --z-banner
-     < --z-search-bar < --z-search-overlay < --z-picker < --z-player
-     < --z-shortcuts < --z-palette. The full-screen search sits ABOVE the
-     nav/hero/floating bar and BELOW the picker/player/palette. */
+     < --z-search-bar < --z-picker < --z-player < --z-shortcuts
+     < --z-palette. There is exactly ONE search surface: the floating glass
+     bar (--z-search-bar), above nav/hero and below picker/player/palette. */
   --z-nav: 40;
   --z-banner: 50;
   --z-search-bar: 85;
-  --z-search-overlay: 120;
   --z-picker: 150;
   --z-player: 180;
   --z-shortcuts: 290;
@@ -1191,30 +1411,18 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
   }
 }
 
-/* Light themes: derive fill/border/icons from the theme so contrast stays
-   readable over bright posters (same shape and proportions). */
+/* Light themes: nav-scoped icon colors only — the glass fill/border/active
+   tints come from the shared --glass-* tokens (see top of this section). */
 html[data-appearance="light"] {
-  --nav-glass-fill: rgba(255, 255, 255, 0.6);
-  --nav-glass-border: rgba(9, 42, 54, 0.16);
-  --nav-active-fill: rgba(9, 42, 54, 0.09);
   --nav-icon-active: #17262e;
   --nav-icon-inactive: rgba(15, 34, 43, 0.64);
-  --nav-glass-fallback: var(--md-sys-color-surface-container-high);
 }
 
-/* Kids Mode: friendlier tonal colors + a capped size bump (≤8%, round-22 —
-   was +15% via hardcoded 84px). Only Home and Kids tabs render (see
-   glass-dock.tsx); restrictions are untouched. */
+/* Kids Mode: a capped size bump (≤8%, round-22 — was +15% via hardcoded
+   84px). Only Home and Kids tabs render (see glass-dock.tsx); restrictions
+   are untouched. Kids glass colors live in the shared --glass-* set. */
 html[data-kids="on"] {
   --nav-kids: 1.08;
-  --nav-glass-fill: rgba(255, 255, 255, 0.12);
-  --nav-active-fill: rgba(255, 255, 255, 0.24);
-  --nav-glass-border: rgba(255, 214, 235, 0.4);
-}
-html[data-kids="on"][data-appearance="light"] {
-  --nav-glass-fill: rgba(255, 255, 255, 0.78);
-  --nav-active-fill: rgba(244, 114, 182, 0.18);
-  --nav-glass-border: rgba(244, 114, 182, 0.35);
 }
 
 /* The capsule: stadium shape, flat translucent fill, inner stroke, background
@@ -1232,17 +1440,19 @@ html[data-kids="on"][data-appearance="light"] {
   width: min(var(--nav-width), var(--nav-max), calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)));
   padding: var(--nav-padding);
   border-radius: var(--nav-radius);
-  background: var(--nav-glass-fill);
-  border: 1px solid var(--nav-glass-border);
-  -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(1.35);
-  backdrop-filter: blur(var(--nav-blur)) saturate(1.35);
-  box-shadow: var(--nav-shadow);
-  transition: transform 350ms var(--nav-motion-ease), opacity 250ms var(--nav-motion-ease);
+  /* Shared glass recipe (identical values the old --nav-glass-* tokens held):
+     single source in the "Shared glass design language" section. */
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  transition: transform 350ms var(--glass-ease), opacity 250ms var(--glass-ease);
 }
 /* Fallback: no backdrop-filter support → opaque surface-container, same shape */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-dock {
-    background: var(--nav-glass-fallback);
+    background: var(--glass-fallback);
   }
 }
 /* Auto-hide on scroll down (dock-auto-hide setting) */
@@ -1274,8 +1484,8 @@ html[data-kids="on"][data-appearance="light"] {
   height: var(--nav-tab-height);
   left: 0;
   border-radius: var(--nav-radius);
-  background: var(--nav-active-fill);
-  transition: transform 350ms var(--nav-motion-ease), width 350ms var(--nav-motion-ease);
+  background: var(--glass-active-fill);
+  transition: transform 350ms var(--glass-ease), width 350ms var(--glass-ease);
   will-change: transform, width;
   pointer-events: none;
 }
@@ -1293,7 +1503,7 @@ html[data-kids="on"][data-appearance="light"] {
   justify-content: center;
   border-radius: var(--nav-radius);
   color: var(--nav-icon-inactive);
-  transition: color 150ms ease, transform 150ms var(--nav-motion-ease);
+  transition: color 150ms ease, transform 150ms var(--glass-ease);
   -webkit-tap-highlight-color: transparent;
 }
 .dock-tab::before {
@@ -1305,7 +1515,7 @@ html[data-kids="on"][data-appearance="light"] {
   border-radius: inherit;
 }
 .dock-tab:active {
-  transform: scale(0.96);
+  transform: scale(var(--glass-press-scale));
 }
 .dock-tab[aria-current="page"] {
   color: var(--nav-icon-active);
