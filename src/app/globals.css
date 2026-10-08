@@ -1600,12 +1600,19 @@ html[data-kids="on"] {
   --hero-btn-ink: #0b0b0b;
   --hero-btn-size: calc(15px * min(var(--home-scale), 1.35));
 
-  /* Carousel indicator (round-24 spec: 8dp white dots, 32×8 active pill,
-     8dp gap; the 48dp touch target is the ::before hit expansion) */
-  --hero-ind-dot: calc(8px * min(var(--home-scale), 1.5));
-  --hero-ind-active-w: calc(32px * min(var(--home-scale), 1.5));
-  --hero-ind-gap: calc(8px * min(var(--home-scale), 1.5));
-  --hero-ind-rest-scale: 0.25; /* 32px bar × 0.25 = the 8dp resting dot */
+  /* Carousel indicator (redesigned: layered-opacity bars — inactive white @
+     40%, hover 70%, active solid white; 7dp dot ↔ 28×7dp pill, rest scale
+     .25; sizes follow the indicator-specific --ind-scale ladder so dots stay
+     compact and elegant on tablets/desktops instead of tracking --home-scale
+     up to 1.65×). The 33dp-class hit circle is the ::before expansion. */
+  --ind-scale: 1;
+  --hero-ind-dot: calc(7px * var(--ind-scale));
+  --hero-ind-active-w: calc(28px * var(--ind-scale));
+  --hero-ind-gap: calc(8px * var(--ind-scale));
+  --hero-ind-rest-scale: 0.25; /* 28px bar × .25 = the 7dp resting dot */
+  --hero-ind-rest-op: 0.4;
+  --hero-ind-hover-op: 0.7;
+  --hero-ind-hit: 13px; /* ::before expansion around the dot button */
 
   /* Motion (round-24): single spring-like ease; only transform + opacity are
      ever animated. JS reads these once per session (home-hero.tsx). */
@@ -1670,6 +1677,20 @@ html[data-kids="on"] {
 }
 @media (min-width: 2560px) {
   :root { --home-scale: 1.8; }
+}
+
+/* Indicator size ladder (separate from content: dots must stay discreet at
+   every breakpoint — phone 1× → tablet 1.1× → laptop 1.2× → desktop cap 1.3×,
+   so a 1280px+ screen shows a ~8.4dp dot / 33.6dp pill instead of the old
+   12–13dp / 48–53dp monsters). */
+@media (min-width: 600px) {
+  :root { --ind-scale: 1.1; }
+}
+@media (min-width: 1024px) {
+  :root { --ind-scale: 1.2; }
+}
+@media (min-width: 1440px) {
+  :root { --ind-scale: 1.3; }
 }
 
 /* Light appearance: dissolve into the themed canvas (never into black — the
@@ -1884,13 +1905,15 @@ html[data-appearance="light"] .home-void {
     transform: scale(0.97);
   }
 
-  /* Indicator (round-24): ONE bar per dot — 32×8 white pill at scaleX .25
-     (resting 8dp dot) → scaleX 1 (active). Compositor-only morph, synced to
-     drag progress by home-hero.tsx (inline transforms during the gesture,
-     CSS transitions take over on release). Layout of the row is constant.
-     The BUTTON is the small visual dot; its ::before is the 48dp-class hit
-     circle (pointer targets don't need paint containment, so the row keeps
-     only layout+style containment — paint would clip the hit/focus areas). */
+  /* Indicator (redesigned): ONE bar per dot — 28×7 pill at scaleX .25
+     (resting 7dp dot) → scaleX 1 (active). Layered opacity: inactive 40%,
+     hover 70%, active 100% — the depth cue makes the active slide obvious at
+     a glance without enlarging the row. Compositor-only morph (transform +
+     opacity), synced to drag progress by home-hero.tsx (inline writes during
+     the gesture; CSS transitions take over on release from the same values —
+     zero pop). Layout of the row is constant. The BUTTON is the small visual
+     dot; its ::before is the 33dp-class hit circle (paint containment is off
+     on the row so hit/focus areas are never clipped). */
   .home-hero-dots {
     contain: layout style;
     position: relative; /* anchors the hidden a11y pause control */
@@ -1910,7 +1933,12 @@ html[data-appearance="light"] .home-void {
   .home-hero-dot-btn::before {
     content: "";
     position: absolute;
-    inset: -12px; /* 32dp hit circle around the 8dp dot */
+    inset: calc(-1 * var(--hero-ind-hit)); /* ~33dp hit circle around the 7dp dot */
+    border-radius: 9999px;
+  }
+  .home-hero-dot-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 3px;
     border-radius: 9999px;
   }
   .home-hero-dot-bar {
@@ -1922,16 +1950,28 @@ html[data-appearance="light"] .home-void {
     height: var(--hero-ind-dot);
     border-radius: 9999px;
     background: #fff;
+    opacity: var(--hero-ind-rest-op);
     transform: scaleX(var(--hero-ind-rest-scale));
-    transition: transform 300ms var(--hero-ease);
+    transition:
+      transform 300ms var(--hero-ease),
+      opacity 300ms var(--hero-ease);
     pointer-events: none;
+  }
+  .home-hero-dot-btn:hover .home-hero-dot-bar {
+    opacity: var(--hero-ind-hover-op);
   }
   .home-hero-dot-btn[aria-current="true"] .home-hero-dot-bar {
     transform: scaleX(1);
+    opacity: 1;
   }
   /* per-frame drag writes must not fight the CSS transition */
   .home-hero.is-dragging .home-hero-dot-bar {
     transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .home-hero-dot-bar {
+      transition-duration: var(--hero-reduced-ms);
+    }
   }
 
   /* Autoplay pause control: visually hidden (the reference design has no

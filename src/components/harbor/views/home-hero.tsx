@@ -20,8 +20,8 @@
 //  - LAYERED MOTION: art moves 1:1; the content stack drifts at most
 //    --hero-content-drift and fades with drag progress, then crossfades to the
 //    next slide's data (it NEVER remounts; dots keep focus).
-//  - INDICATOR: one 32×8 bar per dot, scaleX .25 ↔ 1 (8px dot ↔ 32px pill),
-//    morph synced to drag progress, compositor-only.
+//  - INDICATOR: one 28×7 bar per dot, scaleX .25 ↔ 1 (7dp dot ↔ 28×7dp pill)
+//    with layered opacity .4 ↔ 1 — both synced to drag progress, compositor-only.
 //  - IMAGES: everything routes through /api/img (SSRF-safe sharp proxy):
 //    DPR-sized width ladders, AVIF>WebP>JPEG negotiation, 24px blurred LQIP
 //    thumbs, decode() gates, hoisted preload for slide 0, idle warm-up walk.
@@ -52,6 +52,8 @@ const JUMP_MS = 350; // --hero-jump-ms
 const REDUCED_MS = 200; // --hero-reduced-ms
 const JUMP_SHIFT = 22; // --hero-jump-shift (px)
 const CONTENT_DRIFT = 12; // --hero-content-drift (px)
+const IND_REST_SCALE = 0.25; // --hero-ind-rest-scale (7dp dot ÷ 28px bar)
+const IND_REST_OP = 0.4; // --hero-ind-rest-op (inactive bar opacity)
 /** Must match the CSS swap point for the portrait/backdrop art layers. */
 const MD_MIN = "(min-width: 600px)";
 /** Hero aspect used for backdrop→portrait crops (height = width × ratio). */
@@ -71,13 +73,25 @@ function readMotionTokens(): void {
   tokenVals.reducedMs = ms("--hero-reduced-ms", REDUCED_MS);
   tokenVals.jumpShift = ms("--hero-jump-shift", JUMP_SHIFT);
   tokenVals.contentDrift = ms("--hero-content-drift", CONTENT_DRIFT);
+  tokenVals.indRestScale = ms("--hero-ind-rest-scale", IND_REST_SCALE);
+  tokenVals.indRestOp = ms("--hero-ind-rest-op", IND_REST_OP);
 }
-const tokenVals: { snapMs: number; jumpMs: number; reducedMs: number; jumpShift: number; contentDrift: number } = {
+const tokenVals: {
+  snapMs: number;
+  jumpMs: number;
+  reducedMs: number;
+  jumpShift: number;
+  contentDrift: number;
+  indRestScale: number;
+  indRestOp: number;
+} = {
   snapMs: SNAP_MS,
   jumpMs: JUMP_MS,
   reducedMs: REDUCED_MS,
   jumpShift: JUMP_SHIFT,
   contentDrift: CONTENT_DRIFT,
+  indRestScale: IND_REST_SCALE,
+  indRestOp: IND_REST_OP,
 };
 
 // ---------- session caches ----------
@@ -661,7 +675,10 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   // resume from the inline value toward the new aria-current state.
   useLayoutEffect(() => {
     for (const el of dotBarRefs.current) {
-      if (el) el.style.transform = "";
+      if (el) {
+        el.style.transform = "";
+        el.style.opacity = "";
+      }
     }
   }, [settle, idx]);
 
@@ -725,7 +742,8 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       content.style.opacity = String(Math.max(0, 1 - Math.abs(p)));
       content.style.transform = `translate3d(${-p * tokenVals.contentDrift}px, 0, 0)`;
     }
-    // indicator: morph candidate + current with drag progress
+    // indicator: morph candidate + current with drag progress (width AND
+    // opacity — the layered look stays seam-free mid-gesture)
     const n = totalRef.current;
     if (n > 1) {
       const step = x * dirRef.current < 0 ? 1 : -1;
@@ -733,8 +751,16 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       const cand = ((((idxRef.current + step) % n) + n) % n) % n;
       const candEl = dotBarRefs.current[cand];
       const curEl = dotBarRefs.current[idxRef.current];
-      if (candEl) candEl.style.transform = `scaleX(${0.25 + 0.75 * prog})`;
-      if (curEl && curEl !== candEl) curEl.style.transform = `scaleX(${1 - 0.75 * prog})`;
+      const rs = tokenVals.indRestScale;
+      const ro = tokenVals.indRestOp;
+      if (candEl) {
+        candEl.style.transform = `scaleX(${rs + (1 - rs) * prog})`;
+        candEl.style.opacity = String(ro + (1 - ro) * prog);
+      }
+      if (curEl && curEl !== candEl) {
+        curEl.style.transform = `scaleX(${1 - (1 - rs) * prog})`;
+        curEl.style.opacity = String(1 - (1 - ro) * prog);
+      }
     }
   }, []);
 

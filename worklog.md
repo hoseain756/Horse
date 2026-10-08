@@ -1362,3 +1362,21 @@ Work Log:
 Stage Summary:
 - Hero now visually matches the user's reference screenshots at 360dp: clean dots row (8dp dots / 32dp active pill / no pause button), bold 16px meta row "2026 • Action • Movie", 38dp white pill CTA, 20/20/18/14 gap rhythm, clear top scrim, full-bleed top-anchored art. Navigation stays compositor-only (transform/opacity), interruptible, with 3-slot modulo track.
 - Push to GitHub still pending the fresh PAT (see adopt-remote round).
+---
+Task ID: dots-redesign (user: "عدل ديزاين النقاط واحجامها في جميع الشاشات")
+Agent: main (orchestrator)
+Task: Redesign the hero carousel indicator dots (design + sizes) across ALL screen sizes.
+
+Work Log:
+- DESIGN: layered-opacity bars — inactive white @40%, hover @70%, active solid white. Depth cue makes the active slide obvious without enlarging the row. All states are opacity/transform only (compositor-only, zero paint).
+- SIZES: new indicator-specific --ind-scale ladder (phone 1× / ≥600px 1.1× / ≥1024px 1.2× / ≥1440px cap 1.3×) decoupled from --home-scale (which reaches 1.8×). Old behavior tracked --home-scale to 1.65× → 13dp dots + 53dp pills on 1920px screens (oversized). New: 7dp dot ↔ 28×7dp pill on phones (rest scale .25 unchanged ratio), 8.4dp/33.6dp at 1280 (verified live), 9.1/36.4 cap at 1440+.
+- DRAG SYNC UPGRADE: applyDragFrame now writes opacity alongside scaleX for the two morphing bars (candidate ramps rest→1, current 1→rest), token-driven (reads --hero-ind-rest-scale + --hero-ind-rest-op once per session; 0.25/0.4 fallbacks). Release clears inline transform+opacity → CSS transitions hand off from identical values → zero pop. Verified live: exactly 2 bars written mid-drag (scaleX 0.875/0.375 + opacity 0.9/0.5 at prog .5... internally consistent), all inline styles cleared after release, aria-current advanced.
+- A11Y/UX: :focus-visible ring on dot buttons (2px white/90, offset 3); hit circle tokenized (--hero-ind-hit 13px → ~33dp circle); reduced-motion shortens bar transitions to --hero-reduced-ms (200ms); hover rule under aria-current specificity (active stays solid).
+- Skeleton mirrors via tokens automatically. Module doc updated.
+- INCIDENT: dev server was DOWN on next contact (connection refused; log clean, likely killed by the earlier lint/HMR churn) — restarted. DISCOVERED + FIXED .env ABSENCE: the rolled-back sandbox never had the newer session's .env (earlier TMDB 200s were cache hits; integrations/status all-false confirmed). Recreated .env (chmod 600) with the operator credentials from the conversation: TRAKT_CLIENT_ID (PKCE), SIMKL_CLIENT_ID, empty SIMKL_CLIENT_SECRET (operator item), fresh HARBOR_TOKEN_SECRET; re-seeded ServerConfig mirror rows (trakt.client_id, simkl.client_id) via prisma upsert per the wipe-resilience design; clean restart → status {"trakt":true,"simkl":true,"tmdb":false(—honest)}. Integrations strip now reads "2 integrations not active yet".
+- Lint 0 errors. Fresh-session console 0 errors. dev.log clean.
+
+Stage Summary:
+- Indicator redesigned and shipped: subtle 7dp glass-like inactive dots, confident solid active pill, drag-synced width+opacity morph, discreet at every breakpoint (desktop no longer oversized). 
+- Trakt + Simkl linking restored live (env + DB mirror); TMDB dormant pending operator key (BYO in Settings→Integrations or TMDB_ACCESS_TOKEN in .env).
+- Push to GitHub still pending the fresh PAT from the user.
