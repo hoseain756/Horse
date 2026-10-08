@@ -1,5 +1,12 @@
 # Harbor Web — Worklog
 
+> ## ⚠️ STANDING POLICY — GITHUB AUTO-PUSH (user mandate, 2026-10-08)
+> The user requires the project to be **pushed to GitHub after EVERY change**, from their personal account (**hoseain756/Horse**, branch main).
+> - Durable credential lives in `~/.git-credentials` (git credential.helper store — OUTSIDE the repo, the daemon can never commit it). Plain `git push origin main` works.
+> - `~/.gh-autopush.sh` watcher (launched via setsid, log `~/.gh-autopush.log`) pushes any new local commit within ~60s. If dead, relaunch: `(setsid bash ~/.gh-autopush.sh </dev/null >/dev/null 2>&1 &)`.
+> - The 15-min webDevReview cron (job 444882) also carries this duty as its item 6.
+> - Rules: never place tokens anywhere inside /home/z/my-project (public repo + external auto-commit daemon = leak risk); never rewrite history; keep the clean-history discipline from Task 31.
+
 ## Project
 Web version of Harbor (github.com/harborstremio/harbor) — a Stremio addon-protocol client.
 Original: Tauri 2 + React 19 + Rust (libmpv, librqbit). License: MIT.
@@ -1203,3 +1210,19 @@ Work Log:
 Stage Summary:
 - All five user-reported player issues fixed at root: fullscreen is now free of technical telemetry; subtitle/settings popovers geometrically safe in LTR+RTL (group-anchored, measured); torrent rows compact + wrap cleanly with truncated badges; captions have their own face (Rubik) in both languages; seek-bar times flank the bar and mirror with language. Business logic untouched (picker/p2p/watchlist flows unchanged).
 - Honest limits: P2P-pill-in-fullscreen verified by code path only (no torrent addons in sandbox); StreamRow live measurements pending real addons; headless fullscreen ignores keyboard `f` (user-activation) but button click works.
+---
+Task ID: 37
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User (AR) mandate — "always push the project to GitHub after any change, from my personal account; give me a link to grant you the permission".
+
+Work Log:
+- Pending work first: found 3 daemon commits ahead of remote (Task 36 player fixes included); OLD ghp_ token still valid (200) → pushed 53d8a64..89bbe53 → remote main == local (verified via ls-remote). Task 36 work is now on GitHub.
+- Durable grant via device flow #2 (public GitHub CLI client_id 178c6fc778ccc68e1d6a, scope=repo): user_code C5E6-039F @ https://github.com/login/device (expires ~15 min). Poller `~/ghflow/poll.sh` armed 14:40:42 UTC → on authorization it: (1) `git config --global credential.helper store`, (2) writes `https://hoseain756:<TOKEN>@github.com` to `~/.git-credentials` (chmod 600, replaces any old github.com lines), (3) pushes immediately, (4) logs `~/ghflow/flow.log`. Token NEVER displayed in chat — strictly better than the pasted ghp_ token.
+- AUTO-PUSH WATCHER: `~/.gh-autopush.sh` (setsid, armed 14:40:51) — 60s loop; waits for credentials then pushes whenever local main SHA changes; state `~/.gh-autopush.state`, log `~/.gh-autopush.log`; GIT_TERMINAL_PROMPT=0 (fails fast, never hangs). All artifacts in $HOME — OUTSIDE the repo so the external auto-commit daemon can never commit/leak them.
+- CRON UPDATED: deleted job 444801, created **444882** (same 15-min fixed_rate) whose item 6 is now the mandatory GitHub push duty (verify watcher alive → relaunch command included; never put tokens in the repo).
+- WORKLOG: added the STANDING POLICY block at the very top of this file so every future round reads it first.
+
+Stage Summary:
+- "Always push from the user's account" is now a standing system: (a) link+code granted on demand, (b) durable credential stored outside the repo, (c) 60s watcher, (d) cron duty, (e) top-of-worklog policy.
+- The old chat-exposed ghp_ token: used for the immediate push ONLY (one-shot URL, not stored); user should STILL revoke it once the new grant is active (the new token is never exposed in chat).
+- If the user misses the 15-min window: next round must re-issue the link (check ~/ghflow/flow.log for EXPIRED/DENIED/ok first).
