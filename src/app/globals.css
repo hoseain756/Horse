@@ -1440,6 +1440,9 @@ html[data-kids="on"] {
   width: min(var(--nav-width), var(--nav-max), calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)));
   padding: var(--nav-padding);
   border-radius: var(--nav-radius);
+  /* The bar owns its gestures: taps + press-and-drag scrubbing. Page scroll
+     / pull-to-refresh must never steal the pointer mid-scrub. */
+  touch-action: none;
   /* Shared glass recipe (identical values the old --nav-glass-* tokens held):
      single source in the "Shared glass design language" section. */
   background: var(--glass-fill);
@@ -1489,6 +1492,14 @@ html[data-kids="on"] {
   will-change: transform, width;
   pointer-events: none;
 }
+/* Scrub mode (glass-dock.tsx press-and-drag): transform/width transitions OFF
+   — the position is driven per-frame from the pointer — while the pill grows
+   slightly via the standalone `scale` property, which composes with (and
+   never fights) the per-frame translateX transform. */
+.dock-track[data-scrub="true"] .dock-pill {
+  transition: scale 150ms var(--glass-ease);
+  scale: 1.08;
+}
 
 /* Tab: equal flex slot sized by tokens; ≥48px TOUCH target is guaranteed by
    the ::before hit extender (never by inflating the bar). Pressed scale + M3
@@ -1521,6 +1532,14 @@ html[data-kids="on"] {
   color: var(--nav-icon-active);
 }
 
+/* Scrub preview (glass-dock.tsx press-and-drag): the tab under the pointer
+   lights EXACTLY like the real active tab — same tokens as
+   [aria-current="page"] — but carries no aria state (the real active tab
+   stays the screen-reader truth); cleared on release/cancel. */
+.dock-tab[data-lit="true"] {
+  color: var(--nav-icon-active);
+}
+
 /* Icon frame: consistent 26px box; outline→filled cross-fade in 150ms. */
 .dock-icon-frame {
   position: relative;
@@ -1541,6 +1560,12 @@ html[data-kids="on"] {
   opacity: 0;
 }
 .dock-tab[aria-current="page"] .dock-icon-filled {
+  opacity: 1;
+}
+.dock-tab[data-lit="true"] .dock-icon-outline {
+  opacity: 0;
+}
+.dock-tab[data-lit="true"] .dock-icon-filled {
   opacity: 1;
 }
 
