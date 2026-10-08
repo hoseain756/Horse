@@ -1679,11 +1679,15 @@ html[data-appearance="light"] .home-void {
 
 @layer components {
   /* ---------- Hero ---------- */
+  /* Round-23 perf: layout+paint containment keeps slide changes off the rest
+     of the page (no hero-internal invalidations escape; no fixed-position
+     children exist inside, so containment is safe). */
   .home-hero {
     position: relative;
     height: var(--hero-height);
     overflow: hidden;
     background: var(--hero-fade);
+    contain: layout paint style;
   }
   .home-hero-track {
     position: relative;
@@ -1693,6 +1697,9 @@ html[data-appearance="light"] .home-void {
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory;
+    /* Both axes explicit: vertical page scrolling is never blocked by the
+       hero, and pan-x keeps the native swipe (pan-y ALONE would kill it). */
+    touch-action: pan-x pan-y;
     scrollbar-width: none;
     -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;
@@ -1708,22 +1715,39 @@ html[data-appearance="light"] .home-void {
     scroll-snap-align: start;
     scroll-snap-stop: always;
     overflow: hidden;
+    contain: layout paint style;
   }
+  /* Round-23: the art is a <picture> (ONE element) — phones download only the
+     portrait ladder, md+ only the backdrop ladder (CSS breakpoint below must
+     stay in sync with MD_MIN in home-hero.tsx). The img fades in only after
+     img.decode() resolves, over the static gradient layer (no blank frames,
+     no half-decoded reveals). */
   .home-hero-art {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+  }
+  .home-hero-art img {
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-  }
-  /* Phones: portrait artwork anchored to the top (spec). md+ swaps to the
-     landscape backdrop (see media query below). */
-  .home-hero-art-portrait {
+    /* Phones: portrait artwork anchored to the top (spec). md+ swaps to the
+       landscape backdrop (see media query at the end of this section). */
     object-position: center top;
+    opacity: 0;
+    transition: opacity 250ms var(--hero-ease);
   }
-  .home-hero-art-landscape {
-    display: none;
-    object-position: center;
+  .home-hero-art-ready img {
+    opacity: 1;
+  }
+  /* Static gradient layer (LQIP / failure fallback) — painted once, never
+     re-rendered per frame; double-duty as the decode placeholder so the
+     carousel never shows a blank frame. */
+  .home-hero-art-fallback {
+    background: radial-gradient(120% 90% at 75% 0%, rgba(255, 255, 255, 0.07), transparent 55%),
+      linear-gradient(180deg, var(--color-raised-var), var(--hero-fade));
   }
   .home-hero-scrim-top {
     position: absolute;
@@ -1835,23 +1859,15 @@ html[data-appearance="light"] .home-void {
   .home-hero-btn:active {
     transform: scale(0.97);
   }
-  /* Content crossfade between items (re-triggered via React key). */
-  .home-hero-content-in {
-    animation: home-hero-content-in var(--hero-crossfade-ms) var(--hero-ease) both;
-  }
-  @keyframes home-hero-content-in {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  /* Content entrance between items is replayed via the Web Animations API
+     (home-hero.tsx) — opacity/transform only, no React remount, so the dots
+     keep DOM identity and keyboard focus. The old keyframes are gone. */
 
   /* Indicator: the BUTTON is the real 48dp touch target (transparent, no
-     pseudo hit-area tricks); the visible dot is the inner span. */
+     pseudo hit-area tricks). Round-23: TWO absolutely-positioned layers —
+     the 4px dot and the 32×4 pill — crossfade with opacity + scaleX
+     (compositor-only; the old `width` transition caused a per-change
+     re-layout). Layout of the row is constant at all times. */
   .home-hero-dot-btn {
     position: relative;
     display: flex;
@@ -1866,18 +1882,35 @@ html[data-appearance="light"] .home-void {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .home-hero-dot-btn > span {
-    display: block;
+  .home-hero-dot-dot,
+  .home-hero-dot-pill {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* translate centers; transform stays reserved for the (animated) scale */
+    translate: -50% -50%;
     height: calc(var(--hero-ind-dot) / 2);
-    width: calc(var(--hero-ind-dot) / 2);
     border-radius: 9999px;
     background: #fff;
-    opacity: 0.55;
-    transition: width 300ms var(--hero-ease), opacity 150ms ease;
+    pointer-events: none;
   }
-  .home-hero-dot-btn[aria-current="true"] > span {
+  .home-hero-dot-dot {
+    width: calc(var(--hero-ind-dot) / 2);
+    opacity: 0.55;
+    transition: opacity 150ms ease;
+  }
+  .home-hero-dot-pill {
     width: var(--hero-ind-active-w);
+    opacity: 0;
+    transform: scaleX(0.125); /* 4px look at rest — matches the dot */
+    transition: opacity 300ms var(--hero-ease), transform 300ms var(--hero-ease);
+  }
+  .home-hero-dot-btn[aria-current="true"] .home-hero-dot-dot {
+    opacity: 0;
+  }
+  .home-hero-dot-btn[aria-current="true"] .home-hero-dot-pill {
     opacity: 1;
+    transform: scaleX(1);
   }
 
   /* ---------- Continue watching ---------- */
@@ -2043,20 +2076,20 @@ html[data-appearance="light"] .home-void {
 
   /* ---------- md+ adaptations (spec: medium/expanded) ---------- */
   @media (min-width: 600px) {
-    .home-hero-art-portrait {
-      display: none;
-    }
-    .home-hero-art-landscape {
-      display: block;
+    /* Art layer swap (see .home-hero-art above): the <source media> selects
+       the backdrop ladder; only object-position differs in CSS. */
+    .home-hero-art img {
+      object-position: center;
     }
   }
 }
 
-/* Reduced motion: no content crossfade, no dot width animation, no card press
-   scale travel; autoplay/jump behavior is additionally gated in JS. */
+/* Reduced motion: no content crossfade, no dot crossfade, no art fade-in, no
+   card press scale travel; autoplay/jump behavior is additionally gated in JS. */
 @media (prefers-reduced-motion: reduce) {
-  .home-hero-content-in,
-  .home-hero-dot-btn,
+  .home-hero-art img,
+  .home-hero-dot-dot,
+  .home-hero-dot-pill,
   .cw-card {
     animation: none;
     transition: none;
