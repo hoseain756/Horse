@@ -4,6 +4,8 @@
 // M3 (m3-3c): poster keeps .harbor-poster (so the --poster-radius setting still wins),
 // overlay badges become M3 chips (.md-chip primitives, reduced height) and the title
 // uses the M3 type scale (md-title-small / md-body-small).
+// NOTE: the release-date line under the title is intentionally NOT rendered
+// (user request: "اخفي التاريخ الذي يكون تحت اسم المسلسل في البطاقات") — keep it that way.
 import { memo } from "react";
 import type { Meta } from "@/lib/harbor/types";
 import { PosterCard } from "./poster";
@@ -50,7 +52,6 @@ export const MetaCard = memo(function MetaCard({
         <p className="md-title-small harbor-clamp-1 text-ink group-hover:text-accent transition-colors">
           {meta.name}
         </p>
-        <p className="md-body-small harbor-clamp-1 text-ink-subtle">{meta.releaseInfo ?? meta.type}</p>
       </div>
     </div>
   );

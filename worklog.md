@@ -1415,3 +1415,16 @@ Work Log:
 Stage Summary:
 - The dock now supports iOS/Material-style press-and-drag scrubbing: hold-or-move enters scrub, the pill (slightly grown) tracks the finger/cursor 1:1 in real pixels with transitions off, tabs light up as the pointer crosses their zones, one haptic tick marks scrub start, release commits a single navigation and snaps the pill via the original spring; cancel restores the prior tab. Taps, keyboard roving, RTL, a11y state and the visual design are byte-for-byte untouched.
 - Push to GitHub still pending the fresh PAT (local commits accumulating: 55eeef4, 5af3a58, + this round).
+---
+Task ID: card-hide-date (user: "اخفي التاريخ الذي يكون تحت اسم المسلسل في البطاقات")
+Agent: main (orchestrator)
+Task: Hide the release-date line that sits under the title in the content cards.
+
+Work Log:
+- LOCATED the single source: MetaCard (src/components/harbor/common/meta-card.tsx) is the universal card used by home rails, section rails, grid view, kids view and detail "More like this" — its text block rendered `meta.releaseInfo ?? meta.type` under the title (the date the user sees).
+- CHANGE: removed that subtitle `<p>` entirely (title block now renders only the name). Left untouched: poster hover year chip (on-poster, not under-title), search rows / command palette year suffixes, library & list-detail views (different components), detail page meta row (year belongs there). Added a header NOTE in meta-card.tsx documenting the intentional omission so it is not re-added.
+- VERIFY (agent-browser 360x780): 8 sampled cards → text block has exactly 1 <p> (title only), 0 `p.md-body-small` date lines remain in any card; click card #3 → detail view opens (tap path intact); back → rails show poster+title only ("Peddi"/"Reacher"/"Spider-Man" with nothing beneath) — screenshot confirmed; console 0 errors; lint 0 errors (164 pre-existing warnings); dev.log clean.
+- RailSkeleton unaffected (renders poster blocks only).
+
+Stage Summary:
+- All content cards across the app now show poster + title only; the release date is gone from under the titles. Dates still available where they belong (detail page meta row, search rows).
