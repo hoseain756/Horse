@@ -1226,3 +1226,19 @@ Stage Summary:
 - "Always push from the user's account" is now a standing system: (a) link+code granted on demand, (b) durable credential stored outside the repo, (c) 60s watcher, (d) cron duty, (e) top-of-worklog policy.
 - The old chat-exposed ghp_ token: used for the immediate push ONLY (one-shot URL, not stored); user should STILL revoke it once the new grant is active (the new token is never exposed in chat).
 - If the user misses the 15-min window: next round must re-issue the link (check ~/ghflow/flow.log for EXPIRED/DENIED/ok first).
+---
+Task ID: 38
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User acknowledged ("تم") — full health verification round (no code changes).
+
+Work Log:
+- Git/push: local main 768f7cb == remote main 768f7cb (GitHub, hoseain756/Horse) — everything incl. Task 36 player fixes + Task 37 automation is on GitHub; autopush watcher alive (PID 19997, log shows PUSHED 768f7cb at 14:46:22).
+- Dev server: GET / 200, /api/sync 200, proxies 200; zero compile errors in dev.log.
+- Player five fixes (Task 36) re-verified in code: player-overlay.tsx l.2296-2302 subtitle panel = group-anchored `bottom-12 right-0` (final correct state); ESLint on file = 0 errors (8 pre-existing warnings only).
+- FALSE ALARM investigated: agent-browser console showed "Parsing ecmascript source code failed @ player-overlay.tsx:2296" — traced to a STALE console buffer entry from the Task 36 intermediate Fast Refresh state (the abandoned `end-0` iteration). Proof: (a) eslint parses the file clean NOW, (b) dev.log contains zero "Parsing ecmascript" lines ever, (c) after `agent-browser close` + fresh session → console = 0 errors, app renders (primary nav tabs visible).
+- Cron housekeeping: old job 444882 auto-disabled by the platform ("exec limits exceeded") → recreated as job 444900 (same 15-min fixed_rate webDevReview + GitHub push duty).
+- No source files modified this round; nothing to push (local==remote).
+
+Stage Summary:
+- Project state: ALL GREEN — five player fixes live & verified, GitHub in sync, push watcher alive, cron review cycle re-armed (444900).
+- Next round should pick up the standing backlog: A–G leftover defects (Integrations M3 polish, P2P card RTL switch), PlaybackTimeline single-time-source refactor, /api/sync addons remount flicker.
