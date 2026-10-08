@@ -161,8 +161,9 @@ export type TmdbDetails = {
   first_air_date?: string | null;
   genres?: { id: number; name: string }[] | null;
   images?: {
-    logos?: { file_path: string; iso_639_1: string | null }[] | null;
-    backdrops?: { file_path: string }[] | null;
+    logos?: { file_path: string; iso_639_1: string | null; width?: number; height?: number }[] | null;
+    posters?: { file_path: string; iso_639_1: string | null; vote_average?: number; vote_count?: number; width?: number; height?: number }[] | null;
+    backdrops?: { file_path: string; iso_639_1: string | null; vote_average?: number; vote_count?: number; width?: number; height?: number }[] | null;
   } | null;
   recommendations?: { results?: { id: number; title?: string; name?: string; poster_path?: string | null; vote_average?: number }[] } | null;
   production_companies?: { name: string; logo_path: string | null }[] | null;
@@ -173,17 +174,59 @@ export type TmdbDetails = {
   watch?: unknown;
 };
 
-/** Full details incl. images/logos (append_to_response keeps it to one request). */
+/** Full details incl. images/logos (append_to_response keeps it to one request).
+ *  Image language list follows the UI language (ar first for Arabic users) so
+ *  localized logos land in the same cached response. */
 export async function tmdbDetails(type: "movie" | "series", tmdbId: number): Promise<TmdbDetails | null> {
   try {
+    let code = "";
+    try {
+      code = (useSettings.getState().settings.uiLanguage || "en").slice(0, 2);
+    } catch {
+      code = "en";
+    }
+    const imageLangs = code && code !== "en" ? `${code},en,null` : "en,null";
     return await tmdbGet<TmdbDetails>(
       `/${type === "series" ? "tv" : "movie"}/${tmdbId}`,
-      { append_to_response: "images,recommendations,release_dates,content_ratings,watch/providers", include_image_language: "en,null" },
+      { append_to_response: "images,recommendations,release_dates,content_ratings,watch/providers", include_image_language: imageLangs },
       30 * 60_000,
     );
   } catch {
     return null;
   }
+}
+
+/** Best textless (iso_639_1 === null) poster/backdrop file paths for hero art,
+ *  best-voted first. Callers must have a non-TMDB fallback — this fails soft. */
+export function tmdbHeroArt(details: TmdbDetails | null): { textlessPoster?: string; textlessBackdrop?: string } {
+  if (!details) return {};
+  const score = (i: { vote_average?: number; vote_count?: number }): number =>
+    (i.vote_average ?? 0) * (i.vote_count ?? 0);
+  const posters = [...(details.images?.posters ?? [])].filter((p) => p.iso_639_1 === null).sort((a, b) => score(b) - score(a));
+  const backdrops = [...(details.images?.backdrops ?? [])].filter((b) => b.iso_639_1 === null).sort((a, b) => score(b) - score(a));
+  return {
+    textlessPoster: posters[0]?.file_path,
+    textlessBackdrop: backdrops[0]?.file_path,
+  };
+}
+
+/** Best transparent LOGO file path for a UI language: user language → English
+ *  → any; widest first inside a group. Render through the image proxy. */
+export function tmdbLogoPath(details: TmdbDetails | null, lang: string): string | undefined {
+  const logos = details?.images?.logos ?? [];
+  if (logos.length === 0) return undefined;
+  const code = (lang || "en").slice(0, 2);
+  const width = (l: { width?: number }): number => l.width ?? 0;
+  const pick = (test: (l: { iso_639_1: string | null }) => boolean): string | undefined => {
+    const group = logos.filter(test).sort((a, b) => width(b) - width(a));
+    return group[0]?.file_path;
+  };
+  return pick((l) => l.iso_639_1 === code) ?? pick((l) => l.iso_639_1 === "en") ?? pick(() => true);
+}
+
+/** Upstream URL for a TMDB original image path (routed through /api/img). */
+export function tmdbOriginal(path: string): string {
+  return `https://image.tmdb.org/t/p/original${path}`;
 }
 
 /** Best logo (prefers English, then any) rendered as an image URL. */

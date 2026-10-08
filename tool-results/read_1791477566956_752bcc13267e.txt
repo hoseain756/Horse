@@ -1,0 +1,778 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Home hero (round-21 mobile rebuild: full-bleed portrait
+     4→// carousel; round-23 perf pass). Spec source: Nuvio-reference measurements
+     5→// (360dp viewport) — every visual value lives in the --hero-* token block in
+     6→// globals.css.
+     7→// Data: Harbor's existing featured pool (Cinemeta anchor catalogs, passed in
+     8→// by HomeView) + fail-soft TMDB enrichment for title logos and the meta-line
+     9→// genre. Autoplay pauses on hover/touch/focus/hidden tab/off-screen/reduced-motion.
+    10→//
+    11→// Round-23 performance contract (measured, see worklog Task 41):
+    12→//  - ONE art element per slide via <picture><source media>: phones download
+    13→//    only the portrait ladder, md+ only the backdrop ladder (the old double
+    14→//    <img> downloaded the hidden layer too).
+    15→//  - Responsive tiers: metahub small/medium/large/original (backdrop
+    16→//    medium/large; tmdb w-tier when the source is TMDB) picked by rendered
+    17→//    width × DPR via srcset+sizes; Save-Data / 2G caps the ladder.
+    18→//  - Art window: only the active slide and its two wrap-aware neighbors mount
+    19→//    art; the rest render the static gradient placeholder (fewer decoded
+    20→//    bitmaps: was 16.3MB for 8 slides, now ~3-5MB).
+    21→//  - The content stack NEVER remounts on slide change (focus in the dots
+    22→//    survives); the entrance animation replays via the Web Animations API
+    23→//    (opacity/transform only, same tokens as the old keyframes).
+    24→//  - Indicator dots crossfade two absolutely-positioned layers (dot ↔ pill)
+    25→//    with opacity + scaleX — zero layout animation.
+    26→//  - Images decode before reveal (img.decode() gate + fade-in) so a
+    27→//    transition never shows a half-decoded frame; first slide preloads via a
+    28→//    hoisted <link rel=preload imagesrcset> (React 19 hoists <link>).
+    29→import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+    30→import { Pause, Play } from "lucide-react";
+    31→import { useNav, useSettings } from "@/lib/harbor/store";
+    32→import type { Meta } from "@/lib/harbor/types";
+    33→import { tmdbDetails, tmdbIdFromImdb, tmdbLogo } from "@/lib/harbor/tmdb";
+    34→import {
+    35→  goToSlideLabel,
+    36→  homeT,
+    37→  isArabic,
+    38→  metaTypeLabel,
+    39→  slideOf,
+    40→} from "@/lib/harbor/i18n";
+    41→
+    42→export type HeroSlide = { meta: Meta };
+    43→
+    44→type SlideInfo = { logo?: string; genre?: string };
+    45→
+    46→const FAILED_ART = new Set<string>();
+    47→const WARMED_ART = new Set<string>(); // artworks already decoded this session
+    48→const AUTOPLAY_MS = 6_000;
+    49→/** Cached once per document: the token-driven content-crossfade duration
+    50→ *  (avoid a forced style recalc on every slide change during fast bursts). */
+    51→let CROSSFADE_MS = 300;
+    52→/** Must match the CSS swap point for the portrait/backdrop art layers. */
+    53→const MD_MIN = "(min-width: 600px)";
+    54→
+    55→// ---------- Responsive art ladders (round-23) ----------
+    56→// The featured pool serves metahub (Cinemeta) or TMDB or addon URLs. Build a
+    57→// width ladder for the two known CDNs; anything else stays a single src (the
+    58→// old behavior) so addon-provided art keeps working untouched.
+    59→
+    60→type ArtTier = { w: number; url: string };
+    61→
+    62→/** Cap the ladder for data-saver / slow connections (never below medium so
+    63→ *  quality stays usable; the browser still picks by rendered×DPR). */
+    64→function tierCap(): number {
+    65→  if (typeof navigator === "undefined") return Infinity;
+    66→  const c = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    67→  if (!c) return Infinity;
+    68→  if (c.saveData) return 500;
+    69→  if (c.effectiveType && /(^|\b)2g(\b|$)/i.test(c.effectiveType)) return 500;
+    70→  return Infinity;
+    71→}
+    72→
+    73→function metahubLadder(base: string, kind: "poster" | "background" | "logo"): ArtTier[] {
+    74→  // https://images.metahub.space/<kind>/<size>/<id>/img — sizes verified:
+    75→  // poster small 300w / medium 500w / large 780w / original 2000w;
+    76→  // background medium 1280w / large 3840w; logo medium ~780w / large ~1526w.
+    77→  const sizes = kind === "poster"
+    78→    ? [
+    79→        { slug: "small", w: 300 },
+    80→        { slug: "medium", w: 500 },
+    81→        { slug: "large", w: 780 },
+    82→        { slug: "original", w: 2000 },
+    83→      ]
+    84→    : kind === "background"
+    85→      ? [
+    86→          { slug: "medium", w: 1280 },
+    87→          { slug: "large", w: 3840 },
+    88→        ]
+    89→      : [
+    90→          { slug: "medium", w: 780 },
+    91→          { slug: "large", w: 1526 },
+    92→        ];
+    93→  const cap = tierCap();
+    94→  const out: ArtTier[] = [];
+    95→  for (const s of sizes) {
+    96→    if (s.w > cap) break;
+    97→    out.push({ w: s.w, url: base.replace(/\/(small|medium|large|xlarge|original)\//, `/${s.slug}/`) });
+    98→  }
+    99→  return out.length > 0 ? out : [{ w: 500, url: base.replace(/\/(small|medium|large|xlarge|original)\//, "/medium/") }];
+   100→}
+   101→
+   102→function tmdbLadder(base: string, poster: boolean): ArtTier[] {
+   103→  // .../t/p/<size>/<path> — poster w185…w780/original; backdrop w780…original.
+   104→  const sizes = poster
+   105→    ? [
+   106→        { slug: "w342", w: 342 },
+   107→        { slug: "w500", w: 500 },
+   108→        { slug: "w780", w: 780 },
+   109→        { slug: "original", w: 2000 },
+   110→      ]
+   111→    : [
+   112→        { slug: "w780", w: 780 },
+   113→        { slug: "w1280", w: 1280 },
+   114→        { slug: "original", w: 3840 },
+   115→      ];
+   116→  const cap = tierCap();
+   117→  const out: ArtTier[] = [];
+   118→  for (const s of sizes) {
+   119→    if (s.w > cap) break;
+   120→    out.push({ w: s.w, url: base.replace(/\/(w\d+|original)\//, `/${s.slug}/`) });
+   121→  }
+   122→  return out.length > 0 ? out : [{ w: 500, url: base.replace(/\/(w\d+|original)\//, "/w500/") }];
+   123→}
+   124→
+   125→function srcSetOf(tiers: ArtTier[]): string {
+   126→  return tiers.map((t) => `${t.url} ${t.w}w`).join(", ");
+   127→}
+   128→
+   129→/** Resolved art for one slide: portrait (poster) + landscape (backdrop)
+   130→ *  ladders, plus a stable failure key (per title, not per size). */
+   131→function slideArt(meta: Meta): {
+   132→  portrait: { src: string; srcSet: string } | null;
+   133→  landscape: { src: string; srcSet: string } | null;
+   134→  failKey: string;
+   135→} | null {
+   136→  const poster = meta.poster;
+   137→  const bg = meta.background;
+   138→  if (!poster && !bg) return null;
+   139→  // Failure key is per TITLE (all size variants of one artwork 404 together).
+   140→  const failKey = `${meta.type}:${meta.id}`;
+   141→  const ladderFor = (url: string, kind: "poster" | "background" | "logo") => {
+   142→    if (!url) return null;
+   143→    if (/images\.metahub\.space\//.test(url)) return metahubLadder(url, kind);
+   144→    if (/image\.tmdb\.org\//.test(url)) return tmdbLadder(url, kind === "poster");
+   145→    return null; // unknown CDN → single-src
+   146→  };
+   147→  const pTiers = ladderFor(poster ?? "", "poster");
+   148→  const bTiers = ladderFor(bg ?? "", "background");
+   149→  return {
+   150→    portrait: poster
+   151→      ? { src: (pTiers ? pTiers[Math.min(1, pTiers.length - 1)] : { url: poster }).url, srcSet: pTiers ? srcSetOf(pTiers) : "" }
+   152→      : null,
+   153→    landscape: bg
+   154→      ? { src: (bTiers ? bTiers[0] : { url: bg }).url, srcSet: bTiers ? srcSetOf(bTiers) : "" }
+   155→      : null,
+   156→    failKey,
+   157→  };
+   158→}
+   159→
+   160→function preferrsReducedMotion(): boolean {
+   161→  if (typeof window === "undefined" || !window.matchMedia) return false;
+   162→  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+   163→}
+   164→
+   165→/** Physical scrollLeft that aligns the given slide to the inline-start edge.
+   166→ *  Works in both directions: LTR slide.offsetLeft is i*width; RTL scrollLeft
+   167→ *  is negative (modern spec) and slide 0 rests at the right edge. */
+   168→function slideScrollLeft(track: HTMLElement, slide: HTMLElement): number {
+   169→  const dir = getComputedStyle(track).direction;
+   170→  if (dir === "rtl") {
+   171→    const slideStart = slide.offsetLeft + slide.offsetWidth; // physical right edge
+   172→    return -(track.clientWidth - slideStart);
+   173→  }
+   174→  return slide.offsetLeft;
+   175→}
+   176→
+   177→/** One art element per slide — <picture> swaps portrait (phones) ↔ backdrop
+   178→ *  (md+) at the CSS breakpoint so ONLY the matching layer downloads. The img
+   179→ *  fades in after decode() resolves; failure falls back to the theme
+   180→ *  gradient (never a blank or broken icon). */
+   181→const HeroArt = memo(function HeroArt({
+   182→  art,
+   183→  alt,
+   184→  eager,
+   185→  active,
+   186→}: {
+   187→  art: NonNullable<ReturnType<typeof slideArt>>;
+   188→  alt: string;
+   189→  eager: boolean;
+   190→  active: boolean;
+   191→}) {
+   192→  const [failed, setFailed] = useState(FAILED_ART.has(art.failKey));
+   193→  const [ready, setReady] = useState(false);
+   194→  const [seenKey, setSeenKey] = useState(art.failKey);
+   195→  const imgRef = useRef<HTMLImageElement>(null);
+   196→  // Render-phase reset when the artwork changes (React-recommended pattern;
+   197→  // keeps the codebase's no-sync-setState-in-effect rule intact).
+   198→  if (seenKey !== art.failKey) {
+   199→    setSeenKey(art.failKey);
+   200→    setReady(false);
+   201→  }
+   202→
+   203→  // Decode gate: reveal only a fully-decoded frame (no half-painted flash).
+   204→  // Cached images are detected on the next tick (codebase lint pattern);
+   205→  // in-flight ones resolve via decode()/onLoad.
+   206→  useEffect(() => {
+   207→    const img = imgRef.current;
+   208→    if (!img) return;
+   209→    if (img.complete && img.naturalWidth > 0) {
+   210→      const h = setTimeout(() => setReady(true), 0);
+   211→      return () => clearTimeout(h);
+   212→    }
+   213→    img.decode?.().catch(() => {
+   214→      /* decode rejects on empty/undecodable sources; onLoad/onError take over */
+   215→    });
+   216→    return undefined;
+   217→  }, [art.portrait?.src, art.landscape?.src]);
+   218→
+   219→  if (failed || (!art.portrait && !art.landscape)) {
+   220→    return (
+   221→      <div
+   222→        aria-label={alt || undefined}
+   223→        role="img"
+   224→        className="home-hero-art home-hero-art-fallback"
+   225→      />
+   226→    );
+   227→  }
+   228→
+   229→  return (
+   230→    <picture
+   231→      className={`home-hero-art home-hero-art-picture${ready ? " home-hero-art-ready" : ""}`}
+   232→    >
+   233→      {art.landscape && (
+   234→        <source
+   235→          media={MD_MIN}
+   236→          srcSet={art.landscape.srcSet || undefined}
+   237→          sizes="100vw"
+   238→        />
+   239→      )}
+   240→      <img
+   241→        ref={imgRef}
+   242→        src={art.portrait?.src ?? art.landscape?.src}
+   243→        srcSet={art.portrait?.srcSet || undefined}
+   244→        sizes="(max-width: 599px) 100vw"
+   245→        alt={alt}
+   246→        loading={eager ? "eager" : "lazy"}
+   247→        decoding={eager ? "sync" : "async"}
+   248→        fetchPriority={eager ? (active ? "high" : "low") : "auto"}
+   249→        draggable={false}
+   250→        onLoad={() => setReady(true)}
+   251→        onError={() => {
+   252→          FAILED_ART.add(art.failKey);
+   253→          setFailed(true);
+   254→        }}
+   255→      />
+   256→    </picture>
+   257→  );
+   258→});
+   259→
+   260→/** Static gradient placeholder for out-of-window slides (same surface as the
+   261→ *  failure fallback — the carousel never shows a blank frame). */
+   262→function ArtPlaceholder({ label }: { label?: string }) {
+   263→  return (
+   264→    <div
+   265→      role={label ? "img" : undefined}
+   266→      aria-label={label || undefined}
+   267→      className="home-hero-art home-hero-art-fallback"
+   268→      aria-hidden={label ? undefined : true}
+   269→    />
+   270→  );
+   271→}
+   272→
+   273→/** Sequential TMDB enrichment: fills title logos + a localized first genre
+   274→ *  for slides that lack them. One slide at a time, ~150ms apart; every step
+   275→ *  fails soft (cached by tmdbGet, so revisits are free). */
+   276→function useHeroEnrichment(slides: HeroSlide[]) {
+   277→  const [info, setInfo] = useState<Record<string, SlideInfo>>({});
+   278→  const infoRef = useRef(info);
+   279→  useEffect(() => {
+   280→    infoRef.current = info;
+   281→  }, [info]);
+   282→  const sig = slides.map((s) => s.meta.id).join("|");
+   283→  useEffect(() => {
+   284→    if (slides.length === 0) return;
+   285→    let alive = true;
+   286→    (async () => {
+   287→      for (const { meta } of slides) {
+   288→        if (!alive) return;
+   289→        if (!/^tt\d+$/.test(meta.id)) continue;
+   290→        if (meta.logo && meta.genres?.length) continue;
+   291→        if (infoRef.current[meta.id]) continue;
+   292→        try {
+   293→          const tmdbId = await tmdbIdFromImdb(meta.id, meta.type === "series" ? "series" : "movie");
+   294→          if (!alive) return;
+   295→          if (!tmdbId) continue;
+   296→          const details = await tmdbDetails(meta.type === "series" ? "series" : "movie", tmdbId);
+   297→          if (!alive || !details) continue;
+   298→          const logo = tmdbLogo(details);
+   299→          const genre = details.genres?.[0]?.name;
+   300→          if (logo || genre) {
+   301→            setInfo((prev) => ({ ...prev, [meta.id]: { logo, genre } }));
+   302→          }
+   303→        } catch {
+   304→          /* fail soft */
+   305→        }
+   306→        await new Promise((r) => setTimeout(r, 150));
+   307→      }
+   308→    })();
+   309→    return () => {
+   310→      alive = false;
+   311→    };
+   312→  }, [sig, slides]);
+   313→  return info;
+   314→}
+   315→
+   316→export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: boolean }) {
+   317→  const settings = useSettings((s) => s.settings);
+   318→  const lang = settings.uiLanguage || "en";
+   319→  const rtl = isArabic(lang);
+   320→  const push = useNav((s) => s.push);
+   321→
+   322→  const [idx, setIdx] = useState(0);
+   323→  const [userPaused, setUserPaused] = useState(false);
+   324→  const [hovering, setHovering] = useState(false);
+   325→  const [touching, setTouching] = useState(false);
+   326→  const [focusPaused, setFocusPaused] = useState(false);
+   327→  const [onScreen, setOnScreen] = useState(true);
+   328→  const [reduced, setReduced] = useState(false);
+   329→  // Burst-tolerant art window (round-23): steady state is the strict
+   330→  // [idx-1, idx, idx+1] window; during rapid navigation (fast dot jumps,
+   331→  // keyboard repeat) the set ACCUMULATES visited slides and prunes back
+   332→  // 1.6s after the burst ends — mount/unmount thrash during a burst is zero,
+   333→  // the resting DOM stays virtualized (3 arts). Standard overscan practice.
+   334→  const [burstSet, setBurstSet] = useState<Set<number>>(() => new Set());
+   335→
+   336→  const trackRef = useRef<HTMLDivElement>(null);
+   337→  const contentRef = useRef<HTMLDivElement>(null);
+   338→  const rafRef = useRef(0);
+   339→  const touchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   340→
+   341→  const info = useHeroEnrichment(slides);
+   342→
+   343→  // Reduced-motion: no autoplay, no smooth scrolling, no crossfade (CSS too)
+   344→  useEffect(() => {
+   345→    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+   346→    const update = () => setReduced(mq.matches);
+   347→    update();
+   348→    mq.addEventListener("change", update);
+   349→    return () => mq.removeEventListener("change", update);
+   350→  }, []);
+   351→
+   352→  // Off-screen gate (also prevents programmatic scrolling from yanking the page)
+   353→  useEffect(() => {
+   354→    const el = trackRef.current;
+   355→    if (!el || typeof IntersectionObserver === "undefined") return;
+   356→    const io = new IntersectionObserver(([e]) => setOnScreen(e.isIntersecting), {
+   357→      threshold: 0.35,
+   358→    });
+   359→    io.observe(el);
+   360→    return () => io.disconnect();
+   361→  }, []);
+   362→
+   363→  // Scroll → active index (exact 1-slide-per-width snapping). rAF-coalesced;
+   364→  // setIdx with an unchanged number is bailed out by React, so swiping costs
+   365→  // one cheap re-render per slide boundary only.
+   366→  const onScroll = useCallback(() => {
+   367→    if (rafRef.current) return;
+   368→    rafRef.current = requestAnimationFrame(() => {
+   369→      rafRef.current = 0;
+   370→      const el = trackRef.current;
+   371→      if (!el || el.clientWidth === 0) return;
+   372→      const i = Math.round(Math.abs(el.scrollLeft) / el.clientWidth);
+   373→      setIdx(Math.max(0, Math.min(slides.length - 1, i)));
+   374→    });
+   375→  }, [slides.length]);
+   376→
+   377→  const goTo = useCallback(
+   378→    (i: number, smooth = true) => {
+   379→      const el = trackRef.current;
+   380→      if (!el) return;
+   381→      const slide = el.querySelector<HTMLElement>(`[data-slide="${i}"]`);
+   382→      if (!slide) return;
+   383→      el.scrollTo({
+   384→        left: slideScrollLeft(el, slide),
+   385→        behavior: smooth && !reduced ? "smooth" : "auto",
+   386→      });
+   387→      setIdx(i);
+   388→    },
+   389→    [reduced],
+   390→  );
+   391→
+   392→  const total = slides.length;
+   393→
+   394→  // Wrap-aware art window + per-slide art resolution. Hooks stay ABOVE the
+   395→  // early returns (rules-of-hooks); the early returns below only choose the
+   396→  // skeleton/empty presentation.
+   397→  // Resolved ONCE per slides-array identity so HeroArt's memo holds.
+   398→  const arts = useMemo(() => slides.map((s) => slideArt(s.meta)), [slides]);
+   399→  const artWindow = useMemo(() => {
+   400→    const set = new Set<number>();
+   401→    if (total > 0) {
+   402→      set.add(idx);
+   403→      set.add((idx + 1) % total);
+   404→      set.add((idx - 1 + total) % total);
+   405→    }
+   406→    return set;
+   407→  }, [idx, total]);
+   408→
+   409→  // Burst accumulation + delayed prune (see burstSet above). Both state
+   410→  // updates run inside timers (codebase no-sync-setState-in-effect rule).
+   411→  useEffect(() => {
+   412→    if (total <= 0) return;
+   413→    const grow = setTimeout(() => {
+   414→      setBurstSet((prev) => {
+   415→        const next = new Set(prev);
+   416→        next.add(idx);
+   417→        next.add((idx + 1) % total);
+   418→        next.add((idx - 1 + total) % total);
+   419→        return next.size === prev.size ? prev : next;
+   420→      });
+   421→    }, 0);
+   422→    const prune = setTimeout(() => {
+   423→      setBurstSet(new Set([idx, (idx + 1) % total, (idx - 1 + total) % total]));
+   424→    }, 1600);
+   425→    return () => {
+   426→      clearTimeout(grow);
+   427→      clearTimeout(prune);
+   428→    };
+   429→  }, [idx, total]);
+   430→
+   431→  const canAutoplay =
+   432→    total > 1 && !reduced && !userPaused && !hovering && !touching && !focusPaused && onScreen;
+   433→
+   434→  // Autoplay (pauses when the tab is hidden via the document listener below)
+   435→  useEffect(() => {
+   436→    if (!canAutoplay || document.hidden) return;
+   437→    const t = setInterval(() => {
+   438→      if (document.hidden) return;
+   439→      const el = trackRef.current;
+   440→      const next = el ? (Math.round(Math.abs(el.scrollLeft) / el.clientWidth) + 1) % total : 0;
+   441→      goTo(next);
+   442→    }, AUTOPLAY_MS);
+   443→    return () => clearInterval(t);
+   444→  }, [canAutoplay, total, goTo]);
+   445→
+   446→  // Keyboard: arrows respect RTL direction; Home/End jump
+   447→  const onKeyDown = (e: React.KeyboardEvent) => {
+   448→    if (total <= 1) return;
+   449→    const nextKey = rtl ? "ArrowLeft" : "ArrowRight";
+   450→    const prevKey = rtl ? "ArrowRight" : "ArrowLeft";
+   451→    if (e.key === nextKey) {
+   452→      e.preventDefault();
+   453→      goTo((idx + 1) % total);
+   454→    } else if (e.key === prevKey) {
+   455→      e.preventDefault();
+   456→      goTo((idx - 1 + total) % total);
+   457→    } else if (e.key === "Home") {
+   458→      e.preventDefault();
+   459→      goTo(0);
+   460→    } else if (e.key === "End") {
+   461→      e.preventDefault();
+   462→      goTo(total - 1);
+   463→    }
+   464→  };
+   465→
+   466→  // Touch pause WITHOUT the per-event timer storm (round-23): arm once on
+   467→  // pointerdown, release 8s after the gesture ends (covers a slow swipe).
+   468→  const onTouchStart = useCallback(() => {
+   469→    setTouching(true);
+   470→    if (touchTimer.current) clearTimeout(touchTimer.current);
+   471→  }, []);
+   472→  const onTouchEnd = useCallback(() => {
+   473→    if (touchTimer.current) clearTimeout(touchTimer.current);
+   474→    touchTimer.current = setTimeout(() => setTouching(false), 8_000);
+   475→  }, []);
+   476→
+   477→  // Unmount cleanup for the touch-release timer + scroll rAF (round-23 leak fix)
+   478→  useEffect(() => {
+   479→    return () => {
+   480→      if (touchTimer.current) clearTimeout(touchTimer.current);
+   481→      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+   482→    };
+   483→  }, []);
+   484→
+   485→  // Content entrance replay WITHOUT remounting the stack (round-23): same
+   486→  // keyframes/easing as the old .home-hero-content-in CSS animation, driven
+   487→  // by the Web Animations API so the dots keep their focus and the logo img
+   488→  // node (and its decoded bitmap) is reused across slide changes. A new
+   489→  // animation CANCELS the previous one (fast dot bursts must not stack 50
+   490→  // running animations on the same element).
+   491→  const contentAnimRef = useRef<Animation | null>(null);
+   492→  const activeMeta = slides[Math.min(idx, Math.max(0, total - 1))]?.meta;
+   493→  const activeId = activeMeta?.id ?? "";
+   494→  useEffect(() => {
+   495→    if (!activeId || reduced) return;
+   496→    const el = contentRef.current;
+   497→    if (!el?.animate) return;
+   498→    if (CROSSFADE_MS === 300) {
+   499→      // Read once per session; stays token-driven (--hero-crossfade-ms).
+   500→      CROSSFADE_MS = parseFloat(getComputedStyle(el).getPropertyValue("--hero-crossfade-ms")) || 300;
+   501→    }
+   502→    contentAnimRef.current?.cancel();
+   503→    contentAnimRef.current = el.animate(
+   504→      [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "translateY(0)" }],
+   505→      { duration: CROSSFADE_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+   506→    );
+   507→  }, [activeId, reduced]);
+   508→  useEffect(() => {
+   509→    return () => {
+   510→      contentAnimRef.current?.cancel();
+   511→    };
+   512→  }, []);
+   513→
+   514→  // Idle prefetch (round-23): walk the WHOLE carousel during idle time, one
+   515→  // slide per idle slice, warming bytes + decoded bitmaps for every artwork
+   516→  // at the tier this device would pick. Autoplay visits all slides anyway, so
+   517→  // this costs nothing extra and no transition ever decodes on the critical
+   518→  // path (in-window slides get img.decode(); out-of-window ones a detached
+   519→  // Image() so the HTTP + image caches are warm when the window reaches them).
+   520→  // WARMED_ART de-duplicates across walk restarts (no repeated decodes when
+   521→  // idx changes; each artwork is decoded at most once per session).
+   522→  useEffect(() => {
+   523→    if (total <= 1) return;
+   524→    let cancelled = false;
+   525→    const w = window as Window & {
+   526→      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+   527→    };
+   528→    const needPx = () => (typeof innerWidth === "number" ? innerWidth : 412) * (devicePixelRatio || 1);
+   529→    const warmAt = (i: number) => {
+   530→      const art = arts[i];
+   531→      if (!art || WARMED_ART.has(art.failKey)) return;
+   532→      const mark = () => WARMED_ART.add(art.failKey);
+   533→      // In-window slide: warm the mounted element directly.
+   534→      const img = trackRef.current?.querySelector<HTMLImageElement>(`[data-slide="${i}"] img`);
+   535→      if (img) {
+   536→        img.decode?.().then(mark).catch(() => {
+   537→          /* warm-up only */
+   538→        });
+   539→        return;
+   540→      }
+   541→      // Out-of-window: detached Image() with the SAME srcset the mounted img
+   542→      // will use, so the browser cache entry matches exactly.
+   543→      const pick = (ladder: { src: string; srcSet: string } | null) => {
+   544→        if (!ladder?.srcSet) return ladder?.src;
+   545→        const px = needPx();
+   546→        const tiers = ladder.srcSet.split(",").map((t) => {
+   547→          const [u, d] = t.trim().split(/\s+/);
+   548→          return { u, w: parseInt(d, 10) || 0 };
+   549→        });
+   550→        return (tiers.find((t) => t.w >= px) ?? tiers[tiers.length - 1]).u;
+   551→      };
+   552→      const probe = new Image();
+   553→      probe.onload = mark;
+   554→      probe.src = pick(art.portrait) ?? pick(art.landscape) ?? "";
+   555→      if (typeof probe.decode === "function") {
+   556→        probe.decode().then(mark).catch(() => {
+   557→          /* warm-up only */
+   558→        });
+   559→      }
+   560→    };
+   561→    let k = idx + 1;
+   562→    const step = () => {
+   563→      if (cancelled) return;
+   564→      warmAt(((k % total) + total) % total);
+   565→      k++;
+   566→      if (k < idx + total) {
+   567→        if (w.requestIdleCallback) w.requestIdleCallback(step, { timeout: 2500 });
+   568→        else setTimeout(step, 400);
+   569→      }
+   570→    };
+   571→    if (w.requestIdleCallback) w.requestIdleCallback(step, { timeout: 2000 });
+   572→    else setTimeout(step, 300);
+   573→    return () => {
+   574→      cancelled = true;
+   575→    };
+   576→  }, [idx, total, arts]);
+   577→
+   578→  if (loading) return <HeroSkeleton lang={lang} />;
+   579→  if (total === 0) return null;
+   580→
+   581→  const slide = slides[Math.min(idx, total - 1)];
+   582→  const meta = slide.meta;
+   583→  const enriched = info[meta.id] ?? {};
+   584→  const logo = meta.logo ?? enriched.logo;
+   585→  const genre = meta.genres?.[0] ?? enriched.genre;
+   586→  const year = meta.releaseInfo?.split("–")[0];
+   587→  const typeLabel = metaTypeLabel(meta.type, meta.genres ?? (genre ? [genre] : undefined), lang);
+   588→
+   589→  // Preload ladder for the FIRST slide (React 19 hoists <link> to <head>);
+   590→  // media-split so each platform preloads exactly the layer it will show.
+   591→  // (arts/artWindow are computed above, before the early returns.)
+   592→  const firstArt = arts.length > 0 ? arts[0] : null;
+   593→
+   594→  const titleLen = meta.name.length;
+   595→  // Length-based fallback sizing (tokens live in globals.css, scale-aware)
+   596→  const titleClass =
+   597→    titleLen <= 8 ? "" : titleLen <= 16 ? " home-hero-title-m" : " home-hero-title-s";
+   598→
+   599→  return (
+   600→    <section
+   601→      className="home-hero group/hero"
+   602→      role="region"
+   603→      aria-roledescription="carousel"
+   604→      aria-label={homeT("featured", lang)}
+   605→      onMouseEnter={() => setHovering(true)}
+   606→      onMouseLeave={() => setHovering(false)}
+   607→      onFocusCapture={() => setFocusPaused(true)}
+   608→      onBlurCapture={() => setFocusPaused(false)}
+   609→      onKeyDown={onKeyDown}
+   610→    >
+   611→      {firstArt && (
+   612→        <>
+   613→          {firstArt.portrait && (
+   614→            <link
+   615→              rel="preload"
+   616→              as="image"
+   617→              media="(max-width: 599px)"
+   618→              href={firstArt.portrait.src}
+   619→              imageSrcSet={firstArt.portrait.srcSet || undefined}
+   620→              imageSizes="100vw"
+   621→              fetchPriority="high"
+   622→            />
+   623→          )}
+   624→          {firstArt.landscape && (
+   625→            <link
+   626→              rel="preload"
+   627→              as="image"
+   628→              media={MD_MIN}
+   629→              href={firstArt.landscape.src}
+   630→              imageSrcSet={firstArt.landscape.srcSet || undefined}
+   631→              imageSizes="100vw"
+   632→              fetchPriority="high"
+   633→            />
+   634→          )}
+   635→        </>
+   636→      )}
+   637→
+   638→      <div
+   639→        ref={trackRef}
+   640→        className="home-hero-track"
+   641→        onScroll={onScroll}
+   642→        onTouchStart={onTouchStart}
+   643→        onTouchEnd={onTouchEnd}
+   644→        onTouchCancel={onTouchEnd}
+   645→        tabIndex={0}
+   646→        aria-label={homeT("featured", lang)}
+   647→      >
+   648→        {slides.map((s, i) => {
+   649→          const active = i === idx;
+   650→          const adjacent = artWindow.has(i) || burstSet.has(i);
+   651→          return (
+   652→            <div
+   653→              key={s.meta.id}
+   654→              data-slide={i}
+   655→              className="home-hero-slide"
+   656→              role="group"
+   657→              aria-roledescription="slide"
+   658→              aria-label={slideOf(i + 1, total, lang)}
+   659→              aria-hidden={!active}
+   660→            >
+   661→              {adjacent && arts[i] ? (
+   662→                <HeroArt
+   663→                  art={arts[i]!}
+   664→                  alt={active ? s.meta.name : ""}
+   665→                  eager={adjacent}
+   666→                  active={active}
+   667→                />
+   668→              ) : (
+   669→                <ArtPlaceholder label={active ? s.meta.name : undefined} />
+   670→              )}
+   671→            </div>
+   672→          );
+   673→        })}
+   674→      </div>
+   675→
+   676→      <div className="home-hero-scrim-top" aria-hidden />
+   677→      <div className="home-hero-scrim-fade" aria-hidden />
+   678→
+   679→      {/* Shared content stack — NEVER remounts (round-23): the entrance
+   680→          animation replays via WAAI; dots/button keep DOM identity + focus. */}
+   681→      <div ref={contentRef} className="home-hero-content">
+   682→        <div className="home-hero-logo-row">
+   683→          {logo ? (
+   684→            <img
+   685→              src={logo}
+   686→              alt={meta.name}
+   687→              className="home-hero-logo"
+   688→              loading="eager"
+   689→              decoding="async"
+   690→            />
+   691→          ) : (
+   692→            <h1 className={`home-hero-title${titleClass}`}>{meta.name}</h1>
+   693→          )}
+   694→        </div>
+   695→
+   696→        <div className="home-hero-meta" style={{ marginBottom: "var(--hero-gap-meta)" }}>
+   697→          {year && <span className="shrink-0">{year}</span>}
+   698→          {year && genre && <span className="hero-meta-dot" aria-hidden />}
+   699→          {genre && <span className="overflow-hidden text-ellipsis">{genre}</span>}
+   700→          <span className="hero-meta-dot" aria-hidden />
+   701→          <span className="shrink-0">{typeLabel}</span>
+   702→        </div>
+   703→
+   704→        <button
+   705→          type="button"
+   706→          onClick={() => push({ kind: "detail", type: meta.type, id: meta.id })}
+   707→          className="home-hero-btn md-state harbor-tv-focus"
+   708→          style={{ marginBottom: "var(--hero-gap-btn)" }}
+   709→        >
+   710→          {homeT("viewDetails", lang)}
+   711→        </button>
+   712→
+   713→        {total > 1 && (
+   714→          <div className="flex items-center justify-center" style={{ gap: "var(--hero-ind-gap)" }}>
+   715→            {slides.map((s, i) => (
+   716→              <button
+   717→                key={s.meta.id}
+   718→                type="button"
+   719→                aria-label={goToSlideLabel(i + 1, lang)}
+   720→                aria-current={i === idx}
+   721→                onClick={() => goTo(i)}
+   722→                className="home-hero-dot-btn harbor-tv-focus"
+   723→              >
+   724→                <span className="home-hero-dot-dot" aria-hidden />
+   725→                <span className="home-hero-dot-pill" aria-hidden />
+   726→              </button>
+   727→            ))}
+   728→            <button
+   729→              type="button"
+   730→              aria-label={userPaused ? homeT("resumeAutoplay", lang) : homeT("pauseAutoplay", lang)}
+   731→              onClick={() => setUserPaused((p) => !p)}
+   732→              className="md-icon-btn md-state !h-11 !w-11 !text-white/70 hover:!text-white harbor-tv-focus"
+   733→            >
+   734→              {userPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4" />}
+   735→            </button>
+   736→          </div>
+   737→        )}
+   738→        {/* Live region: announces slide changes only while autoplay is off */}
+   739→        <p aria-live={userPaused ? "polite" : "off"} className="sr-only">
+   740→          {slideOf(idx + 1, total, lang)}
+   741→        </p>
+   742→      </div>
+   743→    </section>
+   744→  );
+   745→}
+   746→
+   747→// ---------- Skeleton (reserved height, no layout shift; token-driven so it
+   748→// mirrors the scaled real layout at every breakpoint) ----------
+   749→function HeroSkeleton({ lang }: { lang: string }) {
+   750→  return (
+   751→    <div className="home-hero" role="status" aria-label={homeT("loadingFeatured", lang)}>
+   752→      <div className="home-hero-content">
+   753→        <div className="home-hero-logo-row">
+   754→          <div
+   755→            className="harbor-skeleton rounded-xl"
+   756→            style={{ width: "calc(var(--hero-logo-max-w) * 0.72)", height: "calc(var(--hero-logo-max-h) * 0.78)" }}
+   757→          />
+   758→        </div>
+   759→        <div className="home-hero-meta" style={{ marginBottom: "var(--hero-gap-meta)" }}>
+   760→          <div className="harbor-skeleton rounded-full" style={{ height: "var(--hero-meta-size)", width: 46 }} />
+   761→          <div className="harbor-skeleton rounded-full" style={{ height: "var(--hero-meta-size)", width: 70 }} />
+   762→          <div className="harbor-skeleton rounded-full" style={{ height: "var(--hero-meta-size)", width: 52 }} />
+   763→        </div>
+   764→        <div
+   765→          className="harbor-skeleton rounded-full"
+   766→          style={{ width: "var(--hero-btn-min-w)", height: "var(--hero-btn-height)", marginBottom: "var(--hero-gap-btn)" }}
+   767→        />
+   768→        <div className="flex items-center justify-center" style={{ gap: "var(--hero-ind-gap)" }}>
+   769→          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+   770→          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-active-w)", height: "var(--hero-ind-dot)" }} />
+   771→          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+   772→          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+   773→        </div>
+   774→      </div>
+   775→    </div>
+   776→  );
+   777→}
+   778→

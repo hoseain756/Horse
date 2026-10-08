@@ -1571,12 +1571,13 @@ html[data-kids="on"] {
   --hero-height: clamp(440px, 67svh, calc(720px * var(--home-scale)));
   --hero-fade: #000000; /* OLED black dissolve target (spec) */
   --hero-scrim-top: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0) 14%);
-  --hero-scrim-fade: linear-gradient(to bottom, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.55) 68%, var(--hero-fade) 97%);
+  --hero-scrim-fade: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 65%, var(--hero-fade) 88%);
 
-  /* Hero content stack */
+  /* Hero content stack (round-24 measured spec: logo box 54vw × 64dp,
+     bottom-baseline aligned; gaps 20/16/14; 8dp under the dots) */
   --hero-content-max-w: calc(640px * var(--home-scale));
-  --hero-logo-max-w: min(66vw, calc(320px * var(--home-scale)));
-  --hero-logo-max-h: calc(68px * var(--home-scale)); /* round-21b: 56 → 68 (user: logo too small) */
+  --hero-logo-max-w: min(54vw, calc(195px * var(--home-scale)));
+  --hero-logo-max-h: calc(64px * var(--home-scale));
   --hero-logo-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
   --hero-title-size: calc(40px * var(--home-scale));
   --hero-title-size-m: clamp(calc(24px * var(--home-scale)), 8.5vw, calc(30px * var(--home-scale)));
@@ -1588,10 +1589,10 @@ html[data-kids="on"] {
   --hero-meta-dot: calc(4px * min(var(--home-scale), 1.35));
   --hero-meta-dot-opacity: 0.6;
   --hero-meta-gap: calc(10px * min(var(--home-scale), 1.35));
-  --hero-gap-logo: calc(24px * var(--home-scale));
+  --hero-gap-logo: calc(20px * var(--home-scale));
   --hero-gap-meta: calc(16px * var(--home-scale));
-  --hero-gap-btn: calc(12px * var(--home-scale));
-  --hero-pad-bottom: calc(6px * var(--home-scale));
+  --hero-gap-btn: calc(14px * var(--home-scale));
+  --hero-pad-bottom: calc(8px * var(--home-scale));
   --hero-btn-height: calc(45px * min(var(--home-scale), 1.5));
   --hero-btn-min-w: calc(146px * min(var(--home-scale), 1.5));
   --hero-btn-pad-x: calc(32px * min(var(--home-scale), 1.5));
@@ -1599,10 +1600,20 @@ html[data-kids="on"] {
   --hero-btn-ink: #0b0b0b;
   --hero-btn-size: calc(15px * min(var(--home-scale), 1.35));
 
-  /* Carousel indicator + motion */
+  /* Carousel indicator (round-24 spec: 8dp white dots, 32×8 active pill,
+     8dp gap; the 48dp touch target is the ::before hit expansion) */
   --hero-ind-dot: calc(8px * min(var(--home-scale), 1.5));
   --hero-ind-active-w: calc(32px * min(var(--home-scale), 1.5));
   --hero-ind-gap: calc(8px * min(var(--home-scale), 1.5));
+  --hero-ind-rest-scale: 0.25; /* 32px bar × 0.25 = the 8dp resting dot */
+
+  /* Motion (round-24): single spring-like ease; only transform + opacity are
+     ever animated. JS reads these once per session (home-hero.tsx). */
+  --hero-slide-ms: 380ms;   /* adjacent slide settle */
+  --hero-jump-ms: 350ms;    /* far-target crossfade jump */
+  --hero-reduced-ms: 200ms; /* reduced-motion crossfade */
+  --hero-jump-shift: 22px;  /* jump travel offset (20–24dp band) */
+  --hero-content-drift: 12px; /* max content drift during a drag */
   --hero-crossfade-ms: 300ms;
   --hero-ease: cubic-bezier(0.2, 0, 0, 1);
 
@@ -1679,75 +1690,85 @@ html[data-appearance="light"] .home-void {
 
 @layer components {
   /* ---------- Hero ---------- */
-  /* Round-23 perf: layout+paint containment keeps slide changes off the rest
-     of the page (no hero-internal invalidations escape; no fixed-position
-     children exist inside, so containment is safe). */
+  /* Round-24: modular transform carousel. Layout+paint containment keeps
+     slide changes off the rest of the page; user-select none because the
+     hero is a gesture surface (drag = swipe, not text selection). */
   .home-hero {
     position: relative;
     height: var(--hero-height);
     overflow: hidden;
     background: var(--hero-fade);
     contain: layout paint style;
+    user-select: none;
+    -webkit-user-select: none;
   }
+  /* The track is a transform layer: slides are absolutely stacked and moved
+     by translate3d (compositor only). touch-action: pan-y keeps native
+     vertical scrolling free — horizontal panning belongs to the carousel. */
   .home-hero-track {
     position: relative;
-    display: flex;
     height: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    /* Both axes explicit: vertical page scrolling is never blocked by the
-       hero, and pan-x keeps the native swipe (pan-y ALONE would kill it). */
-    touch-action: pan-x pan-y;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
+    touch-action: pan-y;
+    outline: none;
   }
-  .home-hero-track::-webkit-scrollbar {
-    display: none;
+  .home-hero.is-moving .home-hero-track {
+    will-change: transform;
   }
   .home-hero-slide {
-    position: relative;
-    flex: 0 0 100%;
-    width: 100%;
-    height: 100%;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
+    position: absolute;
+    inset: 0;
     overflow: hidden;
     contain: layout paint style;
   }
-  /* Round-23: the art is a <picture> (ONE element) — phones download only the
+  .home-hero.is-moving .home-hero-slide {
+    will-change: transform, opacity;
+  }
+  /* Static base layer (never re-rendered during transitions): doubles as the
+     LQIP underlay and the art-failure fallback — the hero never shows blank. */
+  .home-hero-base {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 90% at 75% 0%, rgba(255, 255, 255, 0.07), transparent 55%),
+      linear-gradient(180deg, var(--color-raised-var), var(--hero-fade));
+  }
+  /* Round-24: art is a <picture> (ONE element) — phones download only the
      portrait ladder, md+ only the backdrop ladder (CSS breakpoint below must
      stay in sync with MD_MIN in home-hero.tsx). The img fades in only after
-     img.decode() resolves, over the static gradient layer (no blank frames,
-     no half-decoded reveals). */
+     img.decode() resolves, over the LQIP → base stack (no blank frames). */
   .home-hero-art {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
   }
+  .home-hero-lqip {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .home-hero-lqip img,
   .home-hero-art img {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* Phones: portrait artwork anchored to the top (spec). md+ swaps to the
-       landscape backdrop (see media query at the end of this section). */
+    /* Phones: portrait artwork anchored to the top (head/face never crops).
+       md+ swaps to the landscape backdrop (media query at the end). */
     object-position: center top;
+  }
+  .home-hero-lqip img {
+    /* slight upscale by design — it is a 24px thumb blown up as a placeholder */
+    filter: blur(1px);
+    transform: scale(1.02);
+  }
+  .home-hero-art img {
     opacity: 0;
     transition: opacity 250ms var(--hero-ease);
   }
   .home-hero-art-ready img {
     opacity: 1;
-  }
-  /* Static gradient layer (LQIP / failure fallback) — painted once, never
-     re-rendered per frame; double-duty as the decode placeholder so the
-     carousel never shows a blank frame. */
-  .home-hero-art-fallback {
-    background: radial-gradient(120% 90% at 75% 0%, rgba(255, 255, 255, 0.07), transparent 55%),
-      linear-gradient(180deg, var(--color-raised-var), var(--hero-fade));
   }
   .home-hero-scrim-top {
     position: absolute;
@@ -1778,26 +1799,29 @@ html[data-appearance="light"] .home-void {
     padding-bottom: var(--hero-pad-bottom);
     pointer-events: none; /* the track keeps receiving swipes */
   }
+  .home-hero.is-moving .home-hero-content {
+    will-change: opacity, transform;
+  }
   .home-hero-content > * {
     pointer-events: auto;
   }
-  /* Logo row: reserves the scaled logo box even before the logo arrives
-     (no layout shift), min-height grows with --home-scale. */
+  /* Logo row: FIXED box, logo aligned to its BOTTOM (spec) so tall stacked
+     wordmarks and wide logos share one baseline; the box is reserved before
+     the logo arrives (zero layout shift). */
   .home-hero-logo-row {
     display: flex;
-    min-height: var(--hero-logo-max-h);
-    align-items: center;
+    height: var(--hero-logo-max-h);
+    align-items: flex-end;
     justify-content: center;
     margin-bottom: var(--hero-gap-logo);
   }
   .home-hero-logo {
-    /* Forced height (round-21b): the logo always renders at its maximum size
-       (user feedback — it previously rendered small). object-fit: contain
-       keeps the aspect inside the box; max-width clamps ultra-wide logos. */
-    height: var(--hero-logo-max-h);
-    width: auto;
+    max-height: var(--hero-logo-max-h);
     max-width: var(--hero-logo-max-w);
+    width: auto;
+    height: auto;
     object-fit: contain;
+    object-position: bottom;
     filter: drop-shadow(var(--hero-logo-shadow));
   }
   .home-hero-title {
@@ -1859,22 +1883,22 @@ html[data-appearance="light"] .home-void {
   .home-hero-btn:active {
     transform: scale(0.97);
   }
-  /* Content entrance between items is replayed via the Web Animations API
-     (home-hero.tsx) — opacity/transform only, no React remount, so the dots
-     keep DOM identity and keyboard focus. The old keyframes are gone. */
 
-  /* Indicator: the BUTTON is the real 48dp touch target (transparent, no
-     pseudo hit-area tricks). Round-23: TWO absolutely-positioned layers —
-     the 4px dot and the 32×4 pill — crossfade with opacity + scaleX
-     (compositor-only; the old `width` transition caused a per-change
-     re-layout). Layout of the row is constant at all times. */
+  /* Indicator (round-24): ONE bar per dot — 32×8 white pill at scaleX .25
+     (resting 8dp dot) → scaleX 1 (active). Compositor-only morph, synced to
+     drag progress by home-hero.tsx (inline transforms during the gesture,
+     CSS transitions take over on release). Layout of the row is constant.
+     The BUTTON is the small visual dot; its ::before is the 48dp-class hit
+     circle (pointer targets don't need paint containment, so the row keeps
+     only layout+style containment — paint would clip the hit/focus areas). */
+  .home-hero-dots {
+    contain: layout style;
+  }
   .home-hero-dot-btn {
     position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 48px;
-    min-width: 48px;
+    display: block;
+    width: var(--hero-ind-dot);
+    height: var(--hero-ind-dot);
     padding: 0;
     border: none;
     background: transparent;
@@ -1882,35 +1906,31 @@ html[data-appearance="light"] .home-void {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .home-hero-dot-dot,
-  .home-hero-dot-pill {
+  .home-hero-dot-btn::before {
+    content: "";
+    position: absolute;
+    inset: -12px; /* 32dp hit circle around the 8dp dot */
+    border-radius: 9999px;
+  }
+  .home-hero-dot-bar {
     position: absolute;
     top: 50%;
     left: 50%;
-    /* translate centers; transform stays reserved for the (animated) scale */
     translate: -50% -50%;
-    height: calc(var(--hero-ind-dot) / 2);
+    width: var(--hero-ind-active-w);
+    height: var(--hero-ind-dot);
     border-radius: 9999px;
     background: #fff;
+    transform: scaleX(var(--hero-ind-rest-scale));
+    transition: transform 300ms var(--hero-ease);
     pointer-events: none;
   }
-  .home-hero-dot-dot {
-    width: calc(var(--hero-ind-dot) / 2);
-    opacity: 0.55;
-    transition: opacity 150ms ease;
-  }
-  .home-hero-dot-pill {
-    width: var(--hero-ind-active-w);
-    opacity: 0;
-    transform: scaleX(0.125); /* 4px look at rest — matches the dot */
-    transition: opacity 300ms var(--hero-ease), transform 300ms var(--hero-ease);
-  }
-  .home-hero-dot-btn[aria-current="true"] .home-hero-dot-dot {
-    opacity: 0;
-  }
-  .home-hero-dot-btn[aria-current="true"] .home-hero-dot-pill {
-    opacity: 1;
+  .home-hero-dot-btn[aria-current="true"] .home-hero-dot-bar {
     transform: scaleX(1);
+  }
+  /* per-frame drag writes must not fight the CSS transition */
+  .home-hero.is-dragging .home-hero-dot-bar {
+    transition: none;
   }
 
   /* ---------- Continue watching ---------- */
@@ -2078,18 +2098,19 @@ html[data-appearance="light"] .home-void {
   @media (min-width: 600px) {
     /* Art layer swap (see .home-hero-art above): the <source media> selects
        the backdrop ladder; only object-position differs in CSS. */
-    .home-hero-art img {
+    .home-hero-art img,
+    .home-hero-lqip img {
       object-position: center;
     }
   }
 }
 
-/* Reduced motion: no content crossfade, no dot crossfade, no art fade-in, no
+/* Reduced motion: no content crossfade, no dot morph, no art fade-in, no
    card press scale travel; autoplay/jump behavior is additionally gated in JS. */
 @media (prefers-reduced-motion: reduce) {
   .home-hero-art img,
-  .home-hero-dot-dot,
-  .home-hero-dot-pill,
+  .home-hero-lqip img,
+  .home-hero-dot-bar,
   .cw-card {
     animation: none;
     transition: none;
