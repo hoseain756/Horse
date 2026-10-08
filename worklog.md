@@ -1153,3 +1153,19 @@ Stage Summary:
 - Repo is PUSH-READY but BLOCKED: the provided PAT is read-only (metadata:read). USER FIX (either): (a) fine-grained PAT → Repository access: All repositories (or select Horse) → Permissions → Repository permissions → Contents: Read and write; or (b) classic PAT with `repo` scope. Then `git push -u origin main` completes immediately.
 - SECURITY NOTE: the PAT was pasted in plaintext chat — recommend revoking/rotating after use regardless.
 - Detail redesign (Task 30) re-verified healthy in live app; no regressions.
+---
+Task ID: 34
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User asked (AR) for a ready one-click link that grants push access ("عطني رابط جاهز اضغطة يعطيك سماح للوصول") — instead of manually fixing the read-only PAT.
+
+Work Log:
+- Implemented GitHub OAuth DEVICE FLOW (the only click-to-grant mechanism GitHub offers): POST /login/device/code with the public GitHub CLI OAuth app client_id (178c6fc778ccc68e1d6a) — transparent to the user that the consent screen says "GitHub CLI". Scope requested: `repo` only (verified repo has NO .github/workflows files, so workflow scope unnecessary; repo is public).
+- Flow: user_code BC4C-4D4E, verification_uri https://github.com/login/device, expires_in 899s, interval 5s. device_code kept OUT of the repo.
+- Background poller launched: /tmp/ghflow/poll.sh (setsid, detached) → polls /login/oauth/access_token every 5s (slow_down-aware), on success: chmod-600 token at /tmp/ghflow/token → `git push https://x-access-token:<t>@github.com/hoseain756/Horse.git main:main` → logs PUSH_OK → DELETES token. All artifacts live in /tmp/ghflow/ (OUTSIDE the repo so the external auto-commit daemon can never commit/log a secret). Log: /tmp/ghflow/flow.log.
+- Poller started 14:11:30 UTC; runs ~18 min (220×5s) > token expiry.
+- NEXT ROUND MUST: check /tmp/ghflow/flow.log — PUSH_OK → confirm to user + verify remote (API repo size/branch) + append final entry; PUSH_FAILED → token file kept at /tmp/ghflow/token for one manual retry, inspect error (never print token); EXPIRED/DENIED/no-code → restart device flow or fall back to the pre-filled classic PAT link (https://github.com/settings/tokens/new?description=Horse%20push&scopes=repo) with user pasting token back; push command ready regardless: git push https://x-access-token:<TOKEN>@github.com/hoseain756/Horse.git main:main.
+- SECURITY: user consent screen will read "GitHub CLI" (expected); token never displayed in chat; recommend the user revoke the authorization afterwards (Settings → Applications → Authorized OAuth Apps → GitHub CLI) once push is confirmed.
+
+Stage Summary:
+- One-click grant flow is LIVE and armed: user clicks https://github.com/login/device, enters BC4C-4D4E, clicks Authorize → push happens automatically within ~5-10s, no further user action.
+- Fallback path documented above if the code expires (15 min) or is denied.
