@@ -245,7 +245,7 @@ export function PickerOverlay({
     <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center" role="dialog" aria-modal="true" aria-label="Stream picker">
       <div className="md-sheet rounded-b-none! md:rounded-b-[28px]! w-full md:max-w-3xl md:max-h-[82vh] max-h-[88vh] flex flex-col overflow-hidden shadow-[var(--md-sys-elevation-3)]">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-edge-soft shrink-0">
+        <div className="flex items-center justify-between gap-3 px-4 py-4 border-b border-edge-soft shrink-0 sm:px-5">
           <div className="min-w-0">
             <h2 className="md-title-large text-ink">Choose a stream</h2>
             <p className="text-xs text-ink-subtle truncate">
@@ -276,7 +276,7 @@ export function PickerOverlay({
         </div>
 
         {/* Filters */}
-        <div className="px-5 py-3 border-b border-edge-soft flex items-center gap-2 flex-wrap shrink-0">
+        <div className="px-4 py-3 border-b border-edge-soft flex items-center gap-2 flex-wrap shrink-0 sm:px-5">
           {(
             [
               ["all", "All"],
@@ -311,7 +311,7 @@ export function PickerOverlay({
             {showAll ? "Showing all" : "Playable here"}
             {!showAll && hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ""}
           </button>
-          <div className="relative ml-auto w-40">
+          <div className="relative ms-auto w-36 sm:w-40">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle" />
             <input
               value={query}
@@ -325,7 +325,7 @@ export function PickerOverlay({
 
         {/* No-debrid hint: torrents play via the built-in P2P engine, debrid adds instant cached links */}
         {!loading && !debridConfigured && filteredTiers.length > 0 && (
-          <div className="mx-5 mt-3 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink-muted shrink-0">
+          <div className="mx-4 mt-3 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink-muted shrink-0 sm:mx-5">
             <Network className="w-4 h-4 text-accent shrink-0" aria-hidden />
             <p className="min-w-0 flex-1">
               Torrent streams play through the <span className="font-semibold text-ink">built-in P2P engine</span> —
@@ -342,7 +342,7 @@ export function PickerOverlay({
         )}
 
         {/* Body */}
-        <div ref={bodyRef} className="harbor-picker-body flex-1 overflow-y-auto harbor-scroll px-5 py-4 space-y-5">
+        <div ref={bodyRef} className="harbor-picker-body flex-1 overflow-y-auto harbor-scroll px-4 py-4 space-y-5 sm:px-5">
           {loading && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs text-ink-muted">
@@ -658,7 +658,7 @@ function StreamRow({
       }}
       aria-label={`${titleLine} — play stream`}
       className={cn(
-        "harbor-tv-focus harbor-picker-row md-state relative w-full flex flex-wrap items-center gap-3.5 rounded-[var(--md-sys-shape-corner-medium)] border p-3 text-left transition-colors cursor-pointer",
+        "harbor-tv-focus harbor-picker-row md-state relative w-full flex flex-wrap items-center gap-2.5 overflow-hidden rounded-[var(--md-sys-shape-corner-medium)] border p-2.5 text-start transition-colors cursor-pointer sm:gap-3.5 sm:p-3",
         cached ? "border-emerald-500/30 bg-emerald-500/5" : "border-edge-soft bg-[var(--md-sys-color-surface-container)]",
         direct && "border-l-2 border-l-emerald-500/50",
       )}
@@ -680,17 +680,17 @@ function StreamRow({
           )}
         </span>
       )}
-      <div className="flex flex-col items-center gap-1 w-14 shrink-0">
-        <span className={cn("rounded-lg px-2 py-1 text-[11px] font-bold", cached ? "bg-emerald-500/20 text-emerald-300" : "bg-raised text-ink-muted")}>
+      <div className="flex min-w-0 flex-col items-center gap-1 w-12 shrink-0 sm:w-14">
+        <span className={cn("max-w-full truncate rounded-lg px-2 py-1 text-[11px] font-bold", cached ? "bg-emerald-500/20 text-emerald-300" : "bg-raised text-ink-muted")}>
           {p?.resolution ?? "—"}
         </span>
         {p?.hdrFormat && (
-          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-accent-soft text-accent">{p.hdrFormat}</span>
+          <span className="max-w-full truncate rounded px-1.5 py-0.5 text-[9px] font-bold bg-accent-soft text-accent">{p.hdrFormat}</span>
         )}
         {/* Playability badge: where this stream will actually play */}
         <span
           className={cn(
-            "rounded-full px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide inline-flex items-center gap-1",
+            "max-w-full overflow-hidden rounded-full px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide inline-flex items-center gap-1 whitespace-nowrap",
             badgeInfo.className,
           )}
           title={cls.reasons.length > 0 ? cls.reasons.join(" · ") : badgeInfo.title}
@@ -735,14 +735,18 @@ function StreamRow({
         )}
       </div>
       {isTorrent && (
-        <div className="flex items-center gap-1.5 shrink-0">
+        /* w-full on phones: the two actions wrap to their own aligned row
+           (justify-end = inline-end, so they hug the reading edge in both
+           directions) instead of crushing the title column or spilling
+           off-sheet; sm+ restores the inline layout. */
+        <div className="flex w-full items-center justify-end gap-1.5 shrink-0 sm:w-auto sm:justify-start">
           {p2pEnabled && (
             <button
               type="button"
               onClick={(e) => void playP2p(e)}
               disabled={busy}
               className={cn(
-                "harbor-tv-focus md-btn md-state h-9! px-3.5!",
+                "harbor-tv-focus md-btn md-state h-8! px-2.5! text-xs! sm:h-9! sm:px-3.5!",
                 debridKey === null ? "md-btn-filled" : "md-btn-tonal",
               )}
               aria-label={debridKey === null ? "Play via P2P" : "Play via P2P torrent engine"}

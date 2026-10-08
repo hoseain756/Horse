@@ -2065,7 +2065,7 @@ function VideoStage({
               <p className="text-[10px] text-ink-subtle mt-0.5 tabular-nums">
                 {Math.round((p2pStats?.progress ?? 0) * 100)}% · {p2pStats?.peers ?? 0} peers · {formatSpeed(p2pStats?.downloadSpeed)}
               </p>
-              {payload.p2p.mode === "remux" && (
+              {payload.p2p.mode === "remux" && !fullscreen && (
                 <p className="text-[10px] text-ink-subtle mt-0.5">transmuxed — seeking restarts the transcoder at the target position</p>
               )}
             </div>
@@ -2074,7 +2074,9 @@ function VideoStage({
       )}
 
       {/* P2P status pill (persistent while a torrent stream is active) */}
-      {payload.p2p && !buffering && (
+      {/* Hidden while fullscreen: diagnostic telemetry (incl. the "transmux"
+          mode suffix) must not sit on the movie. Windowed mode keeps it. */}
+      {payload.p2p && !buffering && !fullscreen && (
         <div
           className="md-card-elevated rounded-[var(--md-sys-shape-corner-large)]! absolute left-4 top-16 z-20 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-ink tabular-nums transition-opacity"
           title="Server-side P2P torrent stream"
@@ -2149,9 +2151,17 @@ function VideoStage({
           controlsVisible ? "opacity-100" : "opacity-0",
         )}
       >
-        {/* Seek bar (timeline-driven: real duration, buffered ranges, drag preview) */}
-        <div className="group/seek relative mb-2.5" onClick={(e) => e.stopPropagation()}>
-          <SeekBar snap={tlSnap} doSeek={doSeek} bumpControls={bumpControls} />
+        {/* Seek bar FLANKED by the two times — logical order: TOTAL anchors the
+            inline-START edge (left in EN, right in AR), RUNNING time anchors the
+            inline-END edge (right in EN, left in AR). No dir on this container:
+            it mirrors with the document automatically. Digits are dir="ltr"
+            inside each label so clock strings never scramble under bidi. */}
+        <div className="group/seek relative mb-2.5 flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+          <TimeEdge kind="total" snap={tlSnap} lang={settings.uiLanguage ?? "en"} />
+          <div className="min-w-0 flex-1">
+            <SeekBar snap={tlSnap} doSeek={doSeek} bumpControls={bumpControls} />
+          </div>
+          <TimeEdge kind="running" snap={tlSnap} lang={settings.uiLanguage ?? "en"} />
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -2262,11 +2272,16 @@ function VideoStage({
             />
           </div>
 
-          <TimeDisplay snap={tlSnap} lang={settings.uiLanguage ?? "en"} />
-
-          <div className="ml-auto flex items-center gap-1">
-            {/* Subtitles */}
-            <div className="relative">
+          {/* relative anchor for BOTH popover panels (subtitles + settings):
+              this group hugs the bar's physical right edge in BOTH directions
+              (ml-auto is physical), so a physical right-0 anchor always leaves
+              the panels fully on-screen — a logical end-0 here was measured
+              overflowing the viewport in RTL (button sits at the far right
+              edge, panel extended outward). */}
+          <div className="relative ml-auto flex items-center gap-1">
+            {/* Subtitles — NOT a positioning context anymore: the panel anchors
+              to the button GROUP above (see comment there). */}
+            <div>
               <button
                 type="button"
                 onClick={() => {
@@ -2282,7 +2297,9 @@ function VideoStage({
                 <Subtitles className="w-4.5 h-4.5" />
               </button>
               {subMenuOpen && (
-                <div className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-72 p-3" onClick={(e) => e.stopPropagation()}>
+                /* Anchored to the button GROUP (physical right-0): stable at
+                   the bar's right edge in LTR and RTL; max-w guards 320px. */
+                <div className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-72 max-w-[calc(100vw-2rem)] p-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-2 px-1">
                     <p className="md-label-medium uppercase text-ink-muted">Subtitles</p>
                     {subEffectiveCount > 0 && (
@@ -2451,8 +2468,8 @@ function VideoStage({
               )}
             </div>
 
-            {/* Settings / speed */}
-            <div className="relative">
+            {/* Settings / speed — same group-anchored panel as subtitles */}
+            <div>
               <button
                 type="button"
                 onClick={() => {
@@ -2468,7 +2485,8 @@ function VideoStage({
                 <Settings2 className="w-4.5 h-4.5" />
               </button>
               {settingsMenuOpen && (
-                <div className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-64 max-h-[70vh] overflow-y-auto harbor-scroll p-3" onClick={(e) => e.stopPropagation()}>
+                /* Group-anchored (physical right-0) — see subtitles panel */
+                <div className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-64 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto harbor-scroll p-3" onClick={(e) => e.stopPropagation()}>
                   <p className="md-label-medium uppercase text-ink-muted mb-2 flex items-center gap-1.5">
                     <Gauge className="w-3.5 h-3.5" /> Speed
                   </p>
@@ -2821,8 +2839,23 @@ function SeekBar({
   );
 }
 
-// ---------------- Time display (elapsed / −remaining toggle) ----------------
-function TimeDisplay({ snap, lang }: { snap: TimelineSnapshot; lang: string }) {
+// ---------------- Seek-bar edge time labels ----------------
+// LOGICAL placement chosen by the user: the TOTAL duration anchors the
+// inline-START edge (left side in English, right side in Arabic) and the
+// RUNNING time anchors the inline-END edge (right in English, left in
+// Arabic). The parent flex row has no dir attribute, so the mirror is
+// automatic. Tapping the running edge still toggles elapsed ↔ remaining
+// (TIME_DISPLAY_KEY preserved). dir="ltr" on each label keeps clock digits
+// in canonical order under bidi.
+function TimeEdge({
+  kind,
+  snap,
+  lang,
+}: {
+  kind: "total" | "running";
+  snap: TimelineSnapshot;
+  lang: string;
+}) {
   const [mode, setMode] = useState<"elapsed" | "remaining">(() => {
     if (typeof window === "undefined") return "elapsed";
     try {
@@ -2840,31 +2873,53 @@ function TimeDisplay({ snap, lang }: { snap: TimelineSnapshot; lang: string }) {
       /* private mode */
     }
   };
+  const ar = lang.startsWith("ar");
   const { currentTime, duration, remaining, isApproximate } = snap;
   const totalKnown = duration != null;
-  const totalShown =
-    mode === "remaining" && remaining != null
-      ? `-${formatClock(remaining)}`
-      : `${isApproximate ? "~" : ""}${formatClock(duration)}`;
+
+  if (kind === "total") {
+    const value = totalKnown ? `${isApproximate ? "~" : ""}${formatClock(duration)}` : null;
+    return (
+      <span
+        dir="ltr"
+        title={
+          totalKnown
+            ? ar ? "المدة الكاملة" : "Total length"
+            : ar ? "المدة غير معروفة لهذا البث" : "Total length unknown for this stream"
+        }
+        className={cn(
+          "shrink-0 select-none rounded-md px-1 py-0.5 text-xs tabular-nums",
+          totalKnown ? "text-ink-muted" : "text-ink-subtle",
+        )}
+      >
+        {value ?? (ar ? "غير معروفة" : "unknown")}
+      </span>
+    );
+  }
+
+  const runningValue =
+    mode === "remaining" && remaining != null ? `-${formatClock(remaining)}` : formatClock(currentTime);
   const ariaText = totalKnown
     ? `${spokenDuration(currentTime)} of ${spokenDuration(duration as number)}`
     : `Elapsed ${spokenDuration(currentTime)}, total length unknown`;
-
   return (
     <button
       type="button"
       dir="ltr"
       onClick={toggle}
-      title={totalKnown ? "Toggle elapsed / remaining time" : "Total length unknown — showing elapsed time"}
-      className="ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-ink-muted tabular-nums md-state hover:text-ink"
-      aria-label={`Time: ${ariaText}. Activate to toggle remaining time display.`}
+      title={
+        totalKnown
+          ? ar ? "تبديل بين الوقت المنقضي والمتبقي" : "Toggle elapsed / remaining time"
+          : ar ? "المدة غير معروفة — يظهر الوقت المنقضي" : "Total length unknown — showing elapsed time"
+      }
+      className="shrink-0 rounded-md px-1 py-0.5 text-xs text-ink-muted tabular-nums md-state hover:text-ink"
+      aria-label={
+        ar
+          ? `الوقت: ${ariaText}. اضغط للتبديل إلى عرض الوقت المتبقي.`
+          : `Time: ${ariaText}. Activate to toggle remaining time display.`
+      }
     >
-      <span aria-live="off">{formatClock(currentTime)}</span>
-      <span aria-live="off" className={totalKnown ? "" : "text-ink-subtle"}>
-        {totalKnown
-          ? ` / ${totalShown}`
-          : ` · ${lang.startsWith("ar") ? "المدة غير معروفة" : "length unknown"}`}
-      </span>
+      <span aria-live="off">{runningValue}</span>
     </button>
   );
 }

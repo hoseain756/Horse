@@ -1,0 +1,925 @@
+     1→"use client";
+     2→
+     3→// Harbor Web — Stream picker overlay (port of Harbor play-picker: fetch streams from all
+     4→// addons, parse + score + rank, tier grouping, quality filters)
+     5→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     6→import {
+     7→  X, Loader2, RefreshCw, Search, Filter, Zap, Gauge, HardDrive, Signal, Globe, FileVideo, KeyRound,
+     8→  Network, ExternalLink, CheckCircle2, AlertTriangle, Wifi,
+     9→} from "lucide-react";
+    10→import type { Stream } from "@/lib/harbor/types";
+    11→import { useAddons, useNav, useSettings } from "@/lib/harbor/store";
+    12→import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
+    13→import { fetchStreams, fetchMeta, defaultVideoId } from "@/lib/harbor/api";
+    14→import { runPipeline, tierOf, TIER_ORDER, formatSize } from "@/lib/harbor/scoring";
+    15→import {
+    16→  classifyStream,
+    17→  serverCapabilities,
+    18→  verdictRank,
+    19→  cachedTranscodeSupported,
+    20→  type StreamClass,
+    21→} from "@/lib/harbor/playback";
+    22→import {
+    23→  p2pPrepare,
+    24→  p2pStatus,
+    25→  p2pPlan,
+    26→  refreshP2pCapabilities,
+    27→  type P2pPlaybackPlan,
+    28→} from "@/lib/harbor/p2p";
+    29→import { useToast } from "@/hooks/use-toast";
+    30→import { PlayerOverlay } from "../player/player-overlay";
+    31→import { cn } from "@/lib/utils";
+    32→
+    33→export function PickerOverlay({
+    34→  type,
+    35→  id,
+    36→  videoId,
+    37→  season,
+    38→  episode,
+    39→  runtimeSeconds,
+    40→}: {
+    41→  type: string;
+    42→  id: string;
+    43→  videoId?: string;
+    44→  season?: number;
+    45→  episode?: number;
+    46→  runtimeSeconds?: number;
+    47→}) {
+    48→  const pop = useNav((s) => s.pop);
+    49→  const push = useNav((s) => s.push);
+    50→  const addons = useAddons((s) => s.addons);
+    51→  const addonsLoaded = useAddons((s) => s.loaded);
+    52→  const settings = useSettings((s) => s.settings);
+    53→  const { toast } = useToast();
+    54→  const debridConfigured = useDebrid((s) => s.apiKey !== null);
+    55→  const [debridDialogOpen, setDebridDialogOpen] = useState(false);
+    56→
+    57→  // Ensure a persisted debrid key is visible even when the user jumps straight
+    58→  // into a picker after a reload (idempotent; settings loads it too).
+    59→  useEffect(() => {
+    60→    useDebrid.getState().load();
+    61→  }, []);
+    62→
+    63→  // Torrent rows: no debrid key → offer the inline setup dialog (does not leave the picker).
+    64→  const handleDebridNotConfigured = useCallback(() => {
+    65→    setDebridDialogOpen(true);
+    66→  }, []);
+    67→
+    68→  const [streams, setStreams] = useState<Stream[]>([]);
+    69→  const [loading, setLoading] = useState(true);
+    70→  const [progressAddons, setProgressAddons] = useState(0);
+    71→  const [totalAddons, setTotalAddons] = useState(0);
+    72→  const [error, setError] = useState<string | null>(null);
+    73→  const [filter, setFilter] = useState("all");
+    74→  const [query, setQuery] = useState("");
+    75→  const [playing, setPlaying] = useState<Stream | null>(null);
+    76→  // "Show all streams" toggle: default = playable only (per settings), with a
+    77→  // visible count of hidden entries so nothing feels missing.
+    78→  const [showAll, setShowAll] = useState(!settings.playableOnly);
+    79→
+    80→  // Warm the server capability cache so badges classify correctly on first paint
+    81→  useEffect(() => {
+    82→    void serverCapabilities();
+    83→  }, []);
+    84→
+    85→  // TV-mode auto focus: keyboard users landing in the picker should get focus moved
+    86→  // to the dialog without touching the mouse. Mouse use (dataset.tv flips off in
+    87→  // tvnav) never steals focus. The check happens inside the delayed callback so a
+    88→  // mouse jiggle during the settle window cancels the steal.
+    89→  const bodyRef = useRef<HTMLDivElement | null>(null);
+    90→  const closeRef = useRef<HTMLButtonElement | null>(null);
+    91→  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    92→
+    93→  const scheduleTvFocus = useCallback(() => {
+    94→    if (focusTimer.current) clearTimeout(focusTimer.current);
+    95→    focusTimer.current = setTimeout(() => {
+    96→      requestAnimationFrame(() => {
+    97→        if (document.documentElement.dataset.tv !== "on") return;
+    98→        const row = bodyRef.current?.querySelector<HTMLElement>(".harbor-picker-row");
+    99→        const target = row ?? closeRef.current;
+   100→        target?.focus({ preventScroll: true });
+   101→        row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+   102→      });
+   103→    }, 350);
+   104→  }, []);
+   105→
+   106→  // On open: focus the first row if streams are already there, else the close button.
+   107→  useEffect(() => {
+   108→    scheduleTvFocus();
+   109→    return () => {
+   110→      if (focusTimer.current) clearTimeout(focusTimer.current);
+   111→    };
+   112→  }, [scheduleTvFocus]);
+   113→
+   114→  // Once streams finish loading (or fail), settle for ~350ms then move focus in.
+   115→  useEffect(() => {
+   116→    if (!loading) scheduleTvFocus();
+   117→  }, [loading, scheduleTvFocus]);
+   118→
+   119→  // Resolved stream target: `id:season:episode` for series (resolved from meta when
+   120→  // the picker was opened with a bare series id), else the raw id.
+   121→  const [targetId, setTargetId] = useState(videoId ?? id);
+   122→
+   123→  const load = useCallback(async () => {
+   124→    setLoading(true);
+   125→    setError(null);
+   126→    setStreams([]);
+   127→    const eligible = addons.filter(
+   128→      (a) => a.enabled && (a.manifest.resources ?? []).some((r) => (typeof r === "string" ? r === "stream" : r.name === "stream")),
+   129→    );
+   130→    setTotalAddons(eligible.length);
+   131→    setProgressAddons(0);
+   132→    if (eligible.length === 0) {
+   133→      setLoading(false);
+   134→      setError("No stream addons installed. Install a stream addon to watch titles.");
+   135→      return;
+   136→    }
+   137→    try {
+   138→      // Series opened without an episode id (bare tt-id): stream addons need
+   139→      // "id:season:episode" — resolve the default video from meta first.
+   140→      let tid = targetId;
+   141→      if (type === "series" && !tid.includes(":")) {
+   142→        const meta = await fetchMeta("series", id).catch(() => null);
+   143→        const vid = defaultVideoId(meta);
+   144→        if (vid) {
+   145→          tid = vid;
+   146→          setTargetId(vid);
+   147→        }
+   148→      }
+   149→      const results = await fetchStreams(addons, type, tid);
+   150→      await serverCapabilities();
+   151→      const ranked = runPipeline(results);
+   152→      // Playable-first ordering: verdict rank is the primary key, the existing
+   153→      // quality/score order is preserved inside each verdict band.
+   154→      const withVerdict = ranked
+   155→        .map((s, i) => ({ s, i, c: classifyStream(s) }))
+   156→        .sort((a, b) => verdictRank(a.c.verdict) - verdictRank(b.c.verdict) || a.i - b.i)
+   157→        .map((x) => x.s);
+   158→      setStreams(withVerdict);
+   159→    } catch (e) {
+   160→      setError(e instanceof Error ? e.message : "Failed to fetch streams");
+   161→    } finally {
+   162→      setLoading(false);
+   163→    }
+   164→  }, [addons, type, targetId, id]);
+   165→
+   166→  useEffect(() => {
+   167→    if (addonsLoaded) load();
+   168→  }, [addonsLoaded, load]);
+   169→
+   170→  // progress simulation per addon completion
+   171→  useEffect(() => {
+   172→    if (!loading || totalAddons === 0) return;
+   173→    const t = setInterval(() => {
+   174→      setProgressAddons((p) => Math.min(totalAddons, p + 1));
+   175→    }, 700);
+   176→    return () => clearInterval(t);
+   177→  }, [loading, totalAddons]);
+   178→
+   179→  const tiers = useMemo(() => {
+   180→    const map = new Map<string, Stream[]>();
+   181→    for (const s of streams) {
+   182→      const tier = tierOf(s);
+   183→      if (!map.has(tier)) map.set(tier, []);
+   184→      map.get(tier)!.push(s);
+   185→    }
+   186→    return TIER_ORDER.filter((t) => map.has(t)).map((t) => ({ tier: t, items: map.get(t)! }));
+   187→  }, [streams]);
+   188→
+   189→  const filteredTiers = useMemo(() => {
+   190→    if (filter === "all" && !query.trim() && showAll) return tiers;
+   191→    return tiers
+   192→      .map(({ tier, items }) => ({
+   193→        tier,
+   194→        items: items.filter((s) => {
+   195→          // playable-only default: hide streams this browser+server cannot play
+   196→          if (!showAll) {
+   197→            const v = classifyStream(s);
+   198→            if (v.verdict === "unplayable") return false;
+   199→          }
+   200→          if (filter === "free" && !((!!s.url && s.url !== "#") || !!s.infoHash)) return false;
+   201→          if (filter === "4k" && !s.parsed?.resolution?.match(/4K/)) return false;
+   202→          if (filter === "1080p" && s.parsed?.resolution !== "1080p") return false;
+   203→          if (filter === "cached" && !Object.values(s.cached ?? {}).some(Boolean)) return false;
+   204→          if (query.trim()) {
+   205→            const q = query.toLowerCase();
+   206→            const text = `${s.title ?? ""} ${s.description ?? ""} ${s.addonName ?? ""}`.toLowerCase();
+   207→            if (!text.includes(q)) return false;
+   208→          }
+   209→          return true;
+   210→        }),
+   211→      }))
+   212→      .filter((t) => t.items.length > 0);
+   213→  }, [tiers, filter, query, showAll]);
+   214→
+   215→  // Count of playable-only hidden entries (shown next to the toggle)
+   216→  const hiddenCount = useMemo(() => {
+   217→    if (showAll) return 0;
+   218→    return streams.filter((s) => classifyStream(s).verdict === "unplayable").length;
+   219→  }, [streams, showAll]);
+   220→
+   221→  if (playing) {
+   222→    const metaName = playing.title?.split("\n")[0] ?? "";
+   223→    return (
+   224→      <PlayerOverlay
+   225→        payload={{
+   226→          url: playing.url ?? "",
+   227→          title: metaName,
+   228→          type,
+   229→          metaId: id,
+   230→          season,
+   231→          episode,
+   232→          videoId: targetId,
+   233→          streamTitle: playing.title,
+   234→          streamDescription: playing.description,
+   235→          deepLink: { type, id, videoId: targetId },
+   236→          stream: playing,
+   237→          runtimeSeconds,
+   238→          ...(playing.p2p ? { p2p: playing.p2p } : {}),
+   239→        }}
+   240→      />
+   241→    );
+   242→  }
+   243→
+   244→  return (
+   245→    <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center" role="dialog" aria-modal="true" aria-label="Stream picker">
+   246→      <div className="md-sheet rounded-b-none! md:rounded-b-[28px]! w-full md:max-w-3xl md:max-h-[82vh] max-h-[88vh] flex flex-col overflow-hidden shadow-[var(--md-sys-elevation-3)]">
+   247→        {/* Header */}
+   248→        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-edge-soft shrink-0">
+   249→          <div className="min-w-0">
+   250→            <h2 className="md-title-large text-ink">Choose a stream</h2>
+   251→            <p className="text-xs text-ink-subtle truncate">
+   252→              {type === "series" ? `Series · ${targetId}` : targetId}
+   253→              {season ? ` · S${season}:E${episode}` : ""}
+   254→            </p>
+   255→          </div>
+   256→          <div className="flex items-center gap-1.5 shrink-0">
+   257→            <button
+   258→              type="button"
+   259→              onClick={load}
+   260→              className="md-icon-btn md-state harbor-tv-focus"
+   261→              aria-label="Refresh streams"
+   262→              title="Refresh"
+   263→            >
+   264→              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+   265→            </button>
+   266→            <button
+   267→              type="button"
+   268→              ref={closeRef}
+   269→              onClick={pop}
+   270→              className="md-icon-btn md-state harbor-tv-focus"
+   271→              aria-label="Close picker"
+   272→            >
+   273→              <X className="w-5 h-5" />
+   274→            </button>
+   275→          </div>
+   276→        </div>
+   277→
+   278→        {/* Filters */}
+   279→        <div className="px-5 py-3 border-b border-edge-soft flex items-center gap-2 flex-wrap shrink-0">
+   280→          {(
+   281→            [
+   282→              ["all", "All"],
+   283→              ["free", "Free"],
+   284→              ["cached", "Cached"],
+   285→              ["4k", "4K"],
+   286→              ["1080p", "1080p"],
+   287→            ] as const
+   288→          ).map(([key, label]) => (
+   289→            <button
+   290→              key={key}
+   291→              type="button"
+   292→              onClick={() => setFilter(key)}
+   293→              aria-pressed={filter === key}
+   294→              className={cn("md-chip md-state", filter === key && "md-chip-selected")}
+   295→            >
+   296→              {label}
+   297→            </button>
+   298→          ))}
+   299→          {/* Playability visibility: playable-first by default, everything available on demand */}
+   300→          <button
+   301→            type="button"
+   302→            onClick={() => setShowAll((v) => !v)}
+   303→            aria-pressed={showAll}
+   304→            className={cn("md-chip md-state", showAll && "md-chip-selected")}
+   305→            title={
+   306→              showAll
+   307→                ? "Showing every stream"
+   308→                : `Showing streams that can play here${hiddenCount > 0 ? ` — ${hiddenCount} hidden` : ""}`
+   309→            }
+   310→          >
+   311→            {showAll ? "Showing all" : "Playable here"}
+   312→            {!showAll && hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ""}
+   313→          </button>
+   314→          <div className="relative ml-auto w-40">
+   315→            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle" />
+   316→            <input
+   317→              value={query}
+   318→              onChange={(e) => setQuery(e.target.value)}
+   319→              placeholder="Filter…"
+   320→              className="md-field-outlined w-full pl-8 pr-2 py-1.5 text-xs placeholder:text-ink-subtle"
+   321→              aria-label="Filter streams"
+   322→            />
+   323→          </div>
+   324→        </div>
+   325→
+   326→        {/* No-debrid hint: torrents play via the built-in P2P engine, debrid adds instant cached links */}
+   327→        {!loading && !debridConfigured && filteredTiers.length > 0 && (
+   328→          <div className="mx-5 mt-3 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink-muted shrink-0">
+   329→            <Network className="w-4 h-4 text-accent shrink-0" aria-hidden />
+   330→            <p className="min-w-0 flex-1">
+   331→              Torrent streams play through the <span className="font-semibold text-ink">built-in P2P engine</span> —
+   332→              no account needed. Connect debrid for instant cached links.
+   333→            </p>
+   334→            <button
+   335→              type="button"
+   336→              onClick={handleDebridNotConfigured}
+   337→              className="harbor-tv-focus md-state shrink-0 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-bold text-accent"
+   338→            >
+   339→              Connect
+   340→            </button>
+   341→          </div>
+   342→        )}
+   343→
+   344→        {/* Body */}
+   345→        <div ref={bodyRef} className="harbor-picker-body flex-1 overflow-y-auto harbor-scroll px-5 py-4 space-y-5">
+   346→          {loading && (
+   347→            <div className="space-y-3">
+   348→              <div className="flex items-center gap-2 text-xs text-ink-muted">
+   349→                <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+   350→                Querying {progressAddons}/{totalAddons || "?"} stream addons…
+   351→              </div>
+   352→              {Array.from({ length: 5 }).map((_, i) => (
+   353→                <div key={i} className="harbor-skeleton rounded-xl h-[68px] p-3 flex items-center gap-3.5" aria-hidden>
+   354→                  {/* shaped like a StreamRow: resolution chip / title+meta / unlock button */}
+   355→                  <div className="w-14 h-9 rounded-lg bg-white/10 shrink-0" />
+   356→                  <div className="flex-1 space-y-2">
+   357→                    <div className="h-3 w-2/3 rounded bg-white/10" />
+   358→                    <div className="h-2.5 w-1/3 rounded bg-white/10" />
+   359→                  </div>
+   360→                  <div className="w-16 h-7 rounded-lg bg-white/10 shrink-0" />
+   361→                </div>
+   362→              ))}
+   363→            </div>
+   364→          )}
+   365→
+   366→          {!loading && error && (
+   367→            <div className="rounded-xl border border-danger/40 bg-danger/10 text-danger px-4 py-3 text-sm">
+   368→              {error}
+   369→            </div>
+   370→          )}
+   371→
+   372→          {!loading && !error && filteredTiers.length === 0 && (
+   373→            <div className="text-center py-14 text-ink-subtle">
+   374→              <Filter className="w-9 h-9 mx-auto mb-2 opacity-40" />
+   375→              <p className="text-sm">No streams match. Try refreshing or removing filters.</p>
+   376→            </div>
+   377→          )}
+   378→
+   379→          {!loading &&
+   380→            filteredTiers.map(({ tier, items }) => (
+   381→              <section key={tier}>
+   382→                <div className="flex items-center gap-2 mb-2.5">
+   383→                  <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full shrink-0", tierDotColor(tier))} />
+   384→                  <h3 className="text-xs font-bold uppercase tracking-widest text-ink-muted">{tier}</h3>
+   385→                  <span className="text-[10px] text-ink-subtle">{items.length} streams</span>
+   386→                  <div className="flex-1 h-px bg-edge-soft" />
+   387→                </div>
+   388→                <div className="space-y-2">
+   389→                  {items.slice(0, 40).map((s, i) => (
+   390→                    <StreamRow
+   391→                      key={`${s.addonId}-${i}`}
+   392→                      stream={s}
+   393→                      onPick={setPlaying}
+   394→                      onNeedsSetup={handleDebridNotConfigured}
+   395→                      configured={debridConfigured}
+   396→                      showQuality={settings.showQualityInfo}
+   397→                    />
+   398→                  ))}
+   399→                </div>
+   400→              </section>
+   401→            ))}
+   402→        </div>
+   403→      </div>
+   404→      {debridDialogOpen && <DebridSetupDialog onClose={() => setDebridDialogOpen(false)} />}
+   405→    </div>
+   406→  );
+   407→}
+   408→
+   409→// Quality-ladder dot per tier header: emerald top, amber mid, neutral low —
+   410→// colors follow Harbor's existing palette conventions (understated).
+   411→function tierDotColor(tier: string): string {
+   412→  if (tier === "4K HDR" || tier === "4K") return "bg-emerald-400";
+   413→  if (tier === "1080p HDR" || tier === "1080p") return "bg-amber-500";
+   414→  if (tier === "720p" || tier === "SD") return "bg-zinc-500";
+   415→  return "bg-zinc-600";
+   416→}
+   417→
+   418→// Compatibility badge styles per verdict (green/yellow/gray per spec)
+   419→const BADGE_STYLES: Record<
+   420→  StreamClass["badge"],
+   421→  { label: string; title: string; className: string; dot: string }
+   422→> = {
+   423→  "plays-here": {
+   424→    label: "Plays here",
+   425→    title: "Direct play — this stream matches your browser",
+   426→    className: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+   427→    dot: "bg-emerald-400",
+   428→  },
+   429→  "plays-proxy": {
+   430→    label: "Via proxy",
+   431→    title: "Plays through the secure proxy (CORS/headers handled)",
+   432→    className: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
+   433→    dot: "bg-amber-400",
+   434→  },
+   435→  "plays-convert": {
+   436→    label: "Convert",
+   437→    title: "Needs on-demand conversion (MKV/HEVC/AC3-DTS) — server converts to H.264/AAC",
+   438→    className: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
+   439→    dot: "bg-amber-400",
+   440→  },
+   441→  external: {
+   442→    label: "External",
+   443→    title: "Opens in a new tab (external link or YouTube)",
+   444→    className: "bg-raised text-ink-muted border border-edge-soft",
+   445→    dot: "bg-zinc-400",
+   446→  },
+   447→  "not-playable": {
+   448→    label: "Can't play",
+   449→    title: "Cannot play in this browser with the current server settings",
+   450→    className: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/30",
+   451→    dot: "bg-zinc-500",
+   452→  },
+   453→};
+   454→
+   455→function StreamRow({
+   456→  stream,
+   457→  onPick,
+   458→  onNeedsSetup,
+   459→  configured,
+   460→  showQuality,
+   461→}: {
+   462→  stream: Stream;
+   463→  onPick: (s: Stream) => void;
+   464→  onNeedsSetup: () => void;
+   465→  configured: boolean;
+   466→  showQuality: boolean;
+   467→}) {
+   468→  const { toast } = useToast();
+   469→  const debridKey = useDebrid((s) => s.apiKey);
+   470→  const debridResolve = useDebrid((s) => s.resolve);
+   471→  const [resolving, setResolving] = useState(false);
+   472→  // P2P connecting state: null = idle, else seconds elapsed while joining the swarm
+   473→  const [p2pPhase, setP2pPhase] = useState<"idle" | "joining" | "planning">("idle");
+   474→  const [p2pInfo, setP2pInfo] = useState<{ peers: number; elapsed: number } | null>(null);
+   475→  const [err, setErr] = useState<string | null>(null);
+   476→  const errTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   477→  const p2pAbort = useRef<AbortController | null>(null);
+   478→
+   479→  useEffect(() => {
+   480→    return () => {
+   481→      if (errTimer.current) clearTimeout(errTimer.current);
+   482→      p2pAbort.current?.abort();
+   483→    };
+   484→  }, []);
+   485→
+   486→  const cached = Object.values(stream.cached ?? {}).some(Boolean);
+   487→  const isTorrent = !!stream.infoHash && !stream.url; // torrent without a direct URL → debrid unlock OR P2P
+   488→  const p2pEnabled = useSettings((s) => s.settings.p2pEnabled);
+   489→  const p = stream.parsed;
+   490→  // Playback compatibility badge (computed BEFORE the user picks)
+   491→  const cls: StreamClass = classifyStream(stream);
+   492→  const badgeInfo = BADGE_STYLES[cls.badge];
+   493→  const titleLine = (stream.title ?? stream.description ?? "Stream").split("\n")[0];
+   494→  const detailLine = (stream.description ?? "").split("\n").filter(Boolean).slice(1).join(" ").slice(0, 140);
+   495→
+   496→  const fail = (msg: string) => {
+   497→    setErr(msg);
+   498→    toast({ title: "Stream unavailable", description: msg, variant: "destructive" });
+   499→    if (errTimer.current) clearTimeout(errTimer.current);
+   500→    errTimer.current = setTimeout(() => setErr(null), 6000);
+   501→  };
+   502→
+   503→  const unlock = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+   504→    e?.stopPropagation();
+   505→    e?.preventDefault();
+   506→    if (resolving) return;
+   507→    if (debridKey === null) {
+   508→      onNeedsSetup();
+   509→      return;
+   510→    }
+   511→    setResolving(true);
+   512→    setErr(null);
+   513→    const res = await debridResolve(
+   514→      stream.infoHash!,
+   515→      stream.behaviorHints?.filename,
+   516→      stream.parsed?.size,
+   517→    );
+   518→    setResolving(false);
+   519→    if ("url" in res && res.url) {
+   520→      onPick({
+   521→        ...stream,
+   522→        url: res.url,
+   523→        behaviorHints: {
+   524→          ...stream.behaviorHints,
+   525→          ...(res.filename ? { filename: res.filename } : {}),
+   526→        },
+   527→      });
+   528→    } else {
+   529→      const msg = "error" in res ? res.error : "Unlock failed";
+   530→      fail(msg);
+   531→    }
+   532→  };
+   533→
+   534→  // Play a torrent through the server-side P2P engine: join swarm → wait for
+   535→  // metadata → pick the right file (native container vs ffmpeg remux) → play.
+   536→  const playP2p = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+   537→    e?.stopPropagation();
+   538→    e?.preventDefault();
+   539→    if (p2pPhase !== "idle") return;
+   540→    if (!useSettings.getState().settings.p2pEnabled) {
+   541→      onNeedsSetup();
+   542→      return;
+   543→    }
+   544→    setErr(null);
+   545→    setP2pPhase("joining");
+   546→    setP2pInfo({ peers: 0, elapsed: 0 });
+   547→    const startedAt = Date.now();
+   548→    const abort = new AbortController();
+   549→    p2pAbort.current = abort;
+   550→    const infoHash = stream.infoHash!.toLowerCase();
+   551→
+   552→    // progress ticker while the swarm join runs
+   553→    const ticker = setInterval(() => {
+   554→      setP2pInfo((prev) => (prev ? { ...prev, elapsed: Math.round((Date.now() - startedAt) / 1000) } : prev));
+   555→    }, 1000);
+   556→
+   557→    try {
+   558→      // 1) prepare (join swarm). 202 = metadata still downloading → poll status.
+   559→      const prep = await p2pPrepare(infoHash, {
+   560→        fileIdx: stream.fileIdx,
+   561→        filename: stream.behaviorHints?.filename ?? stream.parsed?.filename,
+   562→      });
+   563→
+   564→      // 2) poll while discovering (up to ~100s; the engine keeps the swarm alive)
+   565→      while (prep.pending) {
+   566→        if (abort.signal.aborted) throw new DOMException("cancelled", "AbortError");
+   567→        if (Date.now() - startedAt > 100_000) {
+   568→          throw new Error(
+   569→            "Could not find peers for this torrent. The swarm may be dead or this network blocks BitTorrent — a debrid service would unlock it instantly.",
+   570→          );
+   571→        }
+   572→        await new Promise((r) => setTimeout(r, 2500));
+   573→        if (abort.signal.aborted) throw new DOMException("cancelled", "AbortError");
+   574→        const st = await p2pStatus(infoHash).catch(() => null);
+   575→        setP2pInfo((prev) => (prev ? { ...prev, peers: st?.peers ?? prev.peers } : prev));
+   576→        if (st?.ready) break;
+   577→      }
+   578→
+   579→      // 3) choose serving mode (native range stream vs ffmpeg remux for mkv)
+   580→      setP2pPhase("planning");
+   581→      await refreshP2pCapabilities(); // engine-level HEVC conversion flag
+   582→      const fileIdx = prep.pending
+   583→        ? await (async () => {
+   584→            const st = await p2pStatus(infoHash);
+   585→            const filename = stream.behaviorHints?.filename ?? stream.parsed?.filename;
+   586→            const idx = Number.isInteger(stream.fileIdx)
+   587→              ? stream.fileIdx!
+   588→              : st.files
+   589→                ? pickFileIndex(st.files, filename)
+   590→                : 0;
+   591→            return idx;
+   592→          })()
+   593→        : prep.fileIdx;
+   594→      const filename = stream.behaviorHints?.filename ?? stream.parsed?.filename;
+   595→      let plan: P2pPlaybackPlan;
+   596→      try {
+   597→        plan = await p2pPlan(infoHash, fileIdx, filename);
+   598→      } catch {
+   599→        plan = { key: infoHash, fileIdx, url: `/stream/${infoHash}/${fileIdx}`, mode: "unknown" };
+   600→      }
+   601→      if (plan.mode === "unknown" && plan.codec?.video === "hevc") {
+   602→        throw new Error(
+   603→          `This file uses ${plan.codec.video.toUpperCase()} video which browsers cannot play — unlock it with debrid instead.`,
+   604→        );
+   605→      }
+   606→      clearInterval(ticker);
+   607→      setP2pPhase("idle");
+   608→      setP2pInfo(null);
+   609→      onPick({
+   610→        ...stream,
+   611→        url: plan.url,
+   612→        behaviorHints: {
+   613→          ...stream.behaviorHints,
+   614→          filename: filename ?? plan.codec?.filename,
+   615→        },
+   616→        p2p: { key: plan.key, fileIdx: plan.fileIdx, infoHash, mode: plan.mode },
+   617→      });
+   618→    } catch (e) {
+   619→      clearInterval(ticker);
+   620→      setP2pPhase("idle");
+   621→      setP2pInfo(null);
+   622→      if ((e as Error)?.name === "AbortError") return;
+   623→      fail(e instanceof Error ? e.message : "P2P stream failed");
+   624→    }
+   625→  };
+   626→
+   627→  const rowActivate = () => {
+   628→    // External destinations (YouTube ids / openInBrowser links) never enter the player
+   629→    if (cls.verdict === "external") {
+   630→      const target = cls.ytId
+   631→        ? `https://www.youtube.com/watch?v=${cls.ytId}`
+   632→        : cls.externalUrl;
+   633→      if (target) window.open(target, "_blank", "noopener,noreferrer");
+   634→      return;
+   635→    }
+   636→    if (isTorrent) {
+   637→      if (debridKey !== null) void unlock();
+   638→      else if (p2pEnabled) void playP2p();
+   639→      else onNeedsSetup();
+   640→    } else {
+   641→      onPick(stream);
+   642→    }
+   643→  };
+   644→
+   645→  const busy = resolving || p2pPhase !== "idle";
+   646→  const direct = !!stream.url && !isTorrent;
+   647→
+   648→  return (
+   649→    <div
+   650→      role="button"
+   651→      tabIndex={0}
+   652→      onClick={rowActivate}
+   653→      onKeyDown={(e) => {
+   654→        if (e.key === "Enter" || e.key === " ") {
+   655→          e.preventDefault();
+   656→          rowActivate();
+   657→        }
+   658→      }}
+   659→      aria-label={`${titleLine} — play stream`}
+   660→      className={cn(
+   661→        "harbor-tv-focus harbor-picker-row md-state relative w-full flex flex-wrap items-center gap-3.5 rounded-[var(--md-sys-shape-corner-medium)] border p-3 text-left transition-colors cursor-pointer",
+   662→        cached ? "border-emerald-500/30 bg-emerald-500/5" : "border-edge-soft bg-[var(--md-sys-color-surface-container)]",
+   663→        direct && "border-l-2 border-l-emerald-500/50",
+   664→      )}
+   665→    >
+   666→      {busy && (
+   667→        <span className="absolute inset-0 z-10 rounded-[var(--md-sys-shape-corner-medium)] bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1" aria-live="polite">
+   668→          {resolving ? (
+   669→            <Loader2 className="w-5 h-5 text-accent animate-spin" />
+   670→          ) : (
+   671→            <>
+   672→              <span className="flex items-center gap-2 text-xs font-semibold text-ink">
+   673→                <Wifi className="w-4 h-4 text-accent animate-pulse" aria-hidden />
+   674→                {p2pPhase === "planning" ? "Preparing file…" : "Joining swarm…"}
+   675→              </span>
+   676→              <span className="text-[10px] text-ink-subtle">
+   677→                {p2pInfo?.peers ? `${p2pInfo.peers} peers` : "looking for peers"} · {p2pInfo?.elapsed ?? 0}s
+   678→              </span>
+   679→            </>
+   680→          )}
+   681→        </span>
+   682→      )}
+   683→      <div className="flex flex-col items-center gap-1 w-14 shrink-0">
+   684→        <span className={cn("rounded-lg px-2 py-1 text-[11px] font-bold", cached ? "bg-emerald-500/20 text-emerald-300" : "bg-raised text-ink-muted")}>
+   685→          {p?.resolution ?? "—"}
+   686→        </span>
+   687→        {p?.hdrFormat && (
+   688→          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-accent-soft text-accent">{p.hdrFormat}</span>
+   689→        )}
+   690→        {/* Playability badge: where this stream will actually play */}
+   691→        <span
+   692→          className={cn(
+   693→            "rounded-full px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide inline-flex items-center gap-1",
+   694→            badgeInfo.className,
+   695→          )}
+   696→          title={cls.reasons.length > 0 ? cls.reasons.join(" · ") : badgeInfo.title}
+   697→        >
+   698→          <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", badgeInfo.dot)} />
+   699→          {badgeInfo.label}
+   700→        </span>
+   701→      </div>
+   702→      <div className="min-w-0 flex-1">
+   703→        <p className="harbor-clamp-1 text-sm font-medium text-ink">{titleLine}</p>
+   704→        {detailLine && !showQuality && (
+   705→          <p className="harbor-clamp-1 text-xs text-ink-subtle mt-0.5">{detailLine}</p>
+   706→        )}
+   707→        {showQuality && (
+   708→          <div className="flex items-center gap-2.5 mt-1 text-[10px] text-ink-subtle flex-wrap">
+   709→            {p?.codec && (
+   710→              <span className="flex items-center gap-1"><FileVideo className="w-3 h-3" />{p.codec}</span>
+   711→            )}
+   712→            {p?.size && <span className="flex items-center gap-1"><HardDrive className="w-3 h-3" />{formatSize(p.size)}</span>}
+   713→            {p?.seeders !== undefined && <span className="flex items-center gap-1"><Signal className="w-3 h-3" />{p.seeders} seeders</span>}
+   714→            {p?.source && <span className="flex items-center gap-1"><Gauge className="w-3 h-3" />{p.source}</span>}
+   715→          </div>
+   716→        )}
+   717→        <p className="text-[10px] text-ink-subtle mt-0.5 flex items-center gap-1.5 flex-wrap">
+   718→          {cached && <Zap className="w-3 h-3 text-emerald-400" />}
+   719→          {isTorrent && (
+   720→            <span className="rounded border border-edge-soft bg-raised px-1 py-0.5 text-[9px] font-bold text-ink-muted">
+   721→              DEBRID
+   722→            </span>
+   723→          )}
+   724→          {isTorrent && p2pEnabled && (
+   725→            <span className="rounded border border-accent/40 bg-accent/10 px-1 py-0.5 text-[9px] font-bold text-accent flex items-center gap-1">
+   726→              <Network className="w-2.5 h-2.5" aria-hidden /> P2P
+   727→            </span>
+   728→          )}
+   729→          {stream.addonName ?? "addon"}
+   730→        </p>
+   731→        {err && (
+   732→          <p className="basis-full w-full text-xs text-danger mt-1" role="alert">
+   733→            {err}
+   734→          </p>
+   735→        )}
+   736→      </div>
+   737→      {isTorrent && (
+   738→        <div className="flex items-center gap-1.5 shrink-0">
+   739→          {p2pEnabled && (
+   740→            <button
+   741→              type="button"
+   742→              onClick={(e) => void playP2p(e)}
+   743→              disabled={busy}
+   744→              className={cn(
+   745→                "harbor-tv-focus md-btn md-state h-9! px-3.5!",
+   746→                debridKey === null ? "md-btn-filled" : "md-btn-tonal",
+   747→              )}
+   748→              aria-label={debridKey === null ? "Play via P2P" : "Play via P2P torrent engine"}
+   749→              title={debridKey === null ? "Play free via the built-in P2P engine" : "Play via the built-in P2P engine (slower)"}
+   750→            >
+   751→              {p2pPhase !== "idle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Network className="w-3.5 h-3.5" aria-hidden />}
+   752→              {p2pPhase !== "idle" ? "Connecting…" : "Play"}
+   753→            </button>
+   754→          )}
+   755→          <button
+   756→            type="button"
+   757→            onClick={(e) => void unlock(e)}
+   758→            disabled={resolving}
+   759→            className={cn(
+   760→              "harbor-tv-focus md-btn md-state h-9! px-3.5!",
+   761→              debridKey === null ? "md-btn-tonal" : "md-btn-filled",
+   762→            )}
+   763→            aria-label="Unlock with debrid"
+   764→            title={debridKey === null ? "Connect a debrid service for instant links" : "Unlock with your debrid service"}
+   765→          >
+   766→            {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" aria-hidden />}
+   767→            {resolving ? "Unlocking…" : debridKey === null ? "Debrid" : "Unlock"}
+   768→          </button>
+   769→        </div>
+   770→      )}
+   771→    </div>
+   772→  );
+   773→}
+   774→
+   775→// Choose the torrent file index client-side when metadata arrives via polling
+   776→function pickFileIndex(files: { index: number; name: string; length: number }[], filename?: string): number {
+   777→  const VIDEO_RE = /\.(mp4|m4v|webm|mkv|avi|mov|ts|flv|wmv|mpg|mpeg)$/i;
+   778→  const videos = files.filter((f) => VIDEO_RE.test(f.name) || f.length > 100 * 1024 * 1024);
+   779→  const pool = videos.length > 0 ? videos : files;
+   780→  if (filename) {
+   781→    const want = filename.toLowerCase().replace(/[\s._-]+/g, "").slice(0, 24);
+   782→    const byName = pool.find((f) => f.name.toLowerCase().replace(/[\s._-]+/g, "").includes(want));
+   783→    if (byName) return byName.index;
+   784→  }
+   785→  return pool.reduce((a, b) => (b.length > a.length ? b : a)).index;
+   786→}
+   787→
+   788→// ---------------- Inline debrid setup (no settings detour) ----------------
+   789→function DebridSetupDialog({ onClose }: { onClose: () => void }) {
+   790→  const { toast } = useToast();
+   791→  const validate = useDebrid((s) => s.validate);
+   792→  const [svc, setSvc] = useState<DebridService>("realdebrid");
+   793→  const [key, setKey] = useState("");
+   794→  const [checking, setChecking] = useState(false);
+   795→  const [error, setError] = useState<string | null>(null);
+   796→
+   797→  const serviceName = svc === "realdebrid" ? "Real-Debrid" : "AllDebrid";
+   798→
+   799→  const connect = async () => {
+   800→    if (key.trim().length < 10) {
+   801→      setError("That API key looks too short — copy the full key from your account page.");
+   802→      return;
+   803→    }
+   804→    setChecking(true);
+   805→    setError(null);
+   806→    const ok = await validate(svc, key.trim());
+   807→    setChecking(false);
+   808→    if (ok) {
+   809→      toast({ title: "Debrid connected", description: `${serviceName} verified — cached streams unlock instantly now.` });
+   810→      onClose();
+   811→    } else {
+   812→      setError(useDebrid.getState().error ?? "Could not verify the key.");
+   813→    }
+   814→  };
+   815→
+   816→  return (
+   817→    <div
+   818→      className="fixed inset-0 z-[170] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6"
+   819→      role="dialog"
+   820→      aria-modal="true"
+   821→      aria-label="Connect a debrid service"
+   822→      onClick={(e) => {
+   823→        if (e.target === e.currentTarget) onClose();
+   824→      }}
+   825→      onKeyDown={(e) => {
+   826→        if (e.key === "Escape") onClose();
+   827→      }}
+   828→    >
+   829→      <div className="md-dialog rounded-b-none! md:rounded-b-[28px]! w-full md:max-w-md p-5">
+   830→        <div className="flex items-center gap-3 mb-1">
+   831→          <span className="w-9 h-9 rounded-[var(--md-sys-shape-corner-medium)] bg-accent-soft flex items-center justify-center shrink-0">
+   832→            <KeyRound className="w-4.5 h-4.5 text-accent" aria-hidden />
+   833→          </span>
+   834→          <div className="min-w-0 flex-1">
+   835→            <h2 className="md-title-medium text-ink">Connect debrid</h2>
+   836→            <p className="text-[11px] text-ink-subtle">Instant cached streams — your key stays in this browser.</p>
+   837→          </div>
+   838→          <button
+   839→            type="button"
+   840→            onClick={onClose}
+   841→            className="md-icon-btn md-state harbor-tv-focus"
+   842→            aria-label="Close"
+   843→          >
+   844→            <X className="w-4.5 h-4.5" />
+   845→          </button>
+   846→        </div>
+   847→
+   848→        <div className="grid grid-cols-2 gap-2 mt-4" role="radiogroup" aria-label="Debrid service">
+   849→          {(
+   850→            [
+   851→              ["realdebrid", "Real-Debrid"],
+   852→              ["alldebrid", "AllDebrid"],
+   853→            ] as const
+   854→          ).map(([id, label]) => (
+   855→            <button
+   856→              key={id}
+   857→              type="button"
+   858→              role="radio"
+   859→              aria-checked={svc === id}
+   860→              onClick={() => setSvc(id)}
+   861→              className={cn(
+   862→                "md-state rounded-[var(--md-sys-shape-corner-medium)] border px-3 py-2.5 text-xs font-bold transition-colors",
+   863→                svc === id
+   864→                  ? "border-accent bg-accent-soft text-accent ring-2 ring-accent"
+   865→                  : "border-edge-soft bg-raised text-ink-muted hover:text-ink",
+   866→              )}
+   867→            >
+   868→              {svc === id && <CheckCircle2 className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" aria-hidden />}
+   869→              {label}
+   870→            </button>
+   871→          ))}
+   872→        </div>
+   873→
+   874→        <label className="block text-xs font-medium text-ink-muted mt-4 mb-1.5" htmlFor="picker-debrid-key">
+   875→          {serviceName} API key
+   876→        </label>
+   877→        <input
+   878→          id="picker-debrid-key"
+   879→          type="password"
+   880→          value={key}
+   881→          onChange={(e) => setKey(e.target.value)}
+   882→          onKeyDown={(e) => {
+   883→            if (e.key === "Enter") void connect();
+   884→            e.stopPropagation();
+   885→          }}
+   886→          placeholder={svc === "realdebrid" ? "Paste your Real-Debrid API key" : "Paste your AllDebrid API key"}
+   887→          autoComplete="off"
+   888→          className="md-field-outlined w-full px-3 py-2.5 text-sm placeholder:text-ink-subtle"
+   889→        />
+   890→        {error && (
+   891→          <p className="flex items-start gap-1.5 text-xs text-danger mt-2" role="alert">
+   892→            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden />
+   893→            {error}
+   894→          </p>
+   895→        )}
+   896→
+   897→        <div className="flex items-center gap-2 mt-4">
+   898→          <button
+   899→            type="button"
+   900→            onClick={() => void connect()}
+   901→            disabled={checking}
+   902→            className="md-btn md-btn-filled md-state flex-1"
+   903→          >
+   904→            {checking ? <Loader2 className="md-btn-icon animate-spin" aria-hidden /> : null}
+   905→            {checking ? "Verifying…" : "Connect"}
+   906→          </button>
+   907→          <a
+   908→            href={svc === "realdebrid" ? "https://real-debrid.com/account" : "https://alldebrid.com/api/"}
+   909→            target="_blank"
+   910→            rel="noreferrer"
+   911→            className="md-btn md-btn-tonal md-state"
+   912→            title="Open your account page to find the API key"
+   913→          >
+   914→            Get key <ExternalLink className="md-btn-icon" aria-hidden />
+   915→          </a>
+   916→        </div>
+   917→        <p className="text-[10px] text-ink-subtle mt-3">
+   918→          No debrid account? Torrents still play free via the built-in P2P engine — debrid just makes cached
+   919→          streams instant.
+   920→        </p>
+   921→      </div>
+   922→    </div>
+   923→  );
+   924→}
+   925→
