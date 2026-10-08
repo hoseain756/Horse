@@ -1242,3 +1242,17 @@ Work Log:
 Stage Summary:
 - Project state: ALL GREEN — five player fixes live & verified, GitHub in sync, push watcher alive, cron review cycle re-armed (444900).
 - Next round should pick up the standing backlog: A–G leftover defects (Integrations M3 polish, P2P card RTL switch), PlaybackTimeline single-time-source refactor, /api/sync addons remount flicker.
+---
+Task ID: 39
+Agent: Z.ai Code (coordinator, no subagents)
+Task: User re-affirmed (AR): "always push the project to GitHub" — verify the standing push system end-to-end.
+
+Work Log:
+- Watcher: alive (PID 19997). Credential: stored in ~/.git-credentials (chmod 600, outside repo), credential.helper=store active.
+- EVIDENCE the system works unattended: the Task 38 worklog entry was auto-committed by the external daemon and AUTO-PUSHED by the watcher at 14:51:25 (768f7cb → d2e159b) with zero manual action — exactly the "always push" contract.
+- Sync check: local main d2e159b == remote main d2e159b (github.com/hoseain756/Horse).
+- Durable guarantees: (1) 60s autopush loop ~/.gh-autopush.sh (relaunch cmd documented in cron 444900 item 6 if ever dead), (2) cron 444900 every 15 min verifies watcher + pushes pending work, (3) tokens never touch the repo.
+- This very entry will be auto-committed + auto-pushed within ~60s — the system demonstrating itself.
+
+Stage Summary:
+- "Always push to GitHub" is a PERMANENT standing system, verified working end-to-end unattended. No code changes this round.
