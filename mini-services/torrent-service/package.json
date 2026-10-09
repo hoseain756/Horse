@@ -10,5 +10,9 @@
   },
   "dependencies": {
     "webtorrent": "^3.0.21"
-  }
+  },
+  "trustedDependencies": [
+    "node-datachannel",
+    "utp-native"
+  ]
 }
