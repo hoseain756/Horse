@@ -4,6 +4,7 @@
 // local data up — seeding the account with this device's addons & library.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import {
   SESSION_COOKIE,
   clientIp,
@@ -19,6 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   if (!rateLimit(`register:${clientIp(req)}`, 10, 60_000)) {
     return NextResponse.json({ error: "Too many attempts. Try again in a minute." }, { status: 429 });
   }

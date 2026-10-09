@@ -4,12 +4,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import { resolveLinkedAccount } from "@/lib/harbor/link-resolve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   const ip = clientIp(req);
   if (!rateLimit(`${ip}:simkl-unlink`, 20, 60_000)) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });

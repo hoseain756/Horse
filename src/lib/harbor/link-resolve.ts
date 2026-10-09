@@ -3,6 +3,7 @@
 // tokens when they're near expiry. Tokens never leave the server boundary —
 // callers use them to talk to the provider API directly.
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import { decryptToken } from "@/lib/harbor/vault";
 import { TRAKT_OAUTH, envTraktClientId, envTraktClientSecret } from "@/lib/harbor/trakt-server";
 import { SIMKL_API } from "@/lib/harbor/simkl-server";
@@ -17,6 +18,7 @@ export type ResolvedAccount = {
 
 export async function resolveLinkedAccount(linkId: string): Promise<ResolvedAccount | null> {
   if (!linkId || linkId.length > 64 || !/^[A-Za-z0-9_-]+$/.test(linkId)) return null;
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   const row = await db.linkedAccount.findUnique({ where: { id: linkId } }).catch(() => null);
   if (!row) return null;
   const accessToken = decryptToken(row.accessTokenEnc);

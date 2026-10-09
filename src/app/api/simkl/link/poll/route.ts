@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { SIMKL_API, resolveSimklClientId, envSimklClientSecret } from "@/lib/harbor/simkl-server";
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import { encryptToken, randomLinkId, getPendingLink, takePendingLink, type PendingLink } from "@/lib/harbor/vault";
 
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   const ip = clientIp(req);
   if (!rateLimit(`${ip}:simkl-poll`, 120, 60_000)) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });

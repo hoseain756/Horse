@@ -7,12 +7,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { TRAKT_API, resolveTraktClientId, envTraktClientSecret } from "@/lib/harbor/trakt-server";
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import { encryptToken, randomLinkId, getPendingLink, takePendingLink } from "@/lib/harbor/vault";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   const ip = clientIp(req);
   if (!rateLimit(`${ip}:trakt-poll`, 120, 60_000)) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });

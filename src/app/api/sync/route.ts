@@ -9,6 +9,7 @@
 // GET prefers the blob; if no blob exists the snapshot is reconstructed from the tables.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { ensureDb } from "@/lib/ensure-db";
 import { sessionUid } from "@/lib/harbor/account-auth";
 
 export const runtime = "nodejs";
@@ -175,6 +176,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!DEVICE_RE.test(device)) {
     return NextResponse.json({ error: "invalid device id" }, { status: 400 });
   }
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
   const { pid } = bucketFor(req, device);
   try {
     const [blob, addons, library, listRows] = await Promise.all([
@@ -297,6 +299,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const snap = sanitizeSnapshot(body.snapshot);
   const { pid } = bucketFor(req, device);
   const now = new Date();
+  await ensureDb(); // create sqlite file + tables on cold serverless instances
 
   try {
     // 1) Canonical blob
