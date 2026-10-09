@@ -76,8 +76,6 @@ export function navLabel(
 }
 
 // ---------- Glass dock tabs (single config array — change order here only) ----------
-// Exactly the 4 primary destinations; the row mirrors automatically in RTL
-// because the dock is a plain flex row inside dir=rtl.
 export type DockTabId = "settings" | "kids" | "anime" | "home";
 
 export type DockTab = {
@@ -95,17 +93,43 @@ export const DOCK_TABS: DockTab[] = [
   { id: "home", view: "home", labelEn: "Home", labelAr: "الرئيسية", icon: House },
 ];
 
-/** Dock tabs for the current settings: Kids Mode keeps only Home + Kids
+/** Explicit per-locale tab ORDER (config map — no hidden auto-reversal).
+ *  The dock is a plain flex row inside the document direction, so the first
+ *  array item lands on the visual START edge (left in LTR, right in RTL):
+ *  - LTR `[settings, kids, anime, home]` → visual left→right: Settings, Kids, Anime, Home
+ *  - RTL `[home, anime, kids, settings]` → first item (Home) at the visual RIGHT edge,
+ *    visual left→right: Settings, Kids, Anime, Home
+ *  Both produce the required on-screen order in BOTH languages:
+ *  Settings | Kids | Anime | Home (Home at the far right). */
+const DOCK_ORDER: Record<"ltr" | "rtl", DockTabId[]> = {
+  ltr: ["settings", "kids", "anime", "home"],
+  rtl: ["home", "anime", "kids", "settings"],
+};
+
+/** Document direction for a UI language — mirrors app-shell's dir logic. */
+export function dockDirectionFor(uiLang?: string): "ltr" | "rtl" {
+  return /^ar(-|_|$)/i.test(uiLang ?? "en") ? "rtl" : "ltr";
+}
+
+/** Dock tabs for the current settings + UI language: the explicit per-locale
+ *  order above; Kids Mode keeps only Home + Kids in the same relative order
  *  (Settings stays behind the parent gate — stricter than the old sidebar);
  *  the optional "hide anime content" setting removes the Anime tab. */
-export function dockTabsFor(settings: {
-  kidsMode: boolean;
-  hideContent: { anime: boolean; liveTv: boolean };
-}): DockTab[] {
-  if (settings.kidsMode) {
-    return DOCK_TABS.filter((t) => t.id === "home" || t.id === "kids");
-  }
-  return DOCK_TABS.filter((t) => !(t.id === "anime" && settings.hideContent.anime));
+export function dockTabsFor(
+  settings: {
+    kidsMode: boolean;
+    hideContent: { anime: boolean; liveTv: boolean };
+  },
+  uiLang?: string,
+): DockTab[] {
+  const order = DOCK_ORDER[dockDirectionFor(uiLang)];
+  const byId = new Map(DOCK_TABS.map((t) => [t.id, t]));
+  const hidden = (id: DockTabId) =>
+    (id === "anime" && settings.hideContent.anime) ||
+    (settings.kidsMode && id !== "home" && id !== "kids");
+  return order
+    .map((id) => byId.get(id))
+    .filter((t): t is DockTab => !!t && !hidden(t.id));
 }
 
 // ---------- Settings Quick Access hub ----------

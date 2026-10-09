@@ -1479,26 +1479,49 @@ html[data-kids="on"] {
   width: 100%;
 }
 
-/* Shared sliding highlight pill — one element moved between slots. Sized to
-   the tab height (not the whole capsule) so it matches the visual slot. */
+/* Shared sliding highlight pill — ONE element for the whole bar (a dev check
+   in glass-dock.tsx asserts exactly one). Sized to the tab height; WIDTH is
+   one slot, written by JS. Anchored with the LOGICAL inset-inline-start so
+   the inline-axis translate (frac * slotW * dirSign) starts at the same edge
+   in LTR and RTL — never mix physical left/right with logical offsets. */
 .dock-pill {
   position: absolute;
   top: calc((100% - var(--nav-tab-height)) / 2);
   height: var(--nav-tab-height);
-  left: 0;
+  inset-inline-start: 0;
   border-radius: var(--nav-radius);
   background: var(--glass-active-fill);
-  transition: transform 350ms var(--glass-ease), width 350ms var(--glass-ease);
+  opacity: 0; /* revealed by JS once measured (data-ready) — no first-paint flash */
+  transition:
+    transform 350ms var(--glass-ease),
+    width 350ms var(--glass-ease),
+    opacity 200ms var(--glass-ease);
   will-change: transform, width;
   pointer-events: none;
 }
+.dock-pill[data-ready="true"] {
+  opacity: 1;
+}
 /* Scrub mode (glass-dock.tsx press-and-drag): transform/width transitions OFF
-   — the position is driven per-frame from the pointer — while the pill grows
-   slightly via the standalone `scale` property, which composes with (and
-   never fights) the per-frame translateX transform. */
+   — the position AND the slight grow (baked into the same translate3d(...)
+   scale(...) write) are driven per-frame from the pointer. The grow MUST live
+   inside the transform property: a standalone `scale` composes around the
+   untranslated origin and multiplies the translation, pushing the pill past
+   the capsule edge at the clamp bounds (the old overshoot bug). */
 .dock-track[data-scrub="true"] .dock-pill {
-  transition: scale 150ms var(--glass-ease);
-  scale: 1.08;
+  transition: none;
+}
+/* Exactly ONE indicator on screen while dragging: the real active tab keeps
+   its aria-current (screen-reader truth, restored on commit) but its VISUAL
+   active state is suppressed unless it is the tab currently under the pill. */
+.dock-track[data-scrub="true"] .dock-tab[aria-current="page"]:not([data-lit="true"]) {
+  color: var(--nav-icon-inactive);
+}
+.dock-track[data-scrub="true"] .dock-tab[aria-current="page"]:not([data-lit="true"]) .dock-icon-outline {
+  opacity: 1;
+}
+.dock-track[data-scrub="true"] .dock-tab[aria-current="page"]:not([data-lit="true"]) .dock-icon-filled {
+  opacity: 0;
 }
 
 /* Tab: equal flex slot sized by tokens; ≥48px TOUCH target is guaranteed by
