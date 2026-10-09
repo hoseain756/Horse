@@ -11,6 +11,28 @@ transcoded to H.264 when `TRANSCODE_ENABLED=1`).
 This is the free path for the Vercel deployment (Settings → Integrations → P2P
 → "Engine on this device" in the app). Requires **Node 18+** and **ffmpeg**.
 
+### One click from the website (after a one-time install)
+
+The app can start the engine for you. In Settings → Integrations → P2P →
+**"Engine on this device"**:
+
+1. Press **Download installer (once)** — you get the installer for YOUR OS
+   (`install-windows.bat` / `install-mac.command` / `install-linux.sh`,
+   served from `public/engine/` in the repo).
+2. Run it once. It downloads the engine to a fixed location, installs
+   dependencies, registers the **`horse-engine://`** trigger
+   (Windows registry / macOS app-bundle URL scheme / xdg .desktop) and
+   starts the engine.
+   - Windows: double-click the downloaded `.bat`.
+   - macOS / Linux: `bash ~/Downloads/install-…`
+3. Back in the website press **Start engine** — it fires
+   `horse-engine://start` (starts the engine if not already running),
+   then probes and saves the config automatically.
+
+Consoles/TVs (Xbox, PlayStation, smart TVs) can never install or run the
+engine — their browsers are sealed. They play in-app via debrid, or via an
+engine on another home device reached over HTTPS.
+
 ### Easiest: one-click launchers (no terminal skills needed)
 
 | OS | Double-click this file in this folder |

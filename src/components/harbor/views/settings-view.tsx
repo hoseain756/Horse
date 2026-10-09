@@ -4,7 +4,7 @@
 
 // Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot, ExternalLink, Server } from "lucide-react";
+import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot, ExternalLink, Server, Rocket } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
 import { RichBidi } from "../common/bidi";
@@ -2657,6 +2657,24 @@ const ENGINE_ENV_VARS = ["ENGINE_URL", "ENGINE_PUBLIC_URL", "ENGINE_API_KEY"] as
 type EngineTestState = "idle" | "testing" | "ok" | "unset" | "unreachable" | "unauthorized";
 type LocalTestState = "idle" | "testing" | "ok" | "unreachable" | "unauthorized" | "badurl";
 
+/** Where is this browser running? Drives the one-click local-engine installer. */
+type LocalPlatform = "windows" | "mac" | "linux" | "console" | "mobile" | "unknown";
+function detectLocalPlatform(): LocalPlatform {
+  if (typeof navigator === "undefined") return "unknown";
+  const ua = navigator.userAgent;
+  if (/Xbox|PlayStation|SmartTV|Smart-TV|CrKey|Web0S|webOS|Tizen|NetCast/i.test(ua)) return "console";
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return "mobile";
+  if (/Windows/i.test(ua)) return "windows";
+  if (/Mac OS X|Macintosh/i.test(ua)) return "mac";
+  if (/Linux|CrOS/i.test(ua)) return "linux";
+  return "unknown";
+}
+const LOCAL_INSTALLERS: Record<"windows" | "mac" | "linux", { href: string; file: string }> = {
+  windows: { href: "/engine/install-windows.bat", file: "install-windows.bat" },
+  mac: { href: "/engine/install-mac.command", file: "install-mac.command" },
+  linux: { href: "/engine/install-linux.sh", file: "install-linux.sh" },
+};
+
 // Free path for serverless deployments: the engine runs on the USER's own
 // computer (one command); the browser talks to it directly over localhost —
 // config lives in localStorage (this device only, never cloud-synced).
@@ -2679,6 +2697,8 @@ function P2pCard() {
   const [localUrl, setLocalUrl] = useState("http://localhost:3031");
   const [localKey, setLocalKey] = useState("");
   const [localTest, setLocalTest] = useState<LocalTestState>("idle");
+  // One-click installer: platform is stable for the session, detect once (SSR-safe).
+  const [platform] = useState<LocalPlatform>(() => detectLocalPlatform());
 
   const check = async () => {
     setChecking(true);
@@ -2797,6 +2817,37 @@ function P2pCard() {
     setLocalTest("idle");
     setHealth(null);
     toast({ title: tr("localEngineRemoved") });
+  };
+
+  // One-click start: fire the horse-engine:// trigger (registered by the
+  // installers), give the OS a moment, then probe + save automatically —
+  // the same validation as "Save & test", just hands-free.
+  const triggerLocalEngine = () => {
+    const base = localUrl.trim() || "http://localhost:3031";
+    if (!localUrl.trim()) setLocalUrl(base);
+    setLocalTest("testing");
+    try {
+      window.location.href = "horse-engine://start";
+    } catch {
+      /* no handler — the delayed probe below reports it as unreachable */
+    }
+    window.setTimeout(() => {
+      void (async () => {
+        const probe = await localEngineHealth({ base, key: localKey.trim() });
+        if (!probe.ok) {
+          setLocalTest(probe.unauthorized ? "unauthorized" : "unreachable");
+          return;
+        }
+        const cfg = setLocalEngine(base, localKey.trim());
+        setLocalCfg(cfg);
+        setLocalTest("ok");
+        if (cfg) {
+          void refreshP2pCapabilities();
+          void check();
+        }
+        toast({ title: tr("localEngineSaved") });
+      })();
+    }, 2500);
   };
 
   const localFeedback =
@@ -3028,6 +3079,62 @@ function P2pCard() {
               <p className="text-xs font-bold text-ink">{tr("localEngineTitle")}</p>
             </div>
             <p className="md-body-small text-ink-muted"><RichBidi text={tr("localEngineBody")} /></p>
+
+            {/* One-click start: download-once installer + horse-engine:// trigger */}
+            {platform === "console" || platform === "mobile" ? (
+              <p
+                className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-highest)] px-3.5 py-2.5 text-xs text-ink-muted"
+                role="note"
+              >
+                <MonitorSmartphone className="w-4 h-4 shrink-0 mt-0.5 text-accent" aria-hidden />
+                <RichBidi text={tr(platform === "console" ? "oneClickConsoleNote" : "oneClickMobileNote")} />
+              </p>
+            ) : (
+              <div className="space-y-2.5 rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft bg-[var(--md-sys-color-surface-container-highest)] p-3">
+                <div className="flex items-center gap-2">
+                  <Rocket className="w-4 h-4 text-accent" aria-hidden />
+                  <p className="text-xs font-bold text-ink">{tr("oneClickTitle")}</p>
+                </div>
+                <p className="md-body-small text-ink-muted"><RichBidi text={tr("oneClickDesc")} /></p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {platform !== "unknown" ? (
+                    <a
+                      href={LOCAL_INSTALLERS[platform].href}
+                      download={LOCAL_INSTALLERS[platform].file}
+                      className="md-state harbor-tv-focus inline-flex h-10 items-center gap-1.5 rounded-full border border-edge px-4 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                    >
+                      <Download className="w-3.5 h-3.5" aria-hidden />
+                      {tr("oneClickDownload")}
+                    </a>
+                  ) : (
+                    (["windows", "mac", "linux"] as const).map((p) => (
+                      <a
+                        key={p}
+                        href={LOCAL_INSTALLERS[p].href}
+                        download={LOCAL_INSTALLERS[p].file}
+                        className="md-state harbor-tv-focus inline-flex h-10 items-center gap-1.5 rounded-full border border-edge px-4 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden />
+                        {p === "windows" ? "Windows" : p === "mac" ? "macOS" : "Linux"}
+                      </a>
+                    ))
+                  )}
+                  <Button onClick={triggerLocalEngine} disabled={localTest === "testing"}>
+                    {localTest === "testing" ? (
+                      <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
+                    ) : (
+                      <Rocket className="w-3.5 h-3.5 me-1.5" />
+                    )}
+                    {tr("oneClickRun")}
+                  </Button>
+                </div>
+                {(platform === "mac" || platform === "linux") && (
+                  <p className="text-[11px] text-ink-subtle"><RichBidi text={tr("oneClickTerminalHint")} /></p>
+                )}
+                <p className="text-[11px] text-ink-subtle"><RichBidi text={tr("oneClickRunHint")} /></p>
+              </div>
+            )}
+
             <p className="text-xs text-ink-muted"><RichBidi text={tr("localEngineHowLabel")} /></p>
             <div
               className="overflow-x-auto rounded-md bg-[var(--md-sys-color-surface-container-highest)] px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed text-ink"

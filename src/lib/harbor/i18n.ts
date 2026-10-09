@@ -351,6 +351,29 @@ export const APP_STRINGS = {
     en: "Want it always-on without leaving your computer on? Oracle's free tier runs the engine 24/7 for $0 — step-by-step guide inside.",
     ar: "تريده دائماً في الخدمة دون إبقاء كمبيوترك شغّالاً؟ الطبقة المجانية من Oracle تشغّل المحرك 24/7 بـ $0 — الدليل خطوة بخطوة بالداخل.",
   },
+  oneClickTitle: { en: "One-click start (computers)", ar: "تشغيل بضغطة واحدة (أجهزة الكمبيوتر)" },
+  oneClickDesc: {
+    en: "First time only: download the installer and run it once — it installs a small engine on this computer and registers the horse-engine:// trigger. After that, the Start button launches it and tests it automatically.",
+    ar: "المرة الأولى فقط: نزّل المُثبّت وشغّله مرة واحدة — يثبّت محركاً صغيراً على هذا الكمبيوتر ويسجّل رابط التشغيل horse-engine://. بعدها يكفي زر «تشغيل المحرك» ليبدأ المحرك ويُختبر تلقائياً.",
+  },
+  oneClickDownload: { en: "Download installer (once)", ar: "تنزيل المُثبّت (مرة واحدة)" },
+  oneClickRun: { en: "Start engine", ar: "تشغيل المحرك" },
+  oneClickRunHint: {
+    en: "Nothing happened? The installer hasn't been run on this computer yet — download it above and run it once, then press Start again.",
+    ar: "لم يحدث شيء؟ المُثبّت لم يُشغَّل على هذا الكمبيوتر بعد — نزّله بالأعلى وشغّله مرة واحدة، ثم اضغط «تشغيل المحرك» مجدداً.",
+  },
+  oneClickTerminalHint: {
+    en: "macOS / Linux: after downloading, run it once from the terminal: bash ~/Downloads/install-…",
+    ar: "ماك / لينكس: بعد التنزيل، شغّله مرة واحدة من الطرفية: bash ~/Downloads/install-…",
+  },
+  oneClickConsoleNote: {
+    en: "This screen (console / TV) can't install the engine — Xbox and PlayStation browsers are sealed and accept no installed apps. Use debrid for instant playback here, or run the engine on another device at home (a computer, or Android via Termux) and reach it over an HTTPS address.",
+    ar: "هذه الشاشة (كونسول / تلفاز) لا يمكنها تثبيت المحرك — متصفحات الإكس بوكس وبلايستيشن مغلقة ولا تقبل تثبيت أي تطبيقات. استخدم debrid للتشغيل الفوري هنا، أو شغّل المحرك على جهاز آخر في منزلك (كمبيوتر، أو أندرويد عبر Termux) واقتبسه عبر رابط HTTPS.",
+  },
+  oneClickMobileNote: {
+    en: "Phones can't run the desktop engine from the browser — on Android you can host it with Termux, or watch through an engine running on a computer in the same home (via an HTTPS address).",
+    ar: "الجوالات لا تشغّل محرك الكمبيوتر من المتصفح — على أندرويد يمكنك استضافته عبر Termux، أو المشاهدة عبر محرك يعمل على كمبيوتر في المنزل نفسه (عبر رابط HTTPS).",
+  },
   engineTest: { en: "Test engine", ar: "اختبار المحرك" },
   engineTestOk: { en: "Engine reachable — torrent streams will play through it.", ar: "المحرك يستجيب — ستُشغَّل تدفقات التورنت عبره." },
   engineTestUnset: { en: "ENGINE_URL is not set on this deployment yet — add it in Vercel and redeploy.", ar: "المتغير ENGINE_URL غير معيّن على هذا النشر بعد — أضفه في Vercel وأعد النشر." },
