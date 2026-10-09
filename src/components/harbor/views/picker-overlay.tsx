@@ -879,12 +879,12 @@ function pickFileIndex(files: { index: number; name: string; length: number }[],
 function DebridSetupDialog({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const validate = useDebrid((s) => s.validate);
-  const [svc, setSvc] = useState<DebridService>("realdebrid");
+  const [svc, setSvc] = useState<DebridService>("torbox");
   const [key, setKey] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const serviceName = svc === "realdebrid" ? "Real-Debrid" : "AllDebrid";
+  const serviceName = svc === "realdebrid" ? "Real-Debrid" : svc === "alldebrid" ? "AllDebrid" : "TorBox";
 
   const connect = async () => {
     if (key.trim().length < 10) {
@@ -935,9 +935,10 @@ function DebridSetupDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-4" role="radiogroup" aria-label="Debrid service">
+        <div className="grid grid-cols-3 gap-2 mt-4" role="radiogroup" aria-label="Debrid service">
           {(
             [
+              ["torbox", "TorBox"],
               ["realdebrid", "Real-Debrid"],
               ["alldebrid", "AllDebrid"],
             ] as const
@@ -949,14 +950,14 @@ function DebridSetupDialog({ onClose }: { onClose: () => void }) {
               aria-checked={svc === id}
               onClick={() => setSvc(id)}
               className={cn(
-                "md-state rounded-[var(--md-sys-shape-corner-medium)] border px-3 py-2.5 text-xs font-bold transition-colors",
+                "md-state flex min-w-0 items-center justify-center rounded-[var(--md-sys-shape-corner-medium)] border px-2 py-2.5 text-[11px] font-bold transition-colors sm:px-3 sm:text-xs",
                 svc === id
                   ? "border-accent bg-accent-soft text-accent ring-2 ring-accent"
                   : "border-edge-soft bg-raised text-ink-muted hover:text-ink",
               )}
             >
-              {svc === id && <CheckCircle2 className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" aria-hidden />}
-              {label}
+              {svc === id && <CheckCircle2 className="w-3.5 h-3.5 mr-1 shrink-0" aria-hidden />}
+              <span className="truncate">{label}</span>
             </button>
           ))}
         </div>
@@ -973,7 +974,13 @@ function DebridSetupDialog({ onClose }: { onClose: () => void }) {
             if (e.key === "Enter") void connect();
             e.stopPropagation();
           }}
-          placeholder={svc === "realdebrid" ? "Paste your Real-Debrid API key" : "Paste your AllDebrid API key"}
+          placeholder={
+            svc === "realdebrid"
+              ? "Paste your Real-Debrid API key"
+              : svc === "alldebrid"
+                ? "Paste your AllDebrid API key"
+                : "Paste your TorBox API key"
+          }
           autoComplete="off"
           className="md-field-outlined w-full px-3 py-2.5 text-sm placeholder:text-ink-subtle"
         />
@@ -995,7 +1002,13 @@ function DebridSetupDialog({ onClose }: { onClose: () => void }) {
             {checking ? "Verifying…" : "Connect"}
           </button>
           <a
-            href={svc === "realdebrid" ? "https://real-debrid.com/account" : "https://alldebrid.com/api/"}
+            href={
+              svc === "realdebrid"
+                ? "https://real-debrid.com/account"
+                : svc === "alldebrid"
+                  ? "https://alldebrid.com/api/"
+                  : "https://torbox.app/settings"
+            }
             target="_blank"
             rel="noreferrer"
             className="md-btn md-btn-tonal md-state"

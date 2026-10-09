@@ -1039,6 +1039,49 @@ function VideoStage({
         if (!alive) return;
         sourceHostRef.current = resolved.host;
         if (resolved.viaProxy) {
+          // Media elements play cross-origin WITHOUT CORS (no crossOrigin
+          // attribute here) — a host lacking CORS headers can still be playing
+          // perfectly. Do NOT tear down a stream that is demonstrably working:
+          // the serverless media proxy has a hard function-time cap on hosts
+          // like Vercel (maxDuration=60), so re-attaching a healthy direct
+          // source through it kills playback mid-stream (TorBox CDN evidence:
+          // no ACAO advertised, plays direct, dies when proxied).
+          const el = videoRef.current;
+          if (el && el.error !== null) return; // escalation ladder owns recovery
+          if (el && el.readyState >= 2) return; // already rendering direct frames
+          const directHls = /\.m3u8(\?|$)/i.test(url) || url.includes("m3u8");
+          if (!directHls) {
+            // The probe usually resolves BEFORE the element has buffered
+            // anything — give the direct attach a short, bounded chance to
+            // prove itself (frames or error) before switching to the proxy.
+            const gotData = await new Promise<boolean>((done) => {
+              const v = videoRef.current;
+              if (!v) return done(false);
+              if (v.error !== null) return done(false);
+              if (v.readyState >= 2) return done(true);
+              const cleanup = () => {
+                v.removeEventListener("loadeddata", ok);
+                v.removeEventListener("error", bad);
+                clearTimeout(timer);
+              };
+              const ok = () => {
+                cleanup();
+                done(true);
+              };
+              const bad = () => {
+                cleanup();
+                done(false);
+              };
+              const timer = setTimeout(() => {
+                cleanup();
+                done(false);
+              }, 2_500);
+              v.addEventListener("loadeddata", ok, { once: true });
+              v.addEventListener("error", bad, { once: true });
+            });
+            if (!alive) return;
+            if (gotData) return; // direct is delivering — keep it out of the proxy
+          }
           sourceModeRef.current = "proxy";
           setSrcOverride({ url: resolved.url, mode: "proxy" });
         }

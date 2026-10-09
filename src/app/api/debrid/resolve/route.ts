@@ -443,7 +443,33 @@ type TbTorrent = {
   name: string | null;
   state: string;
   files: TbFile[];
+  // Documented readiness signals (mylist item):
+  //   download_finished — the transfer completed on TorBox's servers
+  //   download_present  — the file is present and servable
+  //   cached            — torrent was already on TorBox (instant)
+  //   progress          — 0-100 completion percentage
+  downloadFinished: boolean | null;
+  downloadPresent: boolean | null;
+  cached: boolean | null;
+  progress: number | null;
 };
+
+/**
+ * Readiness per the documented TorBox state machine (official SDK docs:
+ * `uploading` = "currently seeding", `completed` = "completely downloaded —
+ * do NOT use this for download completion status"). A torrent that finished
+ * downloading typically rests in a SEEDING state (`uploading`, `stalledUP`,
+ * …), so the reliable readiness truth is the boolean fields, with the state
+ * string as a fast path — not the other way around.
+ */
+function tbTorrentReady(t: TbTorrent): boolean {
+  if (t.state === "cached" || t.downloadFinished === true || t.cached === true) return true;
+  if (t.downloadPresent === true && (t.progress ?? 0) >= 100) return true;
+  // Fallback for deployments where the booleans are absent: "completed" is
+  // documented as "completely downloaded" even though it is not the
+  // recommended completion signal.
+  return t.state === "completed";
+}
 
 function parseTbTorrent(raw: unknown): TbTorrent | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -475,6 +501,10 @@ function parseTbTorrent(raw: unknown): TbTorrent | null {
     name: typeof rec.name === "string" ? rec.name : null,
     state: typeof rec.download_state === "string" ? rec.download_state.toLowerCase() : "",
     files,
+    downloadFinished: rec.download_finished === true ? true : rec.download_finished === false ? false : null,
+    downloadPresent: rec.download_present === true ? true : rec.download_present === false ? false : null,
+    cached: rec.cached === true ? true : rec.cached === false ? false : null,
+    progress: typeof rec.progress === "number" && Number.isFinite(rec.progress) ? rec.progress : null,
   };
 }
 
@@ -582,7 +612,17 @@ async function resolveTorBox(
     } else {
       torrent = (await torboxMyList(apiKey)).find((t) => t.hash === hash) ?? torrent;
     }
-    if (torrent && (torrent.state === "cached" || torrent.state === "completed")) break;
+    if (torrent && tbTorrentReady(torrent)) {
+      // Guard the documented mylist quirk (the ?id= filter returns a single
+      // OBJECT that can omit the files array): re-fetch the full list once so
+      // file selection never runs against an empty file table.
+      const ready = torrent;
+      if (ready.files.length === 0) {
+        const full = (await torboxMyList(apiKey)).find((t) => t.id === ready.id || t.hash === hash);
+        if (full && full.files.length > 0) torrent = full;
+      }
+      break;
+    }
     if (torrent && torrent.state === "error") {
       throw new UpstreamError("TorBox could not download this torrent (dead or unsupported)", 502);
     }

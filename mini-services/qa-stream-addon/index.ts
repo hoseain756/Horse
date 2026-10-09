@@ -49,11 +49,30 @@ const server = Bun.serve({
     // Catch-all stream route: /stream/movie/ttXXXX.json / /stream/series/ttX:1:1.json
     const m = /^\/stream\/(movie|series)\/([^/]+)\.json$/.exec(p);
     if (m) {
-      let seeded: { infoHash?: string; filename?: string; title?: string } = {};
+      let seeded: { infoHash?: string; filename?: string; title?: string; url?: string } = {};
       try {
         seeded = await Bun.file(INFOHASH_FILE).json();
       } catch {
         seeded = {};
+      }
+      // Direct-URL mode: seed {url, filename?, title?} to test the player's
+      // direct-attach / probe / auto-proxy behavior (agent-browser E2E only).
+      if (typeof seeded.url === "string" && seeded.url.length > 0) {
+        return Response.json(
+          {
+            streams: [
+              {
+                url: seeded.url,
+                title: seeded.title ?? "QA · direct url stream",
+                behaviorHints: {
+                  filename: seeded.filename ?? "qa-sample.mp4",
+                  notWebReady: false,
+                },
+              },
+            ],
+          },
+          { headers: cors },
+        );
       }
       const infoHash = typeof seeded.infoHash === "string" ? seeded.infoHash : null;
       if (!infoHash) {
