@@ -31,6 +31,7 @@ import {
 import { tmdbEnabled, tmdbMultiSearch, type TmdbMultiHit } from "@/lib/harbor/tmdb";
 import { cn } from "@/lib/utils";
 import { PosterImage } from "../common/poster";
+import { useT } from "@/hooks/use-t";
 
 const RECENTS_KEY = "harbor-web.search-recents";
 const MAX_RECENTS = 8;
@@ -90,6 +91,7 @@ export function FloatingSearch() {
   const push = useNav((s) => s.push);
   const stack = useNav((s) => s.stack);
   const uiLanguage = useSettings((s) => s.settings.uiLanguage);
+  const tr = useT(); // B1/B3: localized, bidi-safe placeholder + labels
 
   // Immersive surfaces (title detail / picker / player) hide the idle bar —
   // mirroring app-shell's showChrome — but an ALREADY-OPEN search stays up so
@@ -420,16 +422,18 @@ export function FloatingSearch() {
       className={cn(
         // Fixed top. PHONES (<600): 48×48 glass trigger at the top inline-END
         // corner (over the hero, safe-area offset) that expands THIS bar into
-        // the full-screen glass search sheet. ≥600: floating glass pill
-        // centered INSIDE the content area — the anchor box starts at
-        // --fs-anchor-start (the side-rail inset at ≥1024) so the bar and its
-        // popover can never overlap the side nav. z: --z-search-bar map.
-        "fixed z-[var(--z-search-bar)] top-[max(0.75rem,env(safe-area-inset-top))] end-3",
+        // the full-screen glass search sheet. 600–1023 (frozen band): floating
+        // pill centered inside the content area via the legacy anchor token.
+        // ≥1024 (B3): the unlayered .fs-wrap rules own the geometry — ONE
+        // fixed width per band, centered in the VIEWPORT, identical in idle
+        // and expanded state, independent of the rail/page/slide. z:
+        // --z-search-bar map.
+        "fs-wrap fixed z-[var(--z-search-bar)] top-[max(0.75rem,env(safe-area-inset-top))] end-3",
         "min-[600px]:end-3 min-[600px]:start-[var(--fs-anchor-start)] min-[600px]:mx-auto",
         "w-12 min-[600px]:w-60",
-        // Expand on focus + hide/reveal on scroll direction (smooth; motion-reduce users get instant snap)
-        "transition-[width,transform,opacity] duration-300 ease-[var(--md-sys-motion-easing-emphasized)] motion-reduce:transition-none",
-        expanded && "min-[600px]:w-[min(var(--fs-bar-max-w),calc(100vw-var(--fs-anchor-start)-24px))]",
+        // Hide/reveal on scroll direction (smooth; motion-reduce users get instant snap).
+        // Width no longer animates on focus — the bar has ONE width per band (B3).
+        "transition-[transform,opacity] duration-300 ease-[var(--md-sys-motion-easing-emphasized)] motion-reduce:transition-none",
         // Scrolled-down: slide the bar fully off-screen. invisible: aria-hidden
         // subtrees must not keep focusable controls.
         hidden && !tvOpen && "-translate-y-[160%] opacity-0 invisible pointer-events-none",
@@ -472,7 +476,7 @@ export function FloatingSearch() {
           aria-controls={tvBand ? undefined : "harbor-float-search-list"}
           aria-haspopup={tvBand ? undefined : "listbox"}
         >
-          <Search className="w-4 h-4 min-[600px]:w-5 min-[600px]:h-5 text-ink-muted shrink-0" aria-hidden />
+          <Search className="w-4 h-4 min-[600px]:w-5 min-[600px]:h-5 text-ink/85 shrink-0" aria-hidden />
           <input
             ref={inputRef}
             value={query}
@@ -488,8 +492,9 @@ export function FloatingSearch() {
             }}
             onKeyDown={onInputKeyDown}
             readOnly={tvBand}
-            placeholder="Search…"
-            aria-label="Search movies, series, people and addons"
+            placeholder={tr("searchPlaceholder")}
+            dir="auto"
+            aria-label={tr("searchAria")}
             aria-autocomplete={tvBand ? undefined : "list"}
             className={cn(
               "fs-input min-w-0 flex-1 self-stretch bg-transparent text-sm min-[600px]:text-base text-ink placeholder:text-ink-muted outline-none",
@@ -551,8 +556,9 @@ export function FloatingSearch() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onInputKeyDown}
-                placeholder="Search…"
-                aria-label="Search movies, series, people and addons"
+                placeholder={tr("searchPlaceholder")}
+                dir="auto"
+                aria-label={tr("searchAria")}
                 aria-autocomplete="list"
                 aria-controls="harbor-float-search-list"
                 className="min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted outline-none"
@@ -723,8 +729,9 @@ export function FloatingSearch() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="Search movies, series, people…"
-              aria-label="Search movies, series, people and addons"
+              placeholder={tr("searchPlaceholder")}
+              dir="auto"
+              aria-label={tr("searchAria")}
               aria-autocomplete="list"
               autoFocus
             />

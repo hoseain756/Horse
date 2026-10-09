@@ -374,6 +374,17 @@ function BasicsPanel() {
       <SettingRow title={tr("autoHideNav")} description={tr("autoHideNavDesc")}>
         <Switch checked={settings.dockAutoHide} onCheckedChange={(v) => update({ dockAutoHide: v })} />
       </SettingRow>
+      <SettingRow title={tr("railMode")} description={tr("railModeDesc")}>
+        <SegmentedControl
+          label={tr("railMode")}
+          value={settings.railAutoHide ? "auto" : "always"}
+          options={([
+            ["auto", tr("optRailAutoHide")],
+            ["always", tr("optRailAlways")],
+          ] as const).map(([id, label]) => [id, label] as const)}
+          onChange={(m) => update({ railAutoHide: m === "auto" })}
+        />
+      </SettingRow>
       <SettingSliderRow
         title={tr("posterSize")}
         value={Math.round(settings.posterScale * 100)}

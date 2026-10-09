@@ -196,7 +196,9 @@ function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void 
     <section aria-label="Top 10 today">
       <div className="flex items-baseline justify-between px-4 md:px-8 mb-2.5">
         <h2 className="md-title-medium text-ink">Top 10 Today</h2>
-        <span className="md-body-small text-ink-subtle">trending on Stremio</span>
+        {/* B9: tiny/low-contrast utility text — ≥1024 CSS bumps this to 12dp
+            with ≥4.5:1 (top10-note in globals.css); bands below 1024 frozen. */}
+        <span className="top10-note md-body-small text-ink-subtle">trending on Stremio</span>
       </div>
       {/* Hover headroom: pt-3/-mt-1 keeps the 18px header→card gap while giving the hover lift room inside the scroll clip */}
       <div className="harbor-scroll-x overflow-x-auto flex items-end gap-1 px-4 md:px-8 pb-3 pt-3 -mt-1">

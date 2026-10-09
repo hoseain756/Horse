@@ -34,7 +34,6 @@
 // and never interrupts a drag. Cleanup covers every timer/observer/animation.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import type { Meta } from "@/lib/harbor/types";
 import { tmdbDetails, tmdbHeroArt, tmdbIdFromImdb, tmdbLogoPath, tmdbOriginal } from "@/lib/harbor/tmdb";
@@ -95,6 +94,10 @@ const FAILED_ART = new Set<string>(); // artworks that 404'd (per title)
 const WARMED_ART = new Set<string>(); // artworks already decoded this session
 /** Enrichment survives hero remounts (round-trips between Home visits). */
 const ENRICH_CACHE = new Map<string, SlideInfo>();
+/** B6: measured extra-scrim alpha per artwork (0…0.75) — sampled once per
+ *  image from a canvas (art is same-origin via /api/img), cached per failKey
+ *  so slide revisits apply it instantly. */
+const SCRIM_CACHE = new Map<string, number>();
 
 type SlideInfo = { logo?: string; genre?: string; posterPath?: string; backdropPath?: string; overview?: string };
 
@@ -420,6 +423,7 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const [wide, setWide] = useState(false); // ≥1024: up-next strip
 
   const trackRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const xRef = useRef(0); // current track offset (px)
   const wRef = useRef(0); // viewport width captured per gesture
@@ -447,6 +451,9 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const indSizesRef = useRef<{ dot: number; active: number } | null>(null);
   const lingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A2: a click right after a drag that actually moved is accidental — swallow
+  // exactly one click (capture phase) after any drag beyond a few px.
+  const suppressClickRef = useRef(false);
 
   const total = slides.length;
   const totalRef = useRef(0);
@@ -490,6 +497,51 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     return () => io.disconnect();
   }, []);
 
+  // B7: show 3–4 up-next cards depending on the available hero height —
+  // never more than actually fit (measured, not assumed). Re-runs when the
+  // skeleton resolves: sectionRef only exists after `loading` clears.
+  const [upnextMax, setUpnextMax] = useState(3);
+  useEffect(() => {
+    if (!wide || loading) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    const compute = () => setUpnextMax(el.clientHeight >= 620 ? 4 : 3);
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [wide, loading]);
+
+  // A2: trackpad/horizontal-wheel navigation — horizontal intent only (a
+  // vertical scroll never moves the carousel), debounced, shortest direction.
+  // Native non-passive listener: React's onWheel is passive, and preventDefault
+  // is what stops a horizontal trackpad swipe from also scrolling the page.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    let accum = 0;
+    let lockUntil = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (totalRef.current <= 1) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // vertical scroll wins
+      e.preventDefault();
+      const now = performance.now();
+      if (now < lockUntil) return;
+      accum += e.deltaX;
+      if (Math.abs(accum) < 60) return;
+      const forward = accum > 0 ? (dirRef.current < 0 ? 1 : -1) : dirRef.current < 0 ? -1 : 1;
+      accum = 0;
+      lockUntil = now + 450; // one step per gesture (momentum floods events)
+      const n = totalRef.current;
+      const cur = idxRef.current;
+      const target = (((cur + forward) % n) + n) % n;
+      goToRef.current(target);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // The section (and the ref) only exists once the skeleton resolves.
+  }, [loading]);
+
   // ---------- art specs (identity-cached per title so HeroArt memo holds) ----------
   const artsCacheRef = useRef(new Map<string, { sig: string; spec: HeroArtSpec }>());
   const arts = useMemo(() => {
@@ -503,6 +555,82 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       return spec;
     });
   }, [slides, info]);
+
+  // B6: adaptive readability — sample the ACTIVE artwork behind the text zone
+  // (inline-start half, lower 70%) on a tiny canvas and write --hero-adapt, the
+  // opacity of the extra scrim layer, so white text keeps ≥4.5:1 on bright art.
+  // Sampled once per image (cached by failKey); art is same-origin (/api/img).
+  // Gated to ≥1024 (`wide`): the 600–1023 tablet band is design-frozen, and
+  // shrinking below 1024 resets the layer to 0 so no stale value leaks.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const apply = (v: number) => section.style.setProperty("--hero-adapt", v.toFixed(3));
+    if (!wide) {
+      apply(0);
+      return;
+    }
+    const i = Math.min(idx, Math.max(0, total - 1));
+    const art = arts[i];
+    if (!art) {
+      apply(0);
+      return;
+    }
+    const cached = SCRIM_CACHE.get(art.failKey);
+    if (cached !== undefined) {
+      apply(cached);
+      return;
+    }
+    const img = trackRef.current?.querySelector<HTMLImageElement>(`[data-i="${i}"] .home-hero-art img`);
+    if (!img) {
+      apply(0);
+      return;
+    }
+    let cancelled = false;
+    const sample = () => {
+      if (cancelled || !img.complete || img.naturalWidth === 0) return;
+      try {
+        const W = 64;
+        const H = 36;
+        const cv = document.createElement("canvas");
+        cv.width = W;
+        cv.height = H;
+        const ctx = cv.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, W, H);
+        // The text zone: the column side (inline-start half), lower 70%.
+        const rtlNow = dirRef.current < 0;
+        const x0 = rtlNow ? Math.floor(W * 0.48) : 0;
+        const x1 = rtlNow ? W : Math.floor(W * 0.52);
+        const y0 = Math.floor(H * 0.3);
+        const data = ctx.getImageData(x0, y0, x1 - x0, H - y0).data;
+        let sum = 0;
+        let n = 0;
+        for (let p = 0; p < data.length; p += 4) {
+          const r = data[p] / 255;
+          const g = data[p + 1] / 255;
+          const b = data[p + 2] / 255;
+          sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          n++;
+        }
+        const L = n > 0 ? sum / n : 0;
+        // White text needs backdrop luminance ≲0.18 for 4.5:1; the static side
+        // scrim covers moderate art — add extra darkening only above ~0.24.
+        const extra = Math.min(0.75, Math.max(0, (L - 0.24) * 1.9));
+        SCRIM_CACHE.set(art.failKey, extra);
+        apply(extra);
+      } catch {
+        /* sampling is best-effort (tainted canvas, detached node, …) */
+      }
+    };
+    if (img.complete) sample();
+    else img.addEventListener("load", sample, { once: true });
+    return () => {
+      cancelled = true;
+      img.removeEventListener("load", sample);
+    };
+    // `loading` re-runs this once the real section (and ref) exists.
+  }, [idx, arts, wide, total, loading]);
 
   const artWindow = useMemo(() => {
     // jump: exactly the crossfading pair; otherwise the 3-slot window
@@ -582,6 +710,9 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   useEffect(() => {
     startJumpRef.current = startJump;
   }, [startJump]);
+  // Wheel navigation (A2) reads the latest goTo through a ref (declared
+  // before goTo itself, assigned right after).
+  const goToRef = useRef<(target: number) => void>(() => {});
 
   /** Live track offset from the computed transform (matrix read; used when
    *  interrupting an in-flight transition so it continues, never jumps). */
@@ -758,6 +889,9 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     },
     [slideStepFrom, startJump],
   );
+  useEffect(() => {
+    goToRef.current = goTo;
+  }, [goTo]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (total <= 1) return;
@@ -900,6 +1034,9 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     if (w === 0) return;
     const s = -(x * dirRef.current) / w; // signed progress toward "next"
     const flung = Math.abs(d.v) > VELOCITY_PX_MS;
+    // A real drag (beyond a few px) swallows the click that follows the
+    // release so releasing over a button never activates it (A2).
+    if (Math.abs(x) > 8) suppressClickRef.current = true;
     let step: 0 | 1 | -1 = 0;
     if (s > ADVANCE_FRACTION || (flung && s > 0)) step = 1;
     else if (s < -ADVANCE_FRACTION || (flung && s < 0)) step = -1;
@@ -1055,7 +1192,8 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   // intentionally AFTER the early returns (no hooks here).
   const upNext: { meta: Meta; i: number }[] = [];
   if (total > 1) {
-    const count = Math.min(4, total - 1);
+    // B7: 3–4 cards by measured hero height (never more than fit).
+    const count = Math.min(upnextMax, total - 1);
     for (let k = 1; k <= count; k++) {
       const i = (idx + k) % total;
       const s = slides[i];
@@ -1090,6 +1228,7 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
 
   return (
     <section
+      ref={sectionRef}
       className={`home-hero group/hero${moving ? " is-moving" : ""}${dragging ? " is-dragging" : ""}`}
       role="region"
       aria-roledescription="carousel"
@@ -1099,6 +1238,14 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       onFocusCapture={() => setFocusPaused(true)}
       onBlurCapture={() => setFocusPaused(false)}
       onKeyDown={onKeyDown}
+      onClickCapture={(e) => {
+        // A2: swallow the single click that trails a real drag.
+        if (suppressClickRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          suppressClickRef.current = false;
+        }
+      }}
     >
       {firstArt && (
         <>
@@ -1176,37 +1323,15 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       {/* Round 25 (≥600): directional readability scrim — darkest at the
           content column's inline-start edge, physical gradient flips in RTL. */}
       <div className="home-hero-scrim-side" aria-hidden />
+      {/* B6 (≥600): adaptive layer — opacity is --hero-adapt, measured from
+          the rendered artwork's luminance behind the text zone (cached). */}
+      <div className="home-hero-scrim-adapt" aria-hidden />
       <div className="home-hero-scrim-fade" aria-hidden />
 
-      {/* Round 25 (≥600, pointer devices): prev/next glass arrows. Hidden where
-          hover+fine-pointer do not both exist (touch tablets swipe); the
-          buttons stay keyboard-reachable via focus-within on pointer bands. */}
-      {total > 1 && (
-        <>
-          <button
-            type="button"
-            className="home-hero-arrow is-start md-state harbor-tv-focus"
-            aria-label={rtl ? homeT("nextSlide", lang) : homeT("prevSlide", lang)}
-            onClick={() => goTo((idxRef.current - 1 + total) % total)}
-            tabIndex={large ? 0 : -1}
-          >
-            <ChevronLeft className="h-6 w-6 rtl:rotate-180" aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="home-hero-arrow is-end md-state harbor-tv-focus"
-            aria-label={rtl ? homeT("prevSlide", lang) : homeT("nextSlide", lang)}
-            onClick={() => goTo((idxRef.current + 1) % total)}
-            tabIndex={large ? 0 : -1}
-          >
-            <ChevronRight className="h-6 w-6 rtl:rotate-180" aria-hidden />
-          </button>
-        </>
-      )}
-
-      {/* Round 25 (≥1024): "Up next" preview strip — next 2–4 titles as small
+      {/* Round 25 (≥1024): "Up next" preview strip — next 3–4 titles as small
           glass cards; the nearest one is highlighted. Shares the SAME data
-          slides (no new source) and the SAME goTo engine. */}
+          slides (no new source) and the SAME goTo engine. Card count adapts
+          to the hero height (B7): 3–4, never more than fit. */}
       {wide && total > 1 && (
         <div className="home-hero-upnext">
           <p className="home-hero-upnext-label">{homeT("upNext", lang)}</p>
@@ -1221,33 +1346,53 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
               <span className="upnext-thumb" aria-hidden>
                 {um.poster ? <PosterImage src={um.poster} alt="" className="absolute inset-0" /> : null}
               </span>
-              <span className="upnext-name">{um.name}</span>
+              <span className="upnext-name" dir="auto">{um.name}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Shared content stack — NEVER remounts: data crossfades in place. */}
+      {/* Shared content stack — NEVER remounts: data crossfades in place.
+          A4: ONE vertical flow anchored from the bottom — [logo] [meta]
+          [synopsis] [actions] [progress segments]; variable-height parts
+          (logo, meta, synopsis) only grow UPWARD, so the button and the
+          segments keep the exact same position on every slide (B4). Gaps are
+          tokens: --hero-gap-meta / --hero-gap-syn / --hero-gap-segs. */}
       <div ref={contentRef} className="home-hero-content">
         <div className="home-hero-logo-row">
           {logo ? (
-            <img src={logo} alt={meta.name} className="home-hero-logo" loading="eager" decoding="async" />
+            <img
+              src={logo}
+              alt={meta.name}
+              className="home-hero-logo"
+              loading="eager"
+              decoding="async"
+              onLoad={(e) => {
+                // B5: classify the mark so square/round logos get their
+                // minimum visual size (CSS [data-shape="square"]).
+                const el = e.currentTarget;
+                const ratio = el.naturalWidth / Math.max(1, el.naturalHeight);
+                el.dataset.shape = ratio < 1.25 ? "square" : "wide";
+              }}
+            />
           ) : (
-            <h1 className={`home-hero-title${titleClass}`}>{meta.name}</h1>
+            <h1 className={`home-hero-title${titleClass}`} dir="auto">{meta.name}</h1>
           )}
         </div>
 
         <div className="home-hero-meta" style={{ marginBottom: "var(--hero-gap-meta)" }}>
-          {year && <span className="shrink-0">{year}</span>}
+          {year && <bdi className="shrink-0">{year}</bdi>}
           {year && genre && <span className="hero-meta-dot" aria-hidden />}
-          {genre && <span className="overflow-hidden text-ellipsis">{genre}</span>}
+          {genre && <bdi className="overflow-hidden text-ellipsis">{genre}</bdi>}
           <span className="hero-meta-dot" aria-hidden />
-          <span className="shrink-0">{typeLabel}</span>
+          <bdi className="shrink-0">{typeLabel}</bdi>
         </div>
 
         {/* Round 25 (≥600 only — the phone hero has no synopsis): TMDB overview
-            from the SAME enrichment call, clamped per band by --hero-syn-lines. */}
-        {large && synopsis && <p className="home-hero-synopsis">{synopsis}</p>}
+            from the SAME enrichment call. A3: clamped to exactly 2 lines at
+            every large size (--hero-syn-lines: 2) with a real ellipsis; B1:
+            dir="auto" renders each locale's punctuation at its logical end. */}
+        {large && synopsis && <p className="home-hero-synopsis" dir="auto">{synopsis}</p>}
 
         {large ? (
           <button

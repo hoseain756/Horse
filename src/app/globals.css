@@ -2640,38 +2640,52 @@ html[lang^="ar"] {
 }
 
 /* ============================================================================ */
-/* ============ ROUND 25 — LARGE-SCREEN ADAPTIVE LAYOUT (≥600 classes) ======== */
+/* ============ ROUND 26 — LARGE-SCREEN CORRECTIONS (A1–B9) ================== */
 /* ============================================================================ */
 /* Size-class system (user spec): PHONE <600 (existing design, untouched) →
-   TABLET 600–1023 (large hero + large search; bottom dock stays) →
-   LAPTOP 1024–1599 (side rail compact; bottom dock removed) →
-   TV ≥1600 (side rail expanded, 10-foot scale).
+   TABLET 600–1023 (FROZEN — pixel-identical to round 25) →
+   LAPTOP 1024–1599 (auto-hide side rail; bottom dock removed) →
+   TV ≥1600 (same rail, larger type/geometry).
    The thresholds are documented here as tokens for reference; media queries
    hardcode the same numbers (CSS cannot parameterize query values):
    --bp-tablet: 600px; --bp-laptop: 1024px; --bp-tv: 1600px.               */
 :root {
-  /* Side rail occupancy. 0 below 1024 → nothing changes on phones/tablets. */
-  --rail-inset: 0px;
+  /* A1: side-rail occupancy. The rail OVERLAYS the content (it never
+     reserves layout space and nothing may depend on its visibility) — every
+     large page keeps a CONSTANT --side-safe-inset so the revealed rail can
+     never cover text or controls and nothing shifts when it appears/hides.
+     0 below 1024 → phones/tablets are untouched. */
+  --side-safe-inset: 0px;
   --rail-width: 0px;
   /* Rail slot metrics (defaults; real values set per band below). */
   --rail-tab-height: 52px;
   --rail-icon-size: 26px;
   /* Hero content column inset (inline-start edge, mirrors in RTL). */
   --hero-col-inset: 0px;
-  /* Floating search anchor: centered inside [anchor-start, viewport end]. */
+  /* B3: floating search — ONE fixed geometry set per size class. The bar is
+     centered in the VIEWPORT (independent of rail state, page, or slide);
+     idle and expanded share the same width (no width animation). The legacy
+     --fs-anchor-start stays defined at 0 for the frozen 600–1023 band's
+     utility classes; ≥1024 the .fs-wrap block owns the geometry instead. */
   --fs-anchor-start: 0px;
-  /* Large search bar / popover max width per band. */
+  --fs-geo-w: 240px;
+  --fs-geo-top: max(0.75rem, env(safe-area-inset-top));
   --fs-bar-max-w: 520px;
-  /* Large hero composition tokens. */
+  /* Large hero composition tokens (the 600–1023 band is frozen; overrides
+     for the laptop/TV bands live in their blocks below). A4 flow gaps:
+     meta→synopsis = --hero-gap-meta (12 ≥1024), synopsis→actions =
+     --hero-gap-syn (20 ≥1024), actions→segments = --hero-gap-segs (24). */
   --hero-pad-lg: clamp(56px, 11svh, 120px);
-  --hero-syn-lines: 2;
+  --hero-syn-lines: 2; /* A3: exactly two lines at EVERY large size */
   --hero-syn-size: calc(15px * min(var(--home-scale), 1.35));
-  --hero-arrow-inset-start: 12px;
+  --hero-gap-syn: 20px;
+  --hero-gap-segs: 24px;
   /* Up-next strip (≥1024 only). */
-  --hero-upnext-w: 148px;
+  --hero-upnext-w: 176px;
+  --hero-upnext-inset: clamp(16px, 3vw, 48px);
 }
 
-/* ---------- TABLET band (600–1023): large hero + large search, dock stays --- */
+/* ---------- TABLET band (600–1023): frozen design — values unchanged ------- */
 @media (min-width: 600px) {
   :root {
     --hero-col-inset: 48px;
@@ -2679,71 +2693,67 @@ html[lang^="ar"] {
   }
 }
 
-/* ---------- LAPTOP band (1024–1599): compact side rail ---------------------- */
+/* ---------- LAPTOP band (1024–1599): compact auto-hide side rail ------------ */
 @media (min-width: 1024px) {
   :root {
+    /* ONE rail form (A1): the compact capsule. TV included. */
     --rail-width: calc(80px * var(--nav-zoom) * var(--nav-kids));
-    --rail-inset: calc(var(--rail-width) + 24px);
+    --side-safe-inset: calc(var(--rail-width) + 24px);
     --rail-tab-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
     --rail-icon-size: calc(26px * var(--nav-zoom) * var(--nav-kids));
-    --hero-col-inset: calc(var(--rail-inset) + 40px);
-    --hero-syn-lines: 3;
-    --hero-arrow-inset-start: calc(var(--rail-inset) + 12px);
-    --fs-anchor-start: var(--rail-inset);
+    /* B4: the column inset derives from the CONSTANT safe inset — identical
+       on every slide and rail state. */
+    --hero-col-inset: calc(var(--side-safe-inset) + 40px);
+    /* A4: bottom-anchored flow gaps + bottom padding (28–32dp). */
+    --hero-gap-meta: 12px;
+    --hero-gap-syn: 20px;
+    --hero-pad-lg: clamp(28px, 4svh, 32px);
+    /* B5: fixed logo box (laptop). */
+    --hero-logo-max-w: min(320px, 26vw);
+    --hero-logo-max-h: 110px;
+    /* B3: fixed search geometry for the band. */
+    --fs-geo-w: min(var(--fs-bar-max-w), calc(100vw - 24px));
     /* The bottom dock does not exist on this band — content needs no
        dock clearance (the side rail is start-anchored, overlays the art). */
     --nav-clearance: 32px;
   }
-  /* User toggle (settings.railExpanded, persisted): expanded rail on laptop. */
-  html[data-rail="expanded"] {
-    --rail-width: calc(240px * var(--nav-zoom));
-    --rail-inset: calc(var(--rail-width) + 24px);
-    --hero-col-inset: calc(var(--rail-inset) + 40px);
-    --hero-arrow-inset-start: calc(var(--rail-inset) + 12px);
-    --fs-anchor-start: var(--rail-inset);
-  }
   /* One navigation, one band: the bottom dock never shows at ≥1024. */
   .glass-dock { display: none; }
   .side-rail { display: block; }
-  /* Content respects the rail: a stable start inset for every page. The
+  /* Content respects the rail's safe inset: a stable start inset for every
+     page — constant whether the rail is hidden or revealed (A1). The
      Home route's full-bleed black canvas escapes the inset (below) so the
-     art and the OLED background run edge-to-edge UNDER the rail — no dead
-     side bars, no background seams. */
-  .rail-main { padding-inline-start: var(--rail-inset); }
-  /* Home's pure-black page canvas spans the FULL viewport (escapes main's
-     start inset); the content rows below the hero re-apply the inset
-     internally (.home-below). The hero needs no extra escape — it is
-     width:100% of the already full-bleed .home-void. */
+     art and the OLED background run edge-to-edge UNDER the rail. */
+  .rail-main { padding-inline-start: var(--side-safe-inset); }
   .home-void {
-    margin-inline-start: calc(-1 * var(--rail-inset));
-    width: calc(100% + var(--rail-inset));
+    margin-inline-start: calc(-1 * var(--side-safe-inset));
+    width: calc(100% + var(--side-safe-inset));
   }
-  .home-below { margin-inline-start: var(--rail-inset); }
+  .home-below { margin-inline-start: var(--side-safe-inset); }
 }
 
-/* ---------- TV / 10-foot band (≥1600): expanded rail, larger scale ---------- */
+/* ---------- TV / 10-foot band (≥1600): larger type + geometry --------------- */
 @media (min-width: 1600px) {
   :root {
-    --rail-width: calc(240px * var(--nav-zoom));
-    --rail-inset: calc(var(--rail-width) + 28px);
+    --rail-width: calc(80px * var(--nav-zoom));
     --rail-tab-height: calc(56px * var(--nav-zoom));
     --rail-icon-size: calc(28px * var(--nav-zoom));
-    --hero-col-inset: calc(var(--rail-inset) + 56px);
-    --hero-syn-lines: 4;
+    --hero-col-inset: calc(var(--side-safe-inset) + 56px);
     --hero-syn-size: calc(18px * min(var(--home-scale), 1.3));
+    --hero-logo-max-w: min(480px, 30vw); /* B5: fixed logo box (TV) */
+    --hero-logo-max-h: 160px;
+    --hero-upnext-w: 200px;
     --fs-bar-max-w: 720px;
-    --fs-anchor-start: var(--rail-inset);
-    --hero-arrow-inset-start: calc(var(--rail-inset) + 16px);
-  }
-  html[data-rail="expanded"] {
-    /* attribute is a no-op here: TV is always expanded */
   }
 }
 
-/* ============ SIDE RAIL (≥1024) — the dock's vertical sibling ============== */
-/* Same glass recipe (--glass-*), same pill language, same easing. The capsule
-   floats at the inline-start edge, vertically centered, OVER the content;
-   pages keep a stable inset via --rail-inset (see band blocks above). */
+/* ============ SIDE RAIL (≥1024) — hidden by default, reveals on intent ===== */
+/* Same glass recipe (--glass-*), same pill language, same easing. ONE form
+   (A1): the compact capsule. By default it is translated off the inline-start
+   edge (right edge in Arabic, left in English) leaving only the 4×48dp edge
+   handle; the reveal state machine lives in side-rail.tsx. Motion is
+   transform + opacity only; hidden = pointer-events dead; reduced-motion =
+   fade only (no translate). */
 .side-rail {
   display: none; /* revealed by the ≥1024 band block above */
   position: fixed;
@@ -2758,6 +2768,9 @@ html[lang^="ar"] {
 @media (min-width: 1024px) {
   .side-rail { display: block; }
 }
+/* A1 reveal motion: transform + opacity only (~280ms, glass easing). The
+   hidden state pushes the capsule fully off the inline-start edge (its own
+   width + the 16dp offset + margin) and kills pointer events. */
 .rail-capsule {
   width: var(--rail-width);
   padding: calc(8px * var(--nav-zoom));
@@ -2771,9 +2784,80 @@ html[lang^="ar"] {
   flex-direction: column;
   gap: 2px;
   touch-action: none;
+  /* B2: no state of the rail may ever overflow its container — the pill,
+     its scrub grow and the lit preview all clip to the capsule shape. */
+  overflow: hidden;
+  transition: transform 280ms var(--glass-ease), opacity 220ms var(--glass-ease);
+  will-change: transform, opacity;
 }
+.side-rail[data-hidden="true"] .rail-capsule {
+  transform: translateX(calc(-1 * (100% + 24px)));
+  opacity: 0;
+  pointer-events: none; /* a hidden rail never intercepts clicks (A1) */
+}
+[dir="rtl"] .side-rail[data-hidden="true"] .rail-capsule {
+  transform: translateX(calc(100% + 24px));
+}
+/* Reduced motion: fade only — no translate motion (A1). The capsule fades
+   in place (it is pointer-events:none while hidden, so nothing is blocked). */
+@media (prefers-reduced-motion: reduce) {
+  .rail-capsule { transition: opacity 200ms ease; }
+  .side-rail[data-hidden="true"] .rail-capsule { transform: none; }
+}
+/* A1: the edge handle — the only visible affordance while hidden (4×48dp
+   glass at ~40% opacity, vertically centered at the inline-start edge). */
+.rail-handle {
+  position: absolute;
+  inset-inline-start: -16px; /* the nav box sits 16dp in from the edge */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 48px;
+  padding: 0;
+  border-radius: 2px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity 200ms var(--glass-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+/* Revealed rail (or the always-visible setting): the handle steps aside. */
+.side-rail:not([data-hidden="true"]) .rail-handle,
+.side-rail:not([data-autohide="true"]) .rail-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+/* A1: glass TOOLTIP beside the hovered/focused icon — labels are never a
+   persisted expanded menu. Anchored inside the nav (its offset parent). */
+.rail-tooltip {
+  position: absolute;
+  inset-inline-start: calc(100% + 12px);
+  top: 0;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  color: var(--nav-icon-active);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 150ms var(--glass-ease);
+  z-index: 1;
+}
+.rail-tooltip.rail-tooltip-on { opacity: 1; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .rail-capsule { background: var(--glass-fallback); }
+  .rail-tooltip { background: var(--glass-fallback); }
 }
 /* Track = the tab stack only (the expand toggle lives outside it so the
    pill's slot math stays exact: slotH = trackHeight / tabCount). */
@@ -2812,7 +2896,8 @@ html[lang^="ar"] {
 .rail-track[data-scrub="true"] .rail-tab[aria-current="page"]:not([data-lit="true"]) .rail-icon-outline { opacity: 1; }
 .rail-track[data-scrub="true"] .rail-tab[aria-current="page"]:not([data-lit="true"]) .rail-icon-filled { opacity: 0; }
 
-/* Tab slot: compact = icon only (26dp), expanded = icon + label rows. */
+/* Tab slot: icon only — the rail has ONE compact form (A1); labels surface
+   as the glass tooltip beside the icon, never as a wide labelled row. */
 .rail-tab {
   position: relative;
   display: flex;
@@ -2853,58 +2938,23 @@ html[lang^="ar"] {
 .rail-tab[aria-current="page"] .rail-icon-filled { opacity: 1; }
 .rail-tab[data-lit="true"] .rail-icon-outline { opacity: 0; }
 .rail-tab[data-lit="true"] .rail-icon-filled { opacity: 1; }
-.rail-label {
-  display: none; /* compact band: icon + native tooltip (title) */
-  font-size: calc(15px * var(--nav-zoom));
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Expanded states: laptop user toggle + the TV band (always). */
-.side-rail[data-expanded="true"] .rail-tab { justify-content: flex-start; padding-inline: 12px; }
-.side-rail[data-expanded="true"] .rail-label { display: inline; }
-@media (min-width: 1600px) {
-  .rail-tab { justify-content: flex-start; padding-inline: 16px; }
-  .rail-label { display: inline; }
-}
-/* Expand/collapse toggle (laptop band only; TV is always expanded). */
-.rail-toggle {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--rail-tab-height);
-  margin-top: 2px;
-  border-radius: 9999px;
-  color: var(--nav-icon-inactive);
-  transition: color 150ms ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.rail-toggle:hover { color: var(--nav-icon-active); }
-.rail-toggle-icon { width: calc(20px * var(--nav-zoom)); height: calc(20px * var(--nav-zoom)); }
-.rail-toggle-icon-alt { display: none; }
-.rail-toggle[aria-pressed="true"] .rail-toggle-icon { display: none; }
-.rail-toggle[aria-pressed="true"] .rail-toggle-icon-alt { display: block; }
-.side-rail[data-expanded="true"] .rail-toggle { justify-content: flex-start; padding-inline: 12px; }
-@media (min-width: 1600px) {
-  .side-rail .rail-toggle { display: none; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .side-rail, .rail-pill, .rail-tab, .rail-icon-frame svg, .rail-toggle { transition: none; }
+  .side-rail, .rail-pill, .rail-tab, .rail-icon-frame svg, .rail-handle, .rail-tooltip { transition: none; }
 }
 
 /* ============ LARGE-SCREEN HERO (≥600) — cinematic start-anchored column === */
-/* Height ladder (svh-clamped; phone keeps its own clamp untouched). */
+/* Height ladder (svh-clamped; phone keeps its own clamp untouched).
+   B8: at ≥1024 the hero is clamp(420px, 62svh, 680px) so the first row's
+   header plus the top of its cards are visible on 1366×768 / 1440×900 /
+   1536×864; a bit larger on TV. The frozen 600–1023 band keeps its ladder. */
 @media (min-width: 600px) {
   :root { --hero-height: clamp(480px, 72svh, 800px); }
 }
 @media (min-width: 1024px) {
-  :root { --hero-height: clamp(520px, 76svh, 880px); }
+  :root { --hero-height: clamp(420px, 62svh, 680px); }
 }
 @media (min-width: 1600px) {
-  :root { --hero-height: clamp(620px, 82svh, 1040px); }
+  :root { --hero-height: clamp(460px, 66svh, 760px); }
 }
 /* Directional readability scrim: darkest at the content edge, fading toward
    the art — the guaranteed-contrast layer under the start-anchored column.
@@ -2922,6 +2972,26 @@ html[lang^="ar"] {
 }
 @media (min-width: 600px) {
   .home-hero-scrim-side { display: block; }
+}
+/* B6: adaptive luminance layer — home-hero.tsx samples the rendered artwork
+   behind the text zone (canvas, cached per image) and writes --hero-adapt
+   (0…0.75). The layer adds exactly the extra darkening a bright image needs
+   so hero text keeps ≥4.5:1 on ANY artwork; dark art gets 0 (no change). */
+.home-hero-scrim-adapt {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: none;
+  opacity: var(--hero-adapt, 0);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.66) 32%, rgba(0, 0, 0, 0) 64%);
+  transition: opacity 400ms var(--hero-ease);
+}
+[dir="rtl"] .home-hero-scrim-adapt {
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.66) 32%, rgba(0, 0, 0, 0) 64%);
+}
+@media (min-width: 600px) {
+  .home-hero-scrim-adapt { display: block; }
 }
 /* Content column: start-anchored (inline-start edge), lower-middle band,
    start-aligned text. Phones keep the centered bottom column untouched. */
@@ -2941,9 +3011,29 @@ html[lang^="ar"] {
   .home-hero-title { max-width: 100%; }
   .home-hero-meta { justify-content: flex-start; max-width: 100%; }
 }
+/* B4/B5/A4: laptop + TV composition — the frozen 600–1023 band above keeps
+   the round-25 values; everything here is ≥1024 only. */
+@media (min-width: 1024px) {
+  /* Logo box: fixed per band (tokens), bottom-aligned (row rule above),
+     start-anchored; square/round logos get a minimum visual size and optical
+     balance so a small round mark reads as well as a wide wordmark (B5). */
+  .home-hero-logo { max-width: var(--hero-logo-max-w); }
+  .home-hero-logo[data-shape="square"] {
+    min-height: 72px;
+    filter: drop-shadow(var(--hero-logo-shadow)) saturate(1.06);
+  }
+  /* A2: mouse drag affordance with grab/grabbing cursors. */
+  .home-hero-track { cursor: grab; }
+  .home-hero.is-dragging .home-hero-track { cursor: grabbing; }
+  /* B6: soft shadow on the remaining white text over bright art. */
+  .home-hero-meta,
+  .home-hero-title { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6); }
+}
 /* Synopsis (large screens only — the phone hero has none): TMDB overview
-   fetched by the EXISTING enrichment call, clamped per band via
-   --hero-syn-lines (2 tablet / 3 laptop / 4 TV), max 60ch. */
+   fetched by the EXISTING enrichment call. A3: exactly TWO lines at every
+   large size with a real ellipsis; max 60ch. The element carries dir="auto"
+   (B1) so punctuation and the ellipsis land at the logical end of the text
+   for Arabic, English and mixed content. */
 .home-hero-synopsis {
   display: none;
   color: rgba(255, 255, 255, 0.88);
@@ -2951,7 +3041,7 @@ html[lang^="ar"] {
   font-weight: 500;
   line-height: 1.55;
   max-width: 60ch;
-  margin: 0 0 var(--hero-gap-btn);
+  margin: 0 0 var(--hero-gap-syn, var(--hero-gap-btn));
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 @media (min-width: 600px) {
@@ -3041,70 +3131,44 @@ html[lang^="ar"] {
   pointer-events: none;
 }
 [dir="rtl"] .home-hero-seg-fill { transform-origin: right center; }
-/* Prev/next glass arrows (pointer-capable devices only; keyboard-focusable).
-   Hidden entirely where hover/fine pointers do not exist (touch tablets swipe;
-   the segmented indicator + keyboard arrows remain). */
-.home-hero-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 9999px;
-  color: #fff;
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-border);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 200ms var(--hero-ease), transform 150ms var(--hero-ease);
-  -webkit-tap-highlight-color: transparent;
+/* A4 (≥1024 — placed AFTER the base rules so the frozen tablet band keeps
+   its geometry): tokenized flow gap actions→segments (24, never < 16); the
+   stack is bottom-anchored, so variable-height parts only grow UP and the
+   button + segments sit at the exact same position on every slide (B4).
+   Segment geometry: 32×4dp bars, 6dp gaps, ≥44dp hit target (unchanged
+   visual size), inactive 35% white, active fill white (unchanged). */
+@media (min-width: 1024px) {
+  .home-hero-segs { margin-top: var(--hero-gap-segs); gap: 6px; }
+  .home-hero-seg-btn { width: 32px; height: 4px; }
+  .home-hero-seg-btn::before { inset: -20px 0; }
+  .home-hero-seg-bar { background: rgba(255, 255, 255, 0.35); }
 }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .home-hero-arrow { background: var(--glass-fallback); }
-}
-.home-hero-arrow.is-start { inset-inline-start: var(--hero-arrow-inset-start); }
-.home-hero-arrow.is-end { inset-inline-end: 12px; }
-@media (hover: hover) and (pointer: fine) and (min-width: 600px) {
-  .home-hero-arrow { display: inline-flex; }
-  .home-hero:hover .home-hero-arrow,
-  .home-hero:focus-within .home-hero-arrow,
-  .home-hero-arrow:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .home-hero .home-hero-arrow:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-.home-hero-arrow:active { transform: translateY(-50%) scale(0.94); }
-/* Up-next preview strip (≥1024 pointer bands): next 2–4 titles as small glass
-   cards near the content column's inline-end. */
+/* Up-next preview strip (≥1024 pointer bands): next 3–4 titles as small glass
+   cards near the content column's inline-end. B7: fixed inset, fully inside
+   the hero bounds, never under the search bar; the card count is measured
+   from the hero height (home-hero.tsx) so nothing is ever clipped. */
 .home-hero-upnext {
   position: absolute;
-  inset-inline-end: clamp(16px, 3vw, 48px);
-  bottom: clamp(20px, 5svh, 48px);
+  inset-inline-end: var(--hero-upnext-inset);
+  bottom: clamp(20px, 4svh, 40px);
   z-index: 2;
   display: none;
   flex-direction: column;
   gap: 10px;
+  max-height: calc(100% - 32px);
+  overflow: hidden;
 }
 @media (min-width: 1024px) {
   .home-hero-upnext { display: flex; }
 }
+/* B7: the label is ≥12dp with ≥4.5:1 contrast over the glass + scrim. */
 .home-hero-upnext-label {
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
   padding-inline-start: 6px;
 }
 .upnext-card {
@@ -3126,10 +3190,19 @@ html[lang^="ar"] {
   .upnext-card { background: var(--glass-fallback); }
 }
 .upnext-card:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.55); }
-.upnext-card[data-primary="true"] { border-color: var(--glass-accent-border); }
+/* B7: the first (nearest) card indicates "next" — accent border + a soft
+   accent wash so it reads as the one autoplay is moving to. */
+.upnext-card[data-primary="true"] {
+  border-color: var(--glass-accent-border);
+  background: color-mix(in srgb, var(--glass-accent-fill) 55%, var(--glass-fill));
+}
+@supports not (color-mix(in srgb, red 50%, blue)) {
+  .upnext-card[data-primary="true"] { background: var(--glass-fill); }
+}
+/* B7: natural 2:3 poster ratio, top-focused, no awkward crop. */
 .upnext-thumb {
   width: 52px;
-  height: 74px;
+  height: 78px;
   flex: 0 0 auto;
   border-radius: 10px;
   overflow: hidden;
@@ -3142,14 +3215,16 @@ html[lang^="ar"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
 }
+/* B7: titles ≥13dp, 2-line clamp, correct bidi ellipsis (dir="auto" in TSX). */
 .upnext-name {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
   min-width: 0;
@@ -3160,6 +3235,14 @@ html[lang^="ar"] {
   border-radius: 9999px;
   margin-bottom: 10px;
 }
+/* B9: micro utility labels get ≥12dp + ≥4.5:1 on large screens (frozen
+   bands below 1024 keep the original). */
+@media (min-width: 1024px) {
+  .top10-note {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--color-ink-var) 62%, transparent);
+  }
+}
 .hero-skel-segs { display: none; gap: 10px; align-items: center; }
 @media (min-width: 600px) {
   .hero-skel-segs { display: flex; }
@@ -3167,10 +3250,40 @@ html[lang^="ar"] {
 }
 
 /* ============ LARGE-SCREEN SEARCH (≥600) + TV fullscreen (≥1600) ============ =*/
-/* The ONE search surface re-anchored per band: centered inside the rail inset
-   at ≥1024 (never overlaps the rail), max width per band, same glass recipe.
-   Width is owned by the WRAPPER utility classes (idle 240 / expanded
-   min(--fs-bar-max-w, …)); .fs-shell only fills it. */
+/* B3: ONE fixed geometry set per size class. The ≥1024 bar is centered in
+   the VIEWPORT (inset-inline 0 + auto margins + the band's fixed width) —
+   identical in idle and expanded state, independent of the rail, the page,
+   or the slide. The frozen 600–1023 band keeps its utility-class geometry.
+   These unlayered rules intentionally override the wrapper utilities. */
+@media (min-width: 1024px) {
+  .fs-wrap {
+    inset-inline: 0;
+    top: var(--fs-geo-top);
+    width: var(--fs-geo-w);
+  }
+  /* Guaranteed-contrast frosted surface: the glass tint mixes the theme
+     canvas (dark mode → dark surface, light mode → light surface) so the
+     ink-on-glass pair stays ≥4.5:1 over ANY artwork — this is what kills
+     the washed-out look over bright backdrops. Blur/saturation unchanged. */
+  .fs-shell {
+    background: color-mix(in srgb, var(--color-canvas-var) 72%, transparent);
+  }
+  @supports not (color-mix(in srgb, red 50%, blue)) {
+    .fs-shell { background: var(--glass-fallback); }
+  }
+  .fs-shell .fs-input::placeholder {
+    color: color-mix(in srgb, var(--color-ink-var) 88%, transparent);
+  }
+  /* B3: readable "/" hint chip (≥20dp, clear contrast, pointer devices). */
+  .fs-shell .harbor-kbd {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0 5px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--color-ink-var) 72%, transparent);
+    border-color: color-mix(in srgb, var(--color-ink-var) 30%, transparent);
+  }
+}
 @media (min-width: 1600px) {
   .fs-shell { height: 64px; }
   .fs-shell .fs-input { font-size: 18px; }

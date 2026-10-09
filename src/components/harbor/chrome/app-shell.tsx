@@ -222,9 +222,9 @@ export function AppShell() {
       kids: settings.kidsMode,
     });
     document.documentElement.dataset.kids = settings.kidsMode ? "on" : "off";
-    // Side rail density → a root attribute so the CONTENT inset tokens
-    // (--rail-inset) follow the same persisted toggle as the rail itself.
-    document.documentElement.dataset.rail = settings.railExpanded ? "expanded" : "compact";
+    // A1: the side rail is compact-only (auto-hide / always-visible). The old
+    // data-rail="expanded" hook is gone — no content inset may ever depend on
+    // a rail state (--side-safe-inset is constant, so nothing shifts).
   }, [settings, loaded]);
 
   // M3 adaptive + RTL: mirror the document for Arabic (logical CSS properties

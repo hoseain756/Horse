@@ -122,9 +122,10 @@ export type Settings = {
   hubHidden: string[];
   /** Auto-hide the glass dock when scrolling down, reveal on scroll up. */
   dockAutoHide: boolean;
-  /** Side rail (≥1024px): expanded (icon+label) instead of compact on the
-   *  laptop band. Always-expanded on the TV band (≥1600px) regardless. */
-  railExpanded: boolean;
+  /** Side rail (≥1024px): auto-hide at the inline-start edge and reveal on
+   *  intent (edge hover / handle tap / focus). When false the compact rail is
+   *  always visible. The rail has ONE compact form (A1 — no expanded mode). */
+  railAutoHide: boolean;
 
   // IPTV
   iptvPlaylists: { id: string; name: string; url: string }[];
@@ -230,7 +231,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hubOrder: [],
   hubHidden: [],
   dockAutoHide: true,
-  railExpanded: false,
+  railAutoHide: true,
 
   iptvPlaylists: [],
 
@@ -274,7 +275,10 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   if (!Array.isArray(out.hubOrder)) out.hubOrder = [];
   if (!Array.isArray(out.hubHidden)) out.hubHidden = [];
   out.dockAutoHide = out.dockAutoHide !== false;
-  out.railExpanded = out.railExpanded === true;
+  out.railAutoHide = out.railAutoHide !== false;
+  // Migration: the expanded rail mode was removed (A1) — drop the stale key
+  // so old persisted payloads do not resurrect dead UI state.
+  delete (out as Partial<Settings> & { railExpanded?: boolean }).railExpanded;
   out.posterScale = clampNum(out.posterScale, 0.6, 1.6, 1);
   out.posterRadius = clampNum(out.posterRadius, 0, 28, 12);
   if (out.episodesView !== "list" && out.episodesView !== "grid") out.episodesView = "auto";

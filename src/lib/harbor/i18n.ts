@@ -53,8 +53,6 @@ const STRINGS = {
   loadingFeatured: { en: "Loading featured titles", ar: "جارٍ تحميل المميزة" },
   pauseAutoplay: { en: "Pause autoplay", ar: "إيقاف العرض التلقائي مؤقتاً" },
   resumeAutoplay: { en: "Resume autoplay", ar: "استئناف العرض التلقائي" },
-  prevSlide: { en: "Previous title", ar: "العنوان السابق" },
-  nextSlide: { en: "Next title", ar: "العنوان التالي" },
   upNext: { en: "Up next", ar: "التالي" },
   resumeAria: { en: "Resume", ar: "متابعة" },
   markWatched: { en: "Mark as watched", ar: "تحديد كمشاهد" },
@@ -251,6 +249,13 @@ export const APP_STRINGS = {
   hideWatchedDesc: { en: "Filter titles you already watched", ar: "تصفية العناوين التي شاهدتها مسبقاً" },
   autoHideNav: { en: "Auto-hide navigation bar", ar: "الإخفاء التلقائي لشريط التنقل" },
   autoHideNavDesc: { en: "Hide the glass dock scrolling down, reveal scrolling up", ar: "أخفِ شريط الأزرار عند التمرير للأسفل وأظهِره عند التمرير للأعلى" },
+  railMode: { en: "Navigation rail", ar: "شريط التنقل الجانبي" },
+  railModeDesc: {
+    en: "Large screens: the side rail hides at the edge and reveals on intent (edge hover, handle tap, or keyboard focus)",
+    ar: "الشاشات الكبيرة: يختبئ الشريط الجانبي عند الحافة ويظهر عند الحاجة (التمرير على الحافة، لمس المقبض، أو التركيز بلوحة المفاتيح)",
+  },
+  optRailAutoHide: { en: "Auto-hide", ar: "إخفاء تلقائي" },
+  optRailAlways: { en: "Always visible", ar: "ظاهر دائمًا" },
   posterSize: { en: "Poster size", ar: "حجم الملصق" },
   posterRadius: { en: "Poster corner radius", ar: "استدارة زوايا الملصق" },
 
@@ -785,6 +790,9 @@ export const APP_STRINGS = {
   syncStatusError: { en: "Sync error", ar: "خطأ مزامنة" },
   syncStatusOff: { en: "Off", ar: "متوقف" },
   cloudSyncTitle: { en: "Cloud sync", ar: "المزامنة السحابية" },
+  // floating search bar (B1/B3: localized, bidi-safe placeholder)
+  searchPlaceholder: { en: "Search…", ar: "ابحث…" },
+  searchAria: { en: "Search movies, series, people and addons", ar: "ابحث عن أفلام ومسلسلات وأشخاص وإضافات" },
 } as const satisfies Record<string, { en: string; ar: string; arOther?: string }>;
 
 export type AppStringKey = keyof typeof APP_STRINGS;
