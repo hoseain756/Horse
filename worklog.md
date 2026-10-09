@@ -1901,3 +1901,22 @@ Stage Summary:
 - Honest limits: BitTorrent client must run SOMEWHERE (physics, not product); browser-WebTorrent was evaluated and rejected (no wss peers for movie swarms + no MKV/HEVC decode). Debrid remains the instant path; the always-on engine remains the best UX for every-device.
 - Note: agent-browser QA ran against the app profile that syncs settings/addons — QA addon was cleanly uninstalled so the removal syncs back; uiLanguage=ar was set during RTL verification (matches the user's actual preference).
 - Next: optional follow-ups — capabilities badge in sidebar/about, ENGINE_URL setup wizard with owner-auth probe, Kids PIN gate, Google OAuth, tsc pre-existing errors cleanup.
+
+---
+Task ID: 58
+Agent: Z.ai Code (main)
+Task: "I want the engine to run ON Vercel — there MUST be a solution" — evidence-based verdict on Vercel + ship the best free always-on path (Oracle Always Free guide, one-click launchers, in-app links)
+
+Work Log:
+- STEP 1 evidence (web-verified, official sources only): (1) Vercel Functions Limits — Hobby = 300s default AND maximum; Pro/Enterprise 800s (1800s extended) — a torrent swarm session is hours (vercel.com/docs/functions/limitations); (2) Vercel functions accept HTTP only — no inbound TCP listeners, no UDP → DHT + peer ingestion impossible; /tmp ephemeral; (3) Vercel AUP (updated 2026-04-21): §4 DMCA §512 process + §5 "material breach of the Agreement" → torrenting on Vercel risks project/account suspension. Verdict: engine-on-Vercel is impossible on three independent walls (technique ×2 + policy); Fluid Compute fixes none of them (no UDP, no inbound, AUP unchanged). Constraint "never add torrent code in Vercel functions" re-affirmed.
+- Reframed the user's real goal (play on horse-1.vercel.app, free, in-app) → engine anywhere + app stays on Vercel; shipped the missing piece: a concrete free-forever host walkthrough.
+- SHIPPED deploy/HOSTING-FREE.md (Arabic-first): the 3-walls table with sources; Oracle Cloud Always Free full walkthrough — CRITICAL June-2026 correction: allowance now 1,500 OCPU-h + 9,000 GB-h per month → the correct always-free size is **2 OCPU / 12 GB** (2×744=1488 ≤ 1500) — the classic 4 OCPU/24 GB only runs ~15.6 days/month (per InfoQ + Oracle docs); signup→VM→dual firewall (VCN Security List + iptables)→docker compose from deploy/→Cloudflare Tunnel HTTPS (quick vs named, honest URL-rotation caveat)→Vercel env vars→in-app verification; comparison table; troubleshooting matrix; source links.
+- SHIPPED one-click engine launchers: mini-services/torrent-service/start-engine.bat (Windows, node check + first-run npm install + npm start), start-engine.command (macOS), start-engine.sh (Linux, chmod +x) — lowers the local-engine path to a double-click; README updated (launcher table + HOSTING-FREE cross-link).
+- SHIPPED in-app: FREE_HOSTING_GUIDE_URL const; "Free 24/7 hosting guide" pill next to "Deployment guide" in testControls (serverless panel + external manage); inside the "Engine on this device" panel a hint ("Oracle's free tier runs the engine 24/7 for $0…") + inline link; i18n keys freeHostingGuide + freeHostingHint (en/ar); deploy/README got a HOSTING-FREE pointer block.
+- VERIFIED (agent-browser, VERCEL=1 sim → capabilities torrent:"none"): card chip "غير متاح على هذا المضيف"; testControls link href = github.com/hoseain756/Horse/blob/main/deploy/HOSTING-FREE.md (×2 occurrences incl. in-panel); Arabic RTL: "دليل الاستضافة المجانية 24/7" + hint render correctly (uiLanguage=ar kept — matches user preference). Lint 0 errors / 161 warnings (= baseline). Screenshot download/qa-free-hosting-guide-ar.png. Dev env restored (plain restart → torrent:"builtin"; engine :3031 healthy v1.3.0; gh-autopush alive).
+- Committed c3199b7; pushed → origin/main == HEAD → Vercel rebuild triggered.
+
+Stage Summary:
+- The honest answer to "run the engine on Vercel" is NO with receipts (3 walls, official links) — and the honest YES is: app on Vercel + engine on Oracle Always Free 2 OCPU/12 GB (free forever, 24/7, all devices) or the one-click local engine (free, while-your-computer-is-on). Everything needed is now linked from the P2P card itself, in Arabic.
+- Key numbers to remember: Vercel Hobby max 300s; Oracle 2026 allowance 1500 OCPU-h/9000 GB-h → 2 OCPU/12 GB = true 24/7; trycloudflare quick tunnels rotate URLs (named tunnel for a stable ENGINE_URL).
+- Next candidates: verify the Vercel rebuild renders the new links on horse-1.vercel.app; Kids PIN gate; Google OAuth; capabilities badge in About; tsc pre-existing errors cleanup.
