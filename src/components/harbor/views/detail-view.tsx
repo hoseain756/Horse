@@ -85,8 +85,11 @@ function MetaBullet() {
   );
 }
 
-/** Semi-transparent top back button (owned by the detail page so it exists
- *  even when a title is deep-linked as the root nav frame). RTL-mirrors. */
+/** Semi-transparent back button OVERLAID on the hero's top inline-start
+ *  corner — 48dp touch target, safe-area aware (portrait top inset + physical
+ *  start inset for landscape notches), glass recipe for readability over any
+ *  artwork. Owned by the detail page so it exists even when a title is
+ *  deep-linked as the root nav frame. RTL-mirrors (start = right in Arabic). */
 function DetailBackButton() {
   const tr = useT();
   const pop = useNav((s) => s.pop);
@@ -100,7 +103,7 @@ function DetailBackButton() {
     <button
       type="button"
       onClick={goBack}
-      className="harbor-tv-focus fixed top-4 start-4 z-40 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/55 ps-3.5 pe-4 text-sm font-medium text-white backdrop-blur-md transition-all hover:scale-[1.03] hover:bg-black/75 active:scale-95 md-state"
+      className="harbor-tv-focus fixed top-[calc(1rem_+_env(safe-area-inset-top))] start-[calc(1rem_+_env(safe-area-inset-left))] rtl:start-[calc(1rem_+_env(safe-area-inset-right))] z-40 flex h-12 items-center gap-2 rounded-full border border-white/15 bg-black/55 ps-3.5 pe-4 text-sm font-medium text-white backdrop-blur-md transition-all hover:scale-[1.03] hover:bg-black/75 active:scale-95 md-state"
       aria-label={tr("goBack")}
     >
       <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
@@ -297,7 +300,7 @@ export function DetailView({ type, id }: { type: string; id: string }) {
         {back}
         {/* hero skeleton — mirrors the real hero (card <600px, full-bleed band ≥600px) */}
         <div
-          className="harbor-skeleton mx-auto aspect-[16/11] max-w-5xl rounded-[28px] max-[599px]:mx-4 max-[599px]:mt-[72px] min-[600px]:mx-0 min-[600px]:mt-0 min-[600px]:aspect-auto min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:rounded-none"
+          className="harbor-skeleton mx-auto h-[calc((100vw_-_2rem)_*_11_/_16_+_72px)] max-w-5xl rounded-b-[28px] max-[599px]:mx-4 min-[600px]:mx-0 min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:rounded-none"
           aria-hidden
         />
         {/* content column skeleton (same container as the real column) */}
@@ -340,14 +343,19 @@ export function DetailView({ type, id }: { type: string; id: string }) {
       {back}
 
       {/* ================= 1 · CINEMATIC HERO =================
-          <600px: contained rounded artwork card — compact layout untouched.
-          ≥600px: full-bleed landscape backdrop spanning the viewport from the
-          top edge (behind the Back button), fading into the page background
-          at the bottom. Scrims keep text readable; both mirror in RTL. */}
-      <section aria-label={meta.name} className="relative max-[599px]:px-4 max-[599px]:pt-[72px]">
+          BOTH variants dock flush to the very top edge (y=0) — no strip above
+          the artwork; the Back button overlays it (safe-area offset + light
+          top scrim). <600px: contained card — square top corners where it
+          meets the screen edge, rounded bottom; height = the old 16/11 art
+          height + the 72px strip it replaced (100vw - 2rem ≈ card width), so
+          the bottom edge — and everything below it — stays exactly where it
+          was. ≥600px: full-bleed landscape backdrop, fading into the page
+          background at the bottom. Scrims keep text readable; both mirror in
+          RTL. */}
+      <section aria-label={meta.name} className="relative max-[599px]:px-4">
         {/* sr-only h1 keeps the document outline in both hero variants */}
         <h1 className="sr-only">{meta.name}</h1>
-        <div className="harbor-pop-in relative mx-auto aspect-[16/11] w-full max-w-5xl overflow-hidden rounded-[28px] border border-edge-soft bg-raised shadow-[0_36px_90px_-36px_rgba(0,0,0,0.9)] min-[600px]:aspect-auto min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:max-w-none min-[600px]:rounded-none min-[600px]:border-0 min-[600px]:shadow-none">
+        <div className="harbor-pop-in relative mx-auto h-[calc((100vw_-_2rem)_*_11_/_16_+_72px)] w-full max-w-5xl overflow-hidden rounded-b-[28px] border border-edge-soft bg-raised shadow-[0_36px_90px_-36px_rgba(0,0,0,0.9)] min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:max-w-none min-[600px]:rounded-none min-[600px]:border-0 min-[600px]:shadow-none">
           <PosterImage
             src={backdrop.src}
             srcSet={backdrop.srcSet}
@@ -357,6 +365,10 @@ export function DetailView({ type, id }: { type: string; id: string }) {
             className="absolute inset-0 min-[600px]:object-[50%_30%]"
             landscape
           />
+          {/* Very light top scrim — the hero meets the screen's top edge and
+              hosts the overlaid Back button; keep it readable on bright art
+              (all widths). */}
+          <div aria-hidden className="absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-black/35 to-transparent" />
           {/* ≥600px scrims: directional gradient from the content (inline-start)
               side — mirrors in RTL — plus the bottom fade into the page. */}
           <div aria-hidden className="absolute inset-0 hidden bg-gradient-to-r from-canvas/90 via-canvas/40 to-transparent min-[600px]:block rtl:bg-gradient-to-l" />
