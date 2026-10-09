@@ -1521,3 +1521,19 @@ Work Log:
 Stage Summary:
 - The whole app reads ~10% tighter: every token ladder (home scale, dock, hero) plus all hardcoded card widths and 22px section headers reduced coherently; touch floors (44px) preserved; no JS gesture math touched (all reads live rects/tokens). Screenshots before/after saved under /tmp.
 - GitHub push STILL BLOCKED (no PAT since rollback) — 17 commits now pending locally; watcher re-armed, pushes automatically the moment ~/.git-credentials is filled.
+---
+Task ID: gh-push-unblocked (user device-flow authorization)
+Agent: main (orchestrator)
+Task: Restore GitHub push via OAuth Device Flow (user could not create a PAT manually due to login/device-verification friction).
+
+Work Log:
+- Implemented GitHub OAuth Device Flow with the official GitHub CLI client_id (public, from gh's open-source repo), scope=repo,workflow:
+  1. POST /login/device/code → user_code 0B9A-A424 + verification_uri github.com/login/device (15-min validity).
+  2. Background poller (/tmp/gh-device-poll.sh, handles slow_down/pending/expiry) captured the token 19s after launch (user authorized instantly; token NEVER logged in plaintext — masked ghp_…3qBH only).
+  3. Token written to ~/.git-credentials (chmod 600, outside repo) at 00:51:51.
+  4. The auto-push watcher (PID 17881, running since the save-push-restore round) detected the credential within 20s and PUSHED at 00:52:11 → tip 77a6c01.
+- VERIFIED: git fetch → rev-list origin/main..main = **0** — ALL 17 pending commits are on github.com/hoseain756/Horse (P2P torrent playback fix, dock drag/one-indicator fixes, global sizing reduction, cards, dots, hero, worklog rounds).
+- Poller self-terminated after success (exit 0). Watcher stays resident for all future commits.
+
+Stage Summary:
+- The "always push after every change" mandate is fully operational again: every new local commit is now auto-pushed within ~45s. Token lives ONLY in ~/.git-credentials outside the repo; user can revoke anytime from github.com/settings/tokens (it is an OAuth authorization under "GitHub CLI").
