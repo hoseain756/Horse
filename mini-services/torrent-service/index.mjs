@@ -83,7 +83,12 @@ function send(res, status, body, extraHeaders = {}) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type,Range",
+    // Authorization: browser-direct LOCAL engine mode sends the shared key as a
+    // header on JSON calls (media uses ?key= — <video> cannot send headers).
+    "Access-Control-Allow-Headers": "Content-Type,Range,Authorization",
+    // Chrome Private Network Access: an https page (vercel.app) fetching this
+    // engine on localhost/LAN sends an ACRPN preflight — opt in explicitly.
+    "Access-Control-Allow-Private-Network": "true",
     ...extraHeaders,
   });
   res.end(data);
@@ -289,7 +294,10 @@ function probeFile(torrent, fileIdx) {
 // ---------- HTTP server ----------
 // Optional shared-secret auth for self-hosted deployments (ENGINE_API_KEY):
 //   • JSON calls relayed by the Horse app arrive with Authorization: Bearer <key>.
-//   • Browser-direct media (/stream, /remux) arrives with ?k=<exp>.<sig> —
+//   • Browser-direct LOCAL engine mode arrives with ?key=<key> (plain shared
+//     secret — the user enters the same key in Horse's P2P settings; media
+//     elements cannot send headers, so a query param is the only channel).
+//   • External-hosted media (/stream, /remux) arrives with ?k=<exp>.<sig> —
 //     a short-lived HMAC-SHA256 token minted by /api/engine/token with the
 //     SAME secret. This keeps the API key itself out of the browser.
 // Unauthenticated /health stays reachable for probes but hides torrent names
@@ -297,6 +305,12 @@ function probeFile(torrent, fileIdx) {
 // the engine at the network level instead.
 const ENGINE_API_KEY = (process.env.ENGINE_API_KEY ?? "").trim();
 const MEDIA_TOKEN_RE = /^(\d{13,16})\.([0-9a-f]{64})$/;
+
+function safeEq(a, b) {
+  const ba = Buffer.from(String(a ?? ""));
+  const bb = Buffer.from(String(b ?? ""));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
 
 function tokenOk(token) {
   const m = MEDIA_TOKEN_RE.exec(token ?? "");
@@ -312,7 +326,9 @@ function tokenOk(token) {
 function authorized(req, url) {
   if (!ENGINE_API_KEY) return true;
   const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (bearer && bearer.length === ENGINE_API_KEY.length && crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(ENGINE_API_KEY))) return true;
+  if (bearer && safeEq(bearer, ENGINE_API_KEY)) return true;
+  const keyParam = (url.searchParams.get("key") ?? "").trim();
+  if (keyParam && safeEq(keyParam, ENGINE_API_KEY)) return true;
   return tokenOk(url.searchParams.get("k"));
 }
 
@@ -324,7 +340,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type,Range",
+      "Access-Control-Allow-Headers": "Content-Type,Range,Authorization",
+      // Private Network Access (https page → localhost/LAN engine): opt in.
+      "Access-Control-Allow-Private-Network": "true",
     });
     return res.end();
   }
@@ -340,7 +358,7 @@ const server = http.createServer(async (req, res) => {
       const open = authorized(req, url);
       return send(res, 200, {
         ok: true,
-        version: "1.2.0",
+        version: "1.3.0",
         paused,
         // Private internals only for authenticated callers (health probes
         // from load balancers / the app's availability check stay public).

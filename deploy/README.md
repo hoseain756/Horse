@@ -5,16 +5,17 @@ cannot run there (no long-lived process, no public TCP sockets, no torrent
 egress guarantees). That is why torrent streams play in the sandbox preview
 (engine runs alongside the app) but are honestly refused on `horse-1.vercel.app`.
 
-There are exactly two ways to enable torrent playback on the Vercel deployment:
+There are exactly three ways to enable torrent playback on the Vercel deployment:
 
 | Option | Cost | Effort | Result |
 | --- | --- | --- | --- |
 | **Debrid key** (Settings → Integrations → Debrid) | provider subscription (Real-Debrid ≈ €3/16 days, AllDebrid similar) | ~2 minutes | cached torrents unlock **instantly** as direct HTTPS streams; nothing to host |
-| **Self-hosted engine** (this guide) | any always-on box (small VPS ≈ $4–5/mo, or a paid PaaS instance) | ~10 minutes | **all** torrents stream via P2P + on-the-fly remux, like the sandbox preview |
+| **Engine on your own computer** (free — see [mini-services/torrent-service/README.md](../mini-services/torrent-service/README.md)) | **free** | ~5 minutes | torrents stream via P2P through YOUR device, browser-direct; engine must stay running |
+| **Self-hosted engine** (this guide) | any always-on box (small VPS ≈ $4–5/mo, or a paid PaaS instance) | ~10 minutes | **all** torrents stream via P2P + on-the-fly remux for every device, hands-off |
 
-Both work with the same player, picker, subtitles and Continue-Watching flows.
-They also compose: with both configured, debrid is tried first (instant for
-cached torrents) and the engine is the fallback.
+All three work with the same player, picker, subtitles and Continue-Watching
+flows. They also compose: with several configured, debrid is tried first
+(instant for cached torrents) and the engine is the fallback.
 
 ---
 
@@ -102,6 +103,35 @@ A Blueprint is included (`deploy/render.yaml`):
 
 ---
 
+## Option C — Engine on your own computer (free, no server)
+
+No VPS, no PaaS, no debrid subscription. You run the engine on the machine
+you watch from; the **browser connects to it directly** — an `https://` page
+may load `http://localhost` (browsers treat loopback as trustworthy), and the
+engine answers Private-Network-Access preflights.
+
+```bash
+# needs Node 18+ and ffmpeg (winget install Gyan.FFmpeg / brew install ffmpeg / apt install ffmpeg)
+git clone https://github.com/hoseain756/Horse.git
+cd Horse/mini-services/torrent-service
+npm install
+npm start
+```
+
+Then in the app (works on `horse-1.vercel.app` too): **Settings →
+Integrations → P2P → Engine on this device** → `http://localhost:3031` →
+**Save & test** → green. No Vercel env vars needed — this setting is
+per-device (localStorage), never synced. Notes:
+
+- Keep the terminal open while watching; closing it stops the engine.
+- Other devices on the same Wi-Fi can use it too: start with
+  `ENGINE_HOST=0.0.0.0 npm start` and point the phone at
+  `http://<your-computers-LAN-IP>:3031` (http — fine on private networks).
+- Optional: `ENGINE_API_KEY=<secret> npm start` and enter the same key in the
+  app's P2P card.
+
+---
+
 ## Wire it into the Vercel deployment
 
 Vercel dashboard → your project → **Settings → Environment Variables** (all
@@ -112,6 +142,9 @@ environments), then **Redeploy**:
 | `ENGINE_URL` | `https://engine.example.com` | server-side JSON relay target |
 | `ENGINE_PUBLIC_URL` | `https://engine.example.com` | browser-direct media; only needed if it differs from `ENGINE_URL` |
 | `ENGINE_API_KEY` | the **same** secret from the engine | ≥16 chars; never sent to the browser — media uses short-lived HMAC tokens instead |
+
+> Only hosting torrents for ONE device? Option C above needs **no Vercel
+> variables at all** — these are for the always-on, every-device setup.
 
 ### Verify
 

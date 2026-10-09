@@ -28,6 +28,7 @@ import {
   cachedTranscodeSupported,
   type FailureClass,
 } from "@/lib/harbor/playback";
+import { getLocalEngine } from "@/lib/harbor/local-engine";
 import { homeT, t } from "@/lib/harbor/i18n";
 import { fetchMeta, defaultVideoId } from "@/lib/harbor/api";
 import {
@@ -197,9 +198,10 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         // torrents whose parsed video codec isn't HEVC — unless conversion is
         // available server-side, which rescues HEVC releases too. Torrents are
         // NEVER auto-selected when this environment cannot run/see an engine
-        // (caps.torrent === "none" on serverless without ENGINE_URL).
+        // (caps.torrent === "none" on serverless without ENGINE_URL) — unless
+        // THIS device has its own local engine configured (browser-direct).
         const transcodeAvail = cachedTranscodeSupported();
-        const torrentsPossible = caps.torrent !== "none";
+        const torrentsPossible = caps.torrent !== "none" || !!getLocalEngine();
         const p2pCandidate = (s: Stream) =>
           torrentsPossible && !!s.infoHash && !s.url && (transcodeAvail || s.parsed?.codec !== "HEVC");
         const urlBest = ranked

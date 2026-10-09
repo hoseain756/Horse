@@ -298,8 +298,8 @@ export const APP_STRINGS = {
   engineChipExternal: { en: "External engine", ar: "محرك خارجي" },
   engineServerlessTitle: { en: "Torrent playback on serverless hosting", ar: "تشغيل التورنتات على استضافة serverless" },
   engineServerlessBody: {
-    en: "This deployment (e.g. Vercel) cannot run the BitTorrent engine, so torrent-only results are refused here. Two ways to enable them:",
-    ar: "هذا النشر (مثل Vercel) لا يستطيع تشغيل محرك BitTorrent، لذلك تُرفض النتائج المعتمدة على التورنت فقط. هناك طريقتان لتفعيلها:",
+    en: "This deployment (e.g. Vercel) cannot run the BitTorrent engine, so torrent-only results are refused here. Three ways to enable them:",
+    ar: "هذا النشر (مثل Vercel) لا يستطيع تشغيل محرك BitTorrent، لذلك تُرفض النتائج المعتمدة على التورنت فقط. هناك ثلاث طرق لتفعيلها:",
   },
   engineDebridOption: {
     en: "Debrid (easiest) — add your API key in the Debrid card above; cached torrents unlock instantly as direct HTTPS streams.",
@@ -308,6 +308,42 @@ export const APP_STRINGS = {
   engineSelfhostOption: {
     en: "Self-hosted engine (full P2P) — run the engine on any always-on server, then set these variables in your Vercel project and redeploy:",
     ar: "محرك ذاتي الاستضافة (P2P كامل) — شغّل المحرك على أي خادم دائم التشغيل، ثم عيّن هذه المتغيرات في مشروع Vercel وأعد النشر:",
+  },
+  engineLocalOption: {
+    en: "Free, no server needed — run the engine on THIS device (or any computer on your network) with one command, then connect it below. The browser talks to it directly.",
+    ar: "مجاناً ودون خادم — شغّل المحرك على هذا الجهاز (أو أي جهاز في شبكتك) بأمر واحد، ثم اربطه أدناه. يتواصل المتصفح معه مباشرة.",
+  },
+  localEngineTitle: { en: "Engine on this device", ar: "المحرك على هذا الجهاز" },
+  localEngineBody: {
+    en: "Point Horse at the engine running on your own computer (mini-services/torrent-service). Stay running while you watch; the setting is kept on this device only.",
+    ar: "وجّه Horse إلى المحرك العامل على جهازك (mini-services/torrent-service). أبقِه يعمل أثناء المشاهدة؛ ويُحفظ هذا الإعداد على هذا الجهاز فقط.",
+  },
+  localEngineHowLabel: {
+    en: "One-time setup on your computer (needs Node 18+ and ffmpeg):",
+    ar: "إعداد لمرة واحدة على جهازك (يتطلب Node 18+ و ffmpeg):",
+  },
+  localEngineUrlLabel: { en: "Engine address", ar: "عنوان المحرك" },
+  localEngineKeyLabel: { en: "Engine key (optional)", ar: "مفتاح المحرك (اختياري)" },
+  localEngineSave: { en: "Save & test", ar: "حفظ واختبار" },
+  localEngineSaved: { en: "Local engine connected — torrents now play on this device.", ar: "تم ربط المحرك المحلي — تعمل التورنتات الآن على هذا الجهاز." },
+  localEngineRemove: { en: "Remove", ar: "إزالة" },
+  localEngineRemoved: { en: "Local engine removed.", ar: "تمت إزالة المحرك المحلي." },
+  localEngineChip: { en: "Local engine", ar: "محرك محلي" },
+  localEngineTestOk: {
+    en: "Local engine connected — torrent streams will play through it on this device.",
+    ar: "المحرك المحلي يستجيب — ستُشغَّل تدفقات التورنت عبره على هذا الجهاز.",
+  },
+  localEngineTestUnreachable: {
+    en: "No engine answered at that address — start it there (npm install && npm start), check the address/port, and that this browser may reach it.",
+    ar: "لا يوجد محرك يستجيب على هذا العنوان — شغّله هناك (npm install && npm start)، وتحقق من العنوان/المنفذ ومن أن هذا المتصفح يمكنه الوصول إليه.",
+  },
+  localEngineTestUnauthorized: {
+    en: "Key mismatch — the key must equal the engine's ENGINE_API_KEY (leave empty when the engine has none).",
+    ar: "عدم تطابق المفتاح — يجب أن يساوي المفتاح قيمة ENGINE_API_KEY في المحرك (اتركه فارغاً إذا لم يضبط المحرك مفتاحاً).",
+  },
+  localEngineTestBad: {
+    en: "That is not a valid engine address — use something like http://localhost:3031",
+    ar: "عنوان المحرك غير صالح — استخدم شيئاً مثل http://localhost:3031",
   },
   engineSetupGuide: { en: "Deployment guide", ar: "دليل النشر" },
   engineTest: { en: "Test engine", ar: "اختبار المحرك" },

@@ -1,12 +1,12 @@
 {
   "name": "harbor-torrent-service",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "Harbor Web — server-side BitTorrent streaming engine (webtorrent): prepare/status/stream/remux/cleanup",
   "scripts": {
-    "dev": "node --watch --env-file=.env index.mjs",
-    "start": "node --env-file=.env index.mjs"
+    "dev": "node --watch index.mjs",
+    "start": "node index.mjs"
   },
   "dependencies": {
     "webtorrent": "^3.0.21"

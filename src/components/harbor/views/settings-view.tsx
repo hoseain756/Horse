@@ -27,7 +27,8 @@ import { serverCapabilities, type TorrentMode } from "@/lib/harbor/playback";
 import { useTrakt, installTraktPushSync } from "@/lib/harbor/trakt";
 import { useSimkl } from "@/lib/harbor/simkl";
 import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
-import { p2pHealth, p2pCleanup, formatSpeed, P2P_PORT } from "@/lib/harbor/p2p";
+import { p2pHealth, p2pCleanup, formatSpeed, P2P_PORT, refreshP2pCapabilities } from "@/lib/harbor/p2p";
+import { getLocalEngine, setLocalEngine, clearLocalEngine, localEngineHealth, type LocalEngineConfig } from "@/lib/harbor/local-engine";
 import { TmdbCard, TmdbAttribution } from "../chrome/tmdb-card";
 import { LinkAccountFlow } from "../chrome/link-account-flow";
 import { RatingsSettingsCard } from "../chrome/ratings-row";
@@ -2651,6 +2652,11 @@ type P2pHealthState = {
 const DEPLOY_GUIDE_URL = "https://github.com/hoseain756/Horse/blob/main/deploy/README.md";
 const ENGINE_ENV_VARS = ["ENGINE_URL", "ENGINE_PUBLIC_URL", "ENGINE_API_KEY"] as const;
 type EngineTestState = "idle" | "testing" | "ok" | "unset" | "unreachable" | "unauthorized";
+type LocalTestState = "idle" | "testing" | "ok" | "unreachable" | "unauthorized" | "badurl";
+
+// Free path for serverless deployments: the engine runs on the USER's own
+// computer (one command); the browser talks to it directly over localhost —
+// config lives in localStorage (this device only, never cloud-synced).
 
 function P2pCard() {
   const { toast } = useToast();
@@ -2665,6 +2671,11 @@ function P2pCard() {
   const [mode, setMode] = useState<TorrentMode | null>(null);
   const [engineHost, setEngineHost] = useState<string | null>(null);
   const [testState, setTestState] = useState<EngineTestState>("idle");
+  // Device-local engine (browser-direct)
+  const [localCfg, setLocalCfg] = useState<LocalEngineConfig | null>(null);
+  const [localUrl, setLocalUrl] = useState("http://localhost:3031");
+  const [localKey, setLocalKey] = useState("");
+  const [localTest, setLocalTest] = useState<LocalTestState>("idle");
 
   const check = async () => {
     setChecking(true);
@@ -2692,7 +2703,14 @@ function P2pCard() {
   useEffect(() => {
     void serverCapabilities().then((c) => {
       setMode(c.torrent);
-      if (c.torrent === "none") setHealth(null); // serverless: engine can never exist, skip the probe
+      const local = getLocalEngine();
+      setLocalCfg(local);
+      if (local) {
+        setLocalUrl(local.base);
+        setLocalKey(local.key);
+      }
+      // Serverless without a local engine: no engine can ever exist — skip the probe.
+      if (c.torrent === "none" && !local) setHealth(null);
       if (c.enginePublicUrl) {
         try {
           setEngineHost(new URL(c.enginePublicUrl).host);
@@ -2700,9 +2718,9 @@ function P2pCard() {
           setEngineHost(c.enginePublicUrl);
         }
       }
-      // Probe the engine only where one can actually exist (builtin/external);
+      // Probe the engine only where one can actually exist (builtin/external/local);
       // in external mode the JSON health call relays server-side with the key.
-      if (c.torrent !== "none") void check();
+      if (c.torrent !== "none" || local) void check();
     });
   }, []);
 
@@ -2737,9 +2755,73 @@ function P2pCard() {
     }
   };
 
-  const serverless = mode === "none";
+  const serverless = mode === "none" && !localCfg;
+  const localActive = mode === "none" && !!localCfg;
   const activeCount = health?.torrents.length ?? 0;
   const totalSpeed = health?.torrents.reduce((a, t) => a + (t.downloadSpeed ?? 0), 0) ?? 0;
+
+  // Test the engine DIRECTLY from this browser before saving — a typo never
+  // gets persisted, and success immediately flips the effective torrent mode
+  // to "local" (cachedTorrentMode folds it in) so playback unlocks at once.
+  const saveLocalEngine = async () => {
+    const base = localUrl.trim();
+    try {
+      const u = new URL(base);
+      if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("bad protocol");
+    } catch {
+      setLocalTest("badurl");
+      return;
+    }
+    setLocalTest("testing");
+    const probe = await localEngineHealth({ base: base.replace(/\/+$/, ""), key: localKey.trim() });
+    if (!probe.ok) {
+      setLocalTest(probe.unauthorized ? "unauthorized" : "unreachable");
+      return;
+    }
+    const cfg = setLocalEngine(base, localKey);
+    setLocalCfg(cfg);
+    setLocalTest("ok");
+    if (cfg) {
+      void refreshP2pCapabilities(); // engine-level HEVC flag (local branch)
+      void check();
+    }
+    toast({ title: tr("localEngineSaved") });
+  };
+
+  const removeLocalEngine = () => {
+    clearLocalEngine();
+    setLocalCfg(null);
+    setLocalTest("idle");
+    setHealth(null);
+    toast({ title: tr("localEngineRemoved") });
+  };
+
+  const localFeedback =
+    localTest === "ok" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-accent-soft px-3.5 py-2.5 text-xs font-semibold text-accent"
+        role="status"
+      >
+        <Check className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr("localEngineTestOk")} />
+      </p>
+    ) : localTest === "badurl" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] px-3.5 py-2.5 text-[var(--md-sys-color-on-error-container)] md-body-small"
+        role="alert"
+      >
+        <CircleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr("localEngineTestBad")} />
+      </p>
+    ) : localTest === "unreachable" || localTest === "unauthorized" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] px-3.5 py-2.5 text-[var(--md-sys-color-on-error-container)] md-body-small"
+        role="alert"
+      >
+        <CircleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr(localTest === "unreachable" ? "localEngineTestUnreachable" : "localEngineTestUnauthorized")} />
+      </p>
+    ) : null;
 
   const testFeedback =
     testState === "ok" ? (
@@ -2830,13 +2912,15 @@ function P2pCard() {
           />
           {serverless
             ? tr("engineChipNone")
-            : mode === "external"
-              ? tr("engineChipExternal")
-              : health === null
-                ? tr("checking")
-                : health.ok
-                  ? tr("online", { n: P2P_PORT })
-                  : tr("offline")}
+            : localActive
+              ? tr("localEngineChip")
+              : mode === "external"
+                ? tr("engineChipExternal")
+                : health === null
+                  ? tr("checking")
+                  : health.ok
+                    ? tr("online", { n: P2P_PORT })
+                    : tr("offline")}
         </span>
       </div>
 
@@ -2847,6 +2931,17 @@ function P2pCard() {
           {tr("engineHostLabel")}:{" "}
           <code className="rounded-md bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 font-mono text-[10px] text-ink" dir="ltr">
             {engineHost}
+          </code>
+        </p>
+      )}
+
+      {/* Engine host (device-local mode) */}
+      {localActive && localCfg && (
+        <p className="mb-3 flex items-center gap-1.5 text-[11px] text-ink-subtle">
+          <MonitorSmartphone className="w-3.5 h-3.5 shrink-0" aria-hidden />
+          {tr("localEngineUrlLabel")}:{" "}
+          <code className="rounded-md bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 font-mono text-[10px] text-ink" dir="ltr">
+            {localCfg.base}
           </code>
         </p>
       )}
@@ -2897,8 +2992,92 @@ function P2pCard() {
                 </span>
               </span>
             </li>
+            <li className="flex gap-2 text-xs text-ink-muted">
+              <MonitorSmartphone className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" aria-hidden />
+              <span className="flex-1"><RichBidi text={tr("engineLocalOption")} /></span>
+            </li>
           </ul>
           {testControls}
+        </div>
+      )}
+
+      {/* Option 3 — free local engine, browser-direct (device-only config).
+          Shown in serverless mode (setup) AND while connected (manage/remove). */}
+      {mode === "none" && (
+        <div
+          className={cn(
+            "space-y-2.5 rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft bg-[var(--md-sys-color-surface-container)] p-3",
+            serverless ? "mt-3" : "mt-4",
+          )
+          }
+        >
+            <div className="flex items-center gap-2">
+              <MonitorSmartphone className="w-4 h-4 text-accent" aria-hidden />
+              <p className="text-xs font-bold text-ink">{tr("localEngineTitle")}</p>
+            </div>
+            <p className="md-body-small text-ink-muted"><RichBidi text={tr("localEngineBody")} /></p>
+            <p className="text-xs text-ink-muted"><RichBidi text={tr("localEngineHowLabel")} /></p>
+            <div
+              className="overflow-x-auto rounded-md bg-[var(--md-sys-color-surface-container-highest)] px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed text-ink"
+              dir="ltr"
+              aria-label="Engine setup commands"
+            >
+              {[
+                "git clone https://github.com/hoseain756/Horse.git",
+                "cd Horse/mini-services/torrent-service",
+                "npm install && npm start",
+              ].map((line) => (
+                <span key={line} className="block whitespace-pre">{line}</span>
+              ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="block text-[11px] font-semibold text-ink-muted">{tr("localEngineUrlLabel")}</span>
+                <Input
+                  dir="ltr"
+                  value={localUrl}
+                  onChange={(e) => {
+                    setLocalUrl(e.target.value);
+                    if (localTest !== "idle" && localTest !== "testing") setLocalTest("idle");
+                  }}
+                  placeholder="http://localhost:3031"
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-[11px] font-semibold text-ink-muted">{tr("localEngineKeyLabel")}</span>
+                <Input
+                  dir="ltr"
+                  type="password"
+                  value={localKey}
+                  onChange={(e) => {
+                    setLocalKey(e.target.value);
+                    if (localTest !== "idle" && localTest !== "testing") setLocalTest("idle");
+                  }}
+                  placeholder="ENGINE_API_KEY"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button onClick={() => void saveLocalEngine()} disabled={localTest === "testing"}>
+                {localTest === "testing" ? (
+                  <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 me-1.5" />
+                )}
+                {tr("localEngineSave")}
+              </Button>
+              {localCfg && (
+                <Button variant="outline" onClick={removeLocalEngine}>
+                  <Trash2 className="w-3.5 h-3.5 me-1.5" />
+                  {tr("localEngineRemove")}
+                </Button>
+              )}
+            </div>
+            {localFeedback}
         </div>
       )}
 

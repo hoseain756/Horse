@@ -6,12 +6,15 @@
 "use client";
 
 import type { Stream } from "./types";
+import { getLocalEngine } from "./local-engine";
 
 // ---------- server capabilities (probed once per session) ----------
 /** Where torrent streams can play: "external" (self-hosted engine via
- *  ENGINE_URL), "builtin" (sandbox gateway, torrent-service on :3031), or
- *  "none" (serverless — a BitTorrent engine cannot run there). */
-export type TorrentMode = "external" | "builtin" | "none";
+ *  ENGINE_URL), "builtin" (sandbox gateway, torrent-service on :3031),
+ *  "local" (engine running on the USER's own device — configured per-device
+ *  in Settings → Integrations → P2P, browser-direct), or "none" (serverless
+ *  with no engine at all — a BitTorrent engine cannot run there). */
+export type TorrentMode = "external" | "builtin" | "local" | "none";
 
 export type Capabilities = {
   proxy: boolean;
@@ -50,11 +53,18 @@ export function cachedTranscodeSupported(): boolean {
   return capsCache?.transcode === true;
 }
 
-/** Last-known torrent engine mode: "external" / "builtin" / "none" / null
- *  (capabilities not fetched yet — callers treat null as "maybe builtin" and
- *  must not hard-block on it; the live engine probe still gates playback). */
+/** Last-known torrent engine mode: "external" / "builtin" / "local" / "none"
+ *  / null (capabilities not fetched yet — callers treat null as "maybe builtin"
+ *  and must not hard-block on it; the live engine probe still gates playback).
+ *
+ *  Folds in the device-local engine: a serverless host reports "none", but
+ *  when THIS device has a local engine configured (Settings → Integrations →
+ *  P2P) torrents play through it browser-direct, so the effective mode is
+ *  "local". Server-configured engines (builtin/external) always win. */
 export function cachedTorrentMode(): TorrentMode | null {
-  return capsCache?.torrent ?? null;
+  const server = capsCache?.torrent ?? null;
+  if (server === "none" && getLocalEngine()) return "local";
+  return server;
 }
 
 // ---------- browser capability ----------
@@ -154,7 +164,7 @@ export function classifyStream(stream: Stream): StreamClass {
     if (cachedTorrentMode() === "none") {
       verdict = "unplayable";
       badge = "not-playable";
-      reasons.push("P2P/torrent streams cannot play on this serverless host — a debrid key unlocks them");
+      reasons.push("P2P/torrent streams cannot play on this serverless host — a debrid key or your own engine unlocks them");
     } else {
       const support = cachedTranscodeSupported();
       if (videoBad && !support) {

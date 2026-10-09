@@ -8,7 +8,13 @@
 //                relay through /api/engine/* (API key stays server-side),
 //                media paths go DIRECTLY to the engine's public host with a
 //                short-lived HMAC token (?k=exp.sig) minted by /api/engine/token.
-//   "none"     — serverless without an engine: p2pEngineAvailable() answers
+//   "local"    — engine running on the USER's device (Settings → Integrations
+//                → P2P, stored per-device in localStorage): JSON + media calls
+//                go browser-direct to the local base URL with the optional
+//                shared key (?key=). Frees serverless deployments (Vercel)
+//                from the debrid-only limitation — the user's own computer
+//                becomes the torrent engine.
+//   "none"     — serverless without any engine: p2pEngineAvailable() answers
 //                false instantly; no network request is ever made.
 // All playback URLs are relative or point at the operator's engine — never at
 // a hardcoded host. No content sources are bundled (neutral client).
@@ -16,6 +22,7 @@
 
 import type { Stream } from "./types";
 import { cachedTorrentMode } from "./playback";
+import { getLocalEngine } from "./local-engine";
 
 export const P2P_PORT = 3031;
 
@@ -140,12 +147,20 @@ export type P2pHealth = {
 };
 
 async function jfetch<T>(path: string, init?: RequestInit, timeoutMs = 65_000): Promise<T> {
+  // Local engine: browser-direct to the user's own machine (optional ?key=).
   // External engine: JSON endpoints relay server-side (key never reaches the
   // browser, path is allowlisted in the relay route). Builtin: gateway by port.
-  const external = cachedTorrentMode() === "external";
-  const url = external
-    ? `/api/engine/${path}`
-    : `${BASE}${path}${path.includes("?") ? "&" : "?"}XTransformPort=${P2P_PORT}`;
+  const mode = cachedTorrentMode();
+  const local = mode === "local" ? getLocalEngine() : null;
+  let url: string;
+  if (local) {
+    const sep = path.includes("?") ? "&" : "?";
+    url = `${local.base}${path}${local.key ? `${sep}key=${encodeURIComponent(local.key)}` : ""}`;
+  } else {
+    url = mode === "external"
+      ? `/api/engine/${path}`
+      : `${BASE}${path}${path.includes("?") ? "&" : "?"}XTransformPort=${P2P_PORT}`;
+  }
   const res = await fetch(url, {
     ...init,
     signal: AbortSignal.timeout(timeoutMs),
@@ -251,9 +266,18 @@ export function p2pCleanup(purge: boolean): Promise<void> {
 
 /** Native range-capable URL for a browser-playable container (mp4/webm/mov).
  *  Builtin mode: gateway-relative (Range passes straight through). External
- *  mode: direct to the engine's public host with the HMAC media token. */
+ *  mode: direct to the engine's public host with the HMAC media token. Local
+ *  mode: direct to the user's own engine (optional ?key= — <video> cannot
+ *  send headers, and https pages may load http://localhost media). */
 export function p2pStreamUrl(key: string, fileIdx: number): string {
-  if (cachedTorrentMode() === "external" && engineMedia.base) {
+  const mode = cachedTorrentMode();
+  if (mode === "local") {
+    const cfg = getLocalEngine();
+    if (cfg) {
+      return `${cfg.base}/stream/${key}/${fileIdx}${cfg.key ? `?key=${encodeURIComponent(cfg.key)}` : ""}`;
+    }
+  }
+  if (mode === "external" && engineMedia.base) {
     const k = engineMediaQuery();
     return `${engineMedia.base}/stream/${key}/${fileIdx}${k ? `?${k}` : ""}`;
   }
@@ -274,7 +298,15 @@ export function p2pRemuxUrl(
 ): string {
   const ss = ssS != null && ssS > 0 ? `ss=${Math.round(ssS)}` : "";
   const au = audioRel != null && audioRel > 0 ? `audio=${audioRel}` : "";
-  if (cachedTorrentMode() === "external" && engineMedia.base) {
+  const mode = cachedTorrentMode();
+  if (mode === "local") {
+    const cfg = getLocalEngine();
+    if (cfg) {
+      const parts = [cfg.key ? `key=${encodeURIComponent(cfg.key)}` : "", vtrans ? "vtrans=h264" : "", ss, au].filter(Boolean);
+      return `${cfg.base}/remux/${key}/${fileIdx}${parts.length ? `?${parts.join("&")}` : ""}`;
+    }
+  }
+  if (mode === "external" && engineMedia.base) {
     const parts = [engineMediaQuery(), vtrans ? "vtrans=h264" : "", ss, au].filter(Boolean);
     return `${engineMedia.base}/remux/${key}/${fileIdx}${parts.length ? `?${parts.join("&")}` : ""}`;
   }
