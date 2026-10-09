@@ -1710,3 +1710,17 @@ Work Log:
 Stage Summary:
 - Feature complete end-to-end locally. Next: user should commit/push (auto-watcher) then Redeploy on Vercel to ship it; Vercel deployment URL protection (SSO) still needs disabling in dashboard (Task 47/48 context).
 - Known limits (documented): rate limiter is per-instance (serverless multi-instance = per-function); account bucket is SQLite/local on Vercel (/tmp/horse.db ephemeral) — for durable cross-DEVICE sync on Vercel, point HORSE_DATABASE_URL at a hosted DB (Turso/Neon) later.
+
+---
+Task ID: 49-b
+Agent: Z.ai Code (main)
+Task: Re-verify HORSE accounts feature end-to-end (Task 49) after Vercel push; confirm commit state
+
+Work Log:
+- git: commit e06cc43 (accounts feature) is on origin/main; working tree clean. Vercel auto-builds on push.
+- curl E2E on dev server: register qa_rider → authed push (addon "QA Test Addon") → acct bucket stored; fresh-cookie login (device-B) → GET /api/sync returns the addon (cross-device handoff OK); anon device-C sees empty snapshot (isolation OK).
+- agent-browser E2E: Home → Settings → Data tab → "HORSE account" card present (Sign in / Create account tabs, username+password, min-11 touch targets); UI register → card flips to username + "Signed in" + Sync now/Sign out, Cloud sync shows "Up to date"; sign out → back to "Not signed in" with bilingual explainer. 0 console errors.
+- QA cleanup: both QA users + acct buckets deleted via project-root Prisma script. Lint: 0 errors (165 warnings = pre-existing baseline).
+
+Stage Summary:
+- Feature VERIFIED SHIPPED (commit e06cc43). Remaining user actions: (1) disable Vercel Authentication toggle (screenshot showed still ON) → Save; (2) know the limit: on Vercel SQLite lives at /tmp/horse.db (ephemeral per cold start) — accounts/sync survive locally but NOT durably on Vercel until HORSE_DATABASE_URL points at a hosted DB (Turso recommended, libSQL-compatible; free tier). Next session candidate: wire Turso adapter + user setup guide.
