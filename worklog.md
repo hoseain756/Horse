@@ -2148,3 +2148,20 @@ Stage Summary:
 - All 13 defects (A1-A4, B1-B9) fixed at the root with measurements before/after; phone+tablet structurally proven frozen (DOM assertions + git-diff audit; pixel diffs confounded only by rotated catalog artwork under translucent glass).
 - Honest limits: real TV remote/D-pad, real touch edge-swipe, TMDB-fed synopsis/logos (sandbox has no key — exercised via DOM injection through the real classes), browser zoom, 4K panel. The one deliberate frozen-band change: hover-arrow removal on mouse-equipped tablets (A2 mandate).
 - Next candidates: production deploy verification (auto-push → Vercel), optional QA playwright geometry spec as a repeatable script, TorBox my-torrents view (carried over).
+
+---
+Task ID: 68
+Agent: Z.ai Code (main)
+Task: SAVEPOINT — user asked to preserve exactly where the project stands ("احفظ المكان الي وصلنا له"). No code changes in this entry; state capture + continuation map only.
+
+Work Log:
+- Verified git state: working tree CLEAN; local HEAD == origin/main == 6c8b6ce (Round 26 corrections commit 3a54130 already pushed → Vercel auto-deploy).
+- Verified deliverables on disk: docs/large-screen-hero-corrections.md (20.6 KB, root causes + evidence per defect A1-A4/B1-B9 + changelog + honest limits); qa-shots/ before/after set (before-ltr-1515, before-ltr-expanded, before-rtl-1515, after-ltr-1515, after-ltr-1515-rail-revealed, after-rtl-1515, 1366 LTR+AR, 360/412/768/820 frozen-band regression, below-fold, contrast-stress).
+- Verified runtime: dev server healthy (GET / 200); torrent-service engine was healthy per Task 66/67 logs.
+- Worklog carries the full Task 67 record (13 defects fixed with before/after measurements; frozen-band guards; verification matrix 1024→2560 RTL+LTR).
+- Refreshed the recurring webDevReview cron job (previous 3 were disabled by exec limits and referenced Tasks 57/66) with the current continuation map.
+
+Stage Summary:
+- PROJECT POSITION (the saved place): Round 26 large-screen correction pass COMPLETE and deployed-bound. Side rail = single compact auto-hide capsule with edge hot-zone reveal (A1); hero arrows deleted, wheel/drag/segments/up-next remain (A2); synopsis 2-line clamp (A3); bottom-anchored tokenized content flow, segments in-flow ≥16dp from actions (A4); bidi-safe dynamic text (B1); stadium capsule fixed (B2); one viewport-centered search with frozen geometry per band + ≥4.5:1 contrast (B3); constant --side-safe-inset column (B4); fixed logo box + shape classification (B5); per-artwork adaptive scrim (B6); 2:3 up-next thumbs, measured card count (B7); hero clamp(420px,62svh,680px) laptop / (460px,66svh,760px) TV (B8); 12px ≥62%-ink secondary labels (B9). Phone+tablet frozen (DOM assertions + git-diff audit).
+- WHERE TO RESUME — next candidates in priority order: (1) production smoke test on horse-1.vercel.app after the 3a54130 Vercel build (verify auto-hide rail + arrowless hero + adaptive scrim live); (2) optional repeatable Playwright geometry spec (scripts/) from the Task 67 assertions; (3) TorBox "my torrents" management view; (4) Kids Mode parent-PIN gate; (5) pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*). Do NOT re-open frozen bands (<1024dp) for any reason.
+- RISKS: sandbox OOM under heavy QA (use UV_THREADPOOL_SIZE=2 VIPS_CONCURRENCY=1 + warm-before-browser cycles, /tmp/qa-cycle.sh pattern); Turbopack stale globals.css after CSS edits (rm -rf .next + restart); gh-autopush watcher must be alive (pgrep -f gh-autopush) for worklog sync.
