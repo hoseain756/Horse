@@ -21,7 +21,12 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60 * 60 * 3; // long movies on supporting hosts
+// NOTE: must be a plain literal — the build-time segment-config extractor
+// cannot evaluate expressions (e.g. `60 * 60 * 3`) and fails the production
+// build with "Invalid segment configuration export detected".
+// 60s = serverless-host friendly cap; long streams are proxied from the
+// dedicated media backend, not sustained by this function.
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const params = req.nextUrl.searchParams;

@@ -1675,3 +1675,20 @@ Stage Summary:
 - Operator guidance given: themoviedb.org signup → Settings → API → API Read Access Token (v4); HARBOR_TOKEN_SECRET explained as self-invented random string; Vercel env vars are server-side (never exposed to visitors).
 - Vercel flow status: user at Import/config page, entering env vars, next step = Deploy.
 - Files: prisma/schema.prisma, src/lib/harbor/vault.ts, .env (local only), .env.example, db/horse.db (renamed).
+
+---
+Task ID: 48
+Agent: Z.ai Code (main)
+Task: Fix Vercel production build failure — "Invalid segment configuration export detected" (user's first Deploy attempt failed during "Collecting page data")
+
+Work Log:
+- Diagnosed via Next 16.1.3 source (node_modules): build/index.js errorFromUnsupportedSegmentConfig() fires when getStaticInfoIncludingLayouts → getAppPageStaticInfo hits extractExportedConstValue → UnsupportedValueError (hadUnsupportedValue=true) for ANY segment-config export whose initializer is not a static literal.
+- extract-const-value.js extractValue() supports only null/bool/string/numeric/regex literals, undefined, arrays, plain objects, no-substitution template literals, TS satisfies. NO BinaryExpression.
+- Culprits (2): src/app/api/media/route.ts:24 and src/app/api/transcode/route.ts:36 — `export const maxDuration = 60 * 60 * 3` (BinaryExpression → UnsupportedValueError). Latent since those routes were written; never surfaced because sandbox only runs `next dev` (dev mode doesn't run this build phase).
+- Fix: replaced both with literal `export const maxDuration = 60;` + explanatory NOTE comments (60s fits Vercel Hobby cap; heavy streaming is the media backend's job anyway).
+- Verified: (a) read Next source to confirm mechanism; (b) full AST scan of ALL 43 src/app ts/tsx files with a checker mimicking extractValue's supported node set → "ALL segment config exports are build-safe literals". Lint 0 errors.
+- Committed; auto-push to origin/main; user to hit Redeploy on Vercel.
+
+Stage Summary:
+- Root cause one-liner: build-time segment-config static extractor rejects expressions (60*60*3); literals only.
+- Vercel deploy should now pass the "Collecting page data" phase; next likely friction point = none known (env vars renamed to HORSE_* in Task 47, .env.example documents them).
