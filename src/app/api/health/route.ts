@@ -1,33 +1,39 @@
 // GET /api/health — deployment diagnostics. Shows WHICH database backend is
-// live (remote libsql:// vs ephemeral local file) and whether the schema is
+// live (Supabase Postgres pooler vs unset) and whether the schema is
 // reachable. No secrets — only the host portion of the URL.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { ensureDb } from "@/lib/ensure-db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
-  const url = process.env.HORSE_DATABASE_URL?.trim() || "";
-  const isRemote = /^(libsql|https?):/i.test(url);
+  const url = process.env.POSTGRES_URL?.trim() || "";
   let host = "unset";
   if (url) {
     try {
-      host = new URL(url).host || (isRemote ? url.split("//")[1] ?? "remote" : "local-file");
+      host = new URL(url).host || "unparsed";
     } catch {
-      host = isRemote ? "remote (unparsed)" : "local-file";
+      host = "unparsed";
     }
   }
   let ok = true;
   let error: string | null = null;
   let tables = 0;
+  let rlsEnabled = 0;
   try {
-    await ensureDb();
-    const rows = (await db.$queryRawUnsafe<{ name: string }[]>(
-      "SELECT name FROM sqlite_master WHERE type='table'",
-    )) as { name: string }[];
-    tables = rows.length;
+    const rows = (await db.$queryRawUnsafe<{ count: bigint }[]>(
+      'SELECT count(*)::bigint AS count FROM pg_tables WHERE schemaname = \'public\'',
+    )) as { count: bigint }[];
+    tables = Number(rows[0]?.count ?? 0);
+    // RLS verification: every public table must be row-security enabled
+    // (deny-by-default for the exposed anon/authenticated PostgREST roles).
+    const rls = (await db.$queryRawUnsafe<{ count: bigint }[]>(
+      `SELECT count(*)::bigint AS count FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true`,
+    )) as { count: bigint }[];
+    rlsEnabled = Number(rls[0]?.count ?? 0);
   } catch (e) {
     ok = false;
     error = e instanceof Error ? e.message : String(e);
@@ -35,10 +41,11 @@ export async function GET(): Promise<NextResponse> {
   return NextResponse.json(
     {
       ok,
-      mode: isRemote ? "remote" : "ephemeral-file",
+      mode: url ? "postgres-pooler" : "unset",
       host,
       tables,
-      hasAuthToken: isRemote ? !!process.env.HORSE_DB_AUTH_TOKEN?.trim() : undefined,
+      rlsTables: rlsEnabled,
+      hasMigrationsUrl: !!process.env.POSTGRES_URL_NON_POOLING?.trim(),
       error,
       time: new Date().toISOString(),
     },

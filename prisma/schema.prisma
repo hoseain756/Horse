@@ -1,20 +1,23 @@
 generator client {
   provider = "prisma-client-js"
-  // Driver adapters (GA since Prisma 6): lets the SAME client speak local
-  // SQLite files AND remote Turso (libsql://) via @prisma/adapter-libsql,
-  // wired in src/lib/db.ts.
+  // Driver adapter (GA since Prisma 6): the runtime CONNECTION comes from
+  // @prisma/adapter-pg wired in src/lib/db.ts — a pure-JS `pg` pool with
+  // prepare:false so it is safe behind the Supabase TRANSACTION pooler
+  // (PgBouncer transaction mode) and Vercel serverless.
 }
 
 datasource db {
-  provider = "sqlite"
-  // Dedicated var name (NOT the generic DATABASE_URL) so the app never picks
-  // up a host-injected DATABASE_URL by accident — the value always comes from
-  // this project's own config. The runtime CONNECTION comes from the adapter:
-  //   local dev : HORSE_DATABASE_URL=file:/home/z/my-project/db/horse.db
-  //   Turso     : HORSE_DATABASE_URL=libsql://<db>-<org>.turso.io
-  //               + HORSE_DB_AUTH_TOKEN=<turso auth token>
-  //   Vercel fallback (no Turso yet): file:/tmp/horse.db (ephemeral!)
-  url = env("HORSE_DATABASE_URL")
+  provider = "postgresql"
+  // Runtime + CLI fallback URL. Per the operator's contract, credentials live
+  // ONLY in env vars (never committed):
+  //   POSTGRES_URL             → Supabase TRANSACTION pooler, port 6543 (the
+  //                              running app connects through the pg adapter
+  //                              with prepare:false — see src/lib/db.ts)
+  //   POSTGRES_URL_NON_POOLING → session pooler / direct (port 5432), used by
+  //                              PRISMA MIGRATIONS ONLY (directUrl) — never at
+  //                              request time.
+  url       = env("POSTGRES_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 // HORSE platform account — email + password. `username` is kept for legacy

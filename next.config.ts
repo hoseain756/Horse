@@ -2,10 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Prisma + libSQL driver adapter ship native bindings — keep them external
-  // so the serverless bundle includes the real packages (and their .node
-  // binaries) instead of a broken bundled copy.
-  serverExternalPackages: ["@prisma/client", "@prisma/adapter-libsql", "@libsql/client"],
+  // Prisma + the pg driver adapter connect to Supabase Postgres (see
+  // src/lib/db.ts) — keep them external so the serverless bundle includes the
+  // real packages instead of a broken bundled copy.
+  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
