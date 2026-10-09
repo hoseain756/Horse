@@ -1330,8 +1330,8 @@ function HorseAccountCard() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-              <Button size="sm" variant="outline" className="gap-1.5 min-h-11" disabled={busy} onClick={() => void syncFromAccount()}>
+            <div className="flex items-center gap-2 flex-wrap justify-end max-[419px]:justify-start w-full sm:w-auto">
+              <Button size="sm" variant="outline" className="gap-1.5 min-h-11 flex-1 min-[420px]:flex-none" disabled={busy} onClick={() => void syncFromAccount()}>
                 <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin")} />
                 {t("accountSyncNow")}
               </Button>
@@ -1800,6 +1800,7 @@ function ForgotPasswordLink({ onDone }: { onDone: (msg: string, bad?: boolean) =
 
 // ---------- Cloud sync card ----------
 function CloudSyncCard() {
+  const t = useT();
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const { toast } = useToast();
