@@ -59,3 +59,7 @@ db/*.db
 db/*.db-journal
 db/*.db-wal
 db/*.db-shm
+
+# agent tool artifacts (never commit)
+tool-results/
+upload/
