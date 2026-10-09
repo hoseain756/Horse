@@ -34,6 +34,11 @@ const STRINGS = {
   errClass: { en: "Failure class", ar: "نوع الخطأ" },
   errCode: { en: "Error code", ar: "رمز الخطأ" },
   sourceHost: { en: "Source host", ar: "مصدر البث" },
+  // ---- audio / dub switcher (player) ----
+  audioPanelTitle: { en: "Audio / Dub", ar: "الصوت / الدبلجة" },
+  audioSwitching: { en: "Switching audio…", ar: "جارٍ تبديل الصوت…" },
+  audioTrackFallback: { en: "Track", ar: "مسار" },
+  audioOriginal: { en: "Original", ar: "الأصلي" },
   // ---- kids ----
   kidsTitle: { en: "Kids Corner", ar: "زاوية الأطفال" },
   kidsSubtitle: { en: "Fun and safe picks for the little ones.", ar: "اختيارات ممتعة وآمنة للصغار." },

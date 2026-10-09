@@ -214,6 +214,7 @@ function probeFile(torrent, fileIdx) {
         container: path.extname(file.name).slice(1),
         video: null,
         audio: null,
+        audioTracks: [], // native containers are streamed raw — track list unknown
         playable: true,
         needsRemux: false,
         assumed: true,
@@ -245,7 +246,8 @@ function probeFile(torrent, fileIdx) {
           const j = JSON.parse(stdout || "{}");
           const streams = j.streams ?? [];
           const video = streams.find((s) => s.codec_type === "video");
-          const audio = streams.find((s) => s.codec_type === "audio");
+          const audioStreams = streams.filter((s) => s.codec_type === "audio");
+          const audio = audioStreams[0];
           const v = video?.codec_name ?? null;
           const a = audio?.codec_name ?? null;
           const playableVideo = ["h264", "vp8", "vp9", "av1", "mpeg4"].includes(v);
@@ -256,6 +258,18 @@ function probeFile(torrent, fileIdx) {
             container: (j.format?.format_name ?? "").split(",")[0] ?? null,
             video: v,
             audio: a,
+            // FULL audio/dub track list (dub-switch feature): rel = the 0-based
+            // audio selector for ffmpeg `-map 0:a:<rel>?` (remux ?audio= param).
+            audioTracks: audioStreams.map((s, rel) => ({
+              rel,
+              index: s.index,
+              codec: s.codec_name ?? null,
+              lang: (s.tags?.language ?? "").toLowerCase() || null,
+              title: s.tags?.title ?? null,
+              channels: s.channels ?? null,
+              default: !!(s.disposition?.default ?? false),
+              forced: !!(s.disposition?.forced ?? false),
+            })),
             width: video?.width ?? null,
             height: video?.height ?? null,
             playable: playableVideo && playableAudio,
@@ -392,6 +406,9 @@ const server = http.createServer(async (req, res) => {
 
     // ---------- remux (ffmpeg → progressive fMP4) ----------
     // ?vtrans=h264 additionally transcodes the video track (HEVC→H.264).
+    // ?audio=N picks the audio track (0-based RELATIVE audio index — matches
+    // /codec audioTracks[].rel). Dub-switch: the player re-opens this URL with
+    // a new audio=N + ss=<now> (same seek-restart contract as below).
     // ?ss=N seeks: progressive pipes cannot input-seek, so ffmpeg uses an
     // OUTPUT seek (-ss after -i) and drops packets until the requested time —
     // cheap for -c:v copy (no decode). The player re-opens this URL with a
@@ -403,6 +420,7 @@ const server = http.createServer(async (req, res) => {
       const idx = parseInt(remuxMatch[2], 10);
       const vtrans = url.searchParams.get("vtrans") === "h264";
       const ss = Math.max(0, parseFloat(url.searchParams.get("ss") ?? "0") || 0);
+      const audioSel = Math.max(0, parseInt(url.searchParams.get("audio") ?? "0", 10) || 0);
       if (vtrans && !TRANSCODE_ENABLED) {
         return send(res, 503, { error: "Video conversion is disabled on this server (TRANSCODE_ENABLED)." });
       }
@@ -422,8 +440,9 @@ const server = http.createServer(async (req, res) => {
         "Access-Control-Allow-Origin": "*",
         "X-Content-Type-Options": "nosniff",
         ...(vtrans ? { "X-Harbor-Transcode": "h264" } : {}),
+        ...(audioSel > 0 ? { "X-Harbor-Audio": String(audioSel) } : {}),
       });
-      log("remux start", key, idx, file.name, vtrans ? "(vtrans h264)" : "", ss > 0 ? `(ss=${ss})` : "");
+      log("remux start", key, idx, file.name, vtrans ? "(vtrans h264)" : "", `(a=${audioSel})`, ss > 0 ? `(ss=${ss})` : "");
       const ff = spawn("ffmpeg", [
         "-hide_banner", "-loglevel", "error",
         "-fflags", "+genpts",
@@ -431,7 +450,10 @@ const server = http.createServer(async (req, res) => {
         // ?ss=N — output seek (after -i): drop packets/frames until the target
         // time. Works on non-seekable pipes where input -ss cannot.
         ...(ss > 0 ? ["-ss", String(ss)] : []),
-        "-map", "0:v:0", "-map", "0:a:0?",
+        // Map the SELECTED audio track (?audio=N, default first). Multi-audio
+        // releases (ITA+ENG dubs etc.) previously hard-served 0:a:0 with no
+        // way to switch — now the player can pick any track via /codec list.
+        "-map", "0:v:0", "-map", `0:a:${audioSel}?`,
         // Default: video stream-copy (fast); audio → AAC (mp4 muxing rejects
         // EAC3/DTS/TrueHD and browsers can't decode them anyway). With vtrans,
         // video is re-encoded to H.264 (last resort for HEVC — CPU-heavy).

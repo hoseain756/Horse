@@ -1537,3 +1537,24 @@ Work Log:
 
 Stage Summary:
 - The "always push after every change" mandate is fully operational again: every new local commit is now auto-pushed within ~45s. Token lives ONLY in ~/.git-credentials outside the repo; user can revoke anytime from github.com/settings/tokens (it is an OAuth authorization under "GitHub CLI").
+---
+Task ID: audio-dub-switcher (user: "المشغل لا يجلب الاصوات… زر اقدر من خلاله اغير الدبلجة")
+Agent: main (orchestrator)
+Task: Fix the player never fetching/serving the right audio track on multi-audio torrents, and add a dub-switch button in the player.
+
+Work Log:
+- ROOT CAUSE (engine): torrent-service remux hard-mapped `-map 0:a:0?` — the FIRST audio track only. On multi-dub releases (S-K ITA+ENG) users always got Italian with no way to switch; ffprobe also kept only the first audio codec. (The pre-existing selectAudioTrack covers HLS/native-Safari audioTracks only — never progressive fMP4 remux.)
+- ENGINE (mini-services/torrent-service/index.mjs): probeFile now returns a FULL `audioTracks[]` list (rel index, abs index, codec, lang tag, title, channels, default/forced flags); /remux accepts `?audio=<rel>` (validated ≥0) → `-map 0:a:<rel>?`, X-Harbor-Audio response header + `(a=N)` log. node --watch EADDRINUSE incident during edits → clean restart procedure (pkill both patterns + relaunch).
+- CLIENT LIB (p2p.ts): P2pAudioTrack type + codec report audioTracks; p2pRemuxUrl(key,fileIdx,vtrans,ss,audioRel); shared pickAudioRel (44-language synonym table incl. Arabic عربي/مترجم + Italian groups' title styles) + audioTrackLabel.
+- PLAYER (player-overlay.tsx): VideoStage owns audio state (audioTracks/audioSel/audioMenuOpen + refs). THREE wiring paths, all preserving the seek-restart contract: (1) plan step pre-selection — embeds &audio=N in the FIRST remux URL; (2) unified dub-discovery effect — fetches /codec once per torrent+file (sig ref), covers picker + native→remux escalation, syncs panel state, re-attaches at current position when preferred ≠ playing; (3) switchAudioTrack — reuses restartAt(currentTime+offset) → pause restore, offset mapping, buffering, first-frame gate. Dedicated AudioLines button in the controls bar (next to Subtitles, accent-lit when a non-default dub is active) + M3 panel (scrollable, aria-pressed rows, "Original" chip on track 0, localized via i18n keys audioPanelTitle/audioSwitching/audioTrackFallback/audioOriginal ar+en). Escalation remux URLs carry audioSelRef too. Fixed pre-existing tsc error: episodeName added to MetaVideo type.
+- PICKER (picker-overlay.tsx): same pre-selection embedded before onPick (player never attaches to the wrong dub even via manual pick).
+- E2E VERIFIED (agent-browser + engine logs, Torrentio installed via the real Addons UI):
+  1. /codec on Reacher S-K (2160p): 4 tracks (ita×2, eng×2) listed with lang/title/codec/channels.
+  2. remux ?audio=2 → ffprobe of output bytes: audio=aac **eng** 6ch (old code = ita). X-Harbor-Audio: 2 header.
+  3. UI: S-K auto-resolve → engine log `remux start … (a=2)` — English auto-picked over the Italian default; AudioLines button visible (accent).
+  4. WEBMux SGF (1080p H.264, 7 tracks ENG/FRE/GER/ITA/POR/SPA×2): played 1920×, button visible; panel lists all 7 localized tracks; click Italian → `&ss=44&audio=3` re-attach, engine `remux start … (a=3) (ss=44)` — SAME position, ITALIAN dub, playback CONTINUED (t 1.7→30.4, 1920px frames, readyState 4).
+  5. Switch-back to English hit a 1-peer swarm data-starve ("File ended prematurely") → honest playback error (environmental, pre-existing season-pack weakness).
+  6. tsc src-clean; lint 0 errors; test torrents purged (cleanup purge=true).
+
+Stage Summary:
+- Multi-audio torrents now surface ALL dubs: the engine probes every track, the player auto-picks the user's preferred language for the first attach, a dedicated player button lists the dubs (Arabic UI included) and switches instantly at the current position through the proven seek-restart contract. Works for auto-resolve, picker and escalation paths alike. HEVC-stall ladder gap remains a known separate backlog item.

@@ -39,6 +39,21 @@ export type P2pStatus = {
   files?: P2pFile[];
 };
 
+export type P2pAudioTrack = {
+  /** 0-based RELATIVE audio index — the remux `?audio=` selector. */
+  rel: number;
+  /** Absolute stream index in the container (informational). */
+  index?: number;
+  codec?: string | null;
+  /** ISO 639 tag from the container ("eng", "ara", "ita"…) or null. */
+  lang?: string | null;
+  /** Track title as authored in the file ("English", "UITA AAC 5.1"…). */
+  title?: string | null;
+  channels?: number | null;
+  default?: boolean;
+  forced?: boolean;
+};
+
 export type P2pCodecReport = {
   error?: string;
   fileIdx?: number;
@@ -46,6 +61,9 @@ export type P2pCodecReport = {
   container?: string | null;
   video?: string | null;
   audio?: string | null;
+  /** Every audio/dub track in the file (multi-audio releases). Empty for
+   *  native containers (streamed raw) — dub switching is remux-only. */
+  audioTracks?: P2pAudioTrack[];
   width?: number | null;
   height?: number | null;
   playable?: boolean | null; // null = unknown
@@ -129,14 +147,98 @@ export function p2pStreamUrl(key: string, fileIdx: number): string {
 /** ffmpeg progressive remux URL (mkv → fMP4). Elements cannot re-fetch a
  *  progressive pipe arbitrarily, so seeking beyond the buffer re-opens this
  *  URL with ss=<seconds> — the engine drops packets until the target time.
- *  vtrans=h264 additionally re-encodes the video track (HEVC → H.264). */
-export function p2pRemuxUrl(key: string, fileIdx: number, vtrans?: boolean, ssS?: number): string {
+ *  vtrans=h264 additionally re-encodes the video track (HEVC → H.264).
+ *  audioRel selects the audio/dub track (0-based, from /codec audioTracks). */
+export function p2pRemuxUrl(
+  key: string,
+  fileIdx: number,
+  vtrans?: boolean,
+  ssS?: number,
+  audioRel?: number | null,
+): string {
   const ss = ssS != null && ssS > 0 ? `&ss=${Math.round(ssS)}` : "";
-  return `/remux/${key}/${fileIdx}${Q}${vtrans ? "&vtrans=h264" : ""}${ss}`;
+  const au = audioRel != null && audioRel > 0 ? `&audio=${audioRel}` : "";
+  return `/remux/${key}/${fileIdx}${Q}${vtrans ? "&vtrans=h264" : ""}${ss}${au}`;
 }
 
 /** Engine-level conversion support (cached; read from /health). */
 let transcodeAvailCache: boolean | null = null;
+
+// ---- Audio/dub track selection (shared: player + picker) ----
+// Container tags are ISO 639-2/3 ("eng","ara","ita"); settings carry display
+// names ("English","Arabic"). The synonym table maps common dub languages to
+// every tag/word they may appear as (lang tag OR track title substring).
+const AUDIO_LANG_SYNONYMS: Record<string, string[]> = {
+  english: ["english", "eng"],
+  arabic: ["arabic", "ara", "arabic dub", "مترجم", "عربي"],
+  italian: ["italian", "ita"],
+  spanish: ["spanish", "spa", "español", "espanol", "latino", "castellano"],
+  french: ["french", "fre", "fra", "français", "francais", "vff", "vfi", "vfq"],
+  german: ["german", "ger", "deu", "deutsch"],
+  japanese: ["japanese", "jpn", "日本語"],
+  korean: ["korean", "kor"],
+  chinese: ["chinese", "chi", "zho", "mandarin", "cantonese"],
+  hindi: ["hindi", "hin"],
+  turkish: ["turkish", "tur"],
+  russian: ["russian", "rus"],
+  persian: ["persian", "fas", "per", "farsi"],
+  urdu: ["urdu", "urd"],
+  portuguese: ["portuguese", "por", "br", "dublado"],
+  hebrew: ["hebrew", "heb"],
+  dutch: ["dutch", "nld", "dut", "vlaams"],
+  polish: ["polish", "pol"],
+  ukrainian: ["ukrainian", "ukr"],
+  indonesian: ["indonesian", "ind", "bahasa"],
+  malay: ["malay", "msa", "may"],
+  thai: ["thai", "tha"],
+  vietnamese: ["vietnamese", "vie"],
+  filipino: ["filipino", "fil", "tagalog", "tgl"],
+  czech: ["czech", "ces", "cze"],
+  greek: ["greek", "ell", "gre"],
+  swedish: ["swedish", "swe"],
+  norwegian: ["norwegian", "nor"],
+  danish: ["danish", "dan"],
+  finnish: ["finnish", "fin"],
+  hungarian: ["hungarian", "hun"],
+  romanian: ["romanian", "ron", "rum"],
+  bulgarian: ["bulgarian", "bul"],
+  serbian: ["serbian", "srp"],
+  croatian: ["croatian", "hrv"],
+  slovak: ["slovak", "slk", "slo"],
+  slovenian: ["slovenian", "slv"],
+  catalan: ["catalan", "cat"],
+  kannada: ["kannada", "kan"],
+  tamil: ["tamil", "tam"],
+  telugu: ["telugu", "tel"],
+  malayalam: ["malayalam", "mal"],
+  bengali: ["bengali", "ben", "bangla"],
+  marathi: ["marathi", "mar"],
+  punjabi: ["punjabi", "pan"],
+  nepali: ["nepali", "nep"],
+};
+
+/** Best audio track for the user's preferred languages: first preference with
+ *  a matching track wins; else the container's default-flagged track; else 0. */
+export function pickAudioRel(tracks: P2pAudioTrack[], preferredLanguages?: string[]): number {
+  if (!tracks.length) return 0;
+  const hay = (t: P2pAudioTrack) => `${t.lang ?? ""} ${t.title ?? ""}`.toLowerCase();
+  for (const pref of preferredLanguages ?? []) {
+    const keys = AUDIO_LANG_SYNONYMS[pref.toLowerCase()] ?? [pref.toLowerCase()];
+    const hit = tracks.find((t) => keys.some((k) => hay(t).includes(k)));
+    if (hit) return hit.rel;
+  }
+  return tracks.find((t) => t.default)?.rel ?? 0;
+}
+
+/** Compact UI label for an audio track: authored title → lang tag → "Track N". */
+export function audioTrackLabel(t: P2pAudioTrack, fallbackWord: string): string {
+  const ch = t.channels ? (t.channels === 6 ? "5.1" : t.channels === 8 ? "7.1" : String(t.channels)) : null;
+  const title = (t.title ?? "").trim() || null;
+  const lang = (t.lang ?? "").toUpperCase() || null;
+  const name = title || lang || `${fallbackWord} ${t.rel + 1}`;
+  const parts = [name, ch, (t.codec ?? "").toUpperCase()].filter(Boolean);
+  return parts.join(" · ");
+}
 
 export function cachedP2pTranscode(): boolean {
   return transcodeAvailCache === true;

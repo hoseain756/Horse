@@ -40,7 +40,7 @@ import {
 import type { MetaVideo, RawSubtitle, SubtitleResult, Stream } from "@/lib/harbor/types";
 import { upsertCw, pushHistory, resumeMsFor } from "@/lib/harbor/cw";
 import { useTrakt } from "@/lib/harbor/trakt";
-import { p2pStatus, p2pRemuxUrl, formatSpeed, refreshP2pCapabilities } from "@/lib/harbor/p2p";
+import { p2pStatus, p2pRemuxUrl, p2pCodec, pickAudioRel, audioTrackLabel, formatSpeed, refreshP2pCapabilities, type P2pAudioTrack } from "@/lib/harbor/p2p";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PosterImage } from "../common/poster";
@@ -271,6 +271,16 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
             canConvert: false,
           });
           return;
+        }
+        // Audio/dub pre-selection: the plan's codec report lists every audio
+        // track — embed the preferred dub in the FIRST remux URL (VideoStage's
+        // discovery effect syncs the same report into the panel state).
+        if (plan.mode === "remux") {
+          const tracks = plan.codec?.audioTracks ?? [];
+          if (tracks.length > 0) {
+            const rel = pickAudioRel(tracks, useSettings.getState().settings.preferredLanguages);
+            if (rel > 0) plan.url = `${plan.url}&audio=${rel}`;
+          }
         }
         setCurrent((c) => ({
           ...c,
@@ -581,6 +591,18 @@ function VideoStage({
   // Declared BEFORE doSeek, which reads it to un-wrap signed transcode URLs.
   const [srcOverride, setSrcOverride] = useState<{ url: string; mode: SourceMode } | null>(null);
 
+  // ---- Audio / dub switcher (P2P remux path) ----
+  // The engine probes ALL audio tracks (/codec audioTracks) and the remux maps
+  // ?audio=<rel>. Switching re-opens the remux URL at the current position
+  // (same restart contract as seek). Ref mirrors state for the restart paths
+  // (restartAt / escalateFailure) which must not re-render on audio change.
+  const [audioTracks, setAudioTracks] = useState<P2pAudioTrack[] | null>(null);
+  const [audioSel, setAudioSel] = useState(0);
+  const [audioMenuOpen, setAudioMenuOpen] = useState(false);
+  const audioSelRef = useRef(0);
+  /** Guard: dub list fetched once per torrent+file (discovery effect). */
+  const dubFetchedRef = useRef<string | null>(null);
+
   // ---- Seeks (timeline-mapped) ----
   // Element seeks are issued by the timeline; unseekable targets on
   // conversion/remux sources restart the server session at a signed offset
@@ -606,7 +628,7 @@ function VideoStage({
         gotFirstFrameRef.current = false;
         setBuffering(true);
         setSrcOverride({
-          url: p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx, vtrans, target),
+          url: p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx, vtrans, target, audioSelRef.current),
           mode: vtrans ? "p2p-transcode" : "p2p-remux",
         });
         return;
@@ -688,6 +710,29 @@ function VideoStage({
   const volumeHudTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [subMenuOpen, setSubMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+
+  /** Dub switch: re-open the remux at the current position with the new audio
+   *  track (restartAt reuses the seek-restart plumbing: pause restore, offset,
+   *  buffering, first-frame gate). Only valid on the p2p remux paths. */
+  const switchAudioTrack = useCallback(
+    (rel: number) => {
+      const video = videoRef.current;
+      if (!payload.p2p || video == null) return;
+      if (rel === audioSelRef.current && sourceModeRef.current !== "direct") {
+        setAudioMenuOpen(false);
+        return;
+      }
+      audioSelRef.current = rel;
+      setAudioSel(rel);
+      setAudioMenuOpen(false);
+      const lang = useSettings.getState().settings.uiLanguage;
+      toast({ title: homeT("audioSwitching", lang) });
+      restartAt((video.currentTime || 0) + timeline.offset);
+    },
+    // restartAt / timeline / videoRef are all declared above (stable deps)
+    [payload.p2p, restartAt, timeline, toast],
+  );
+
   // P2P engine: live swarm stats + one-shot remux fallback when the native stream can't demux
   const [p2pStats, setP2pStats] = useState<{ progress: number; peers: number; downloadSpeed: number; ready: boolean } | null>(null);
   const sourceModeRef = useRef<SourceMode>("direct");
@@ -796,6 +841,11 @@ function VideoStage({
     const url = payload.url;
     if (!url) return;
     setSrcOverride(null);
+    setAudioTracks(null);
+    setAudioSel(0);
+    setAudioMenuOpen(false);
+    audioSelRef.current = 0;
+    dubFetchedRef.current = null;
     sourceModeRef.current = payload.p2p ? "p2p-native" : "direct";
     gotFirstFrameRef.current = false;
     const isHttp = /^https?:\/\//i.test(url);
@@ -823,6 +873,52 @@ function VideoStage({
     };
   }, [payload.url, payload.stream, payload.p2p?.key]);
 
+  // ---- Dub discovery (unified, P2P remux sources) ----
+  // One path covers EVERY way a remux can be reached (auto-resolve plan step,
+  // stream picker, native→remux escalation): fetch /codec once per torrent+file,
+  // populate the track list, auto-select the user's preferred dub, and — when
+  // that differs from what is playing — re-open the remux at the current
+  // position with ?audio=<rel> (same restart contract as seek).
+  useEffect(() => {
+    const p2p = payload.p2p;
+    const overrideMode = srcOverride?.mode;
+    if (!p2p) return;
+    const onRemux = p2p.mode === "remux" || overrideMode === "p2p-remux" || overrideMode === "p2p-transcode";
+    if (!onRemux) return;
+    const sig = `${p2p.key}:${p2p.fileIdx}`;
+    if (dubFetchedRef.current === sig) return;
+    dubFetchedRef.current = sig;
+    let alive = true;
+    void (async () => {
+      try {
+        const rep = await p2pCodec(p2p.key, p2p.fileIdx);
+        const tracks = rep.audioTracks ?? [];
+        if (!alive || tracks.length === 0) return;
+        setAudioTracks(tracks);
+        const rel = pickAudioRel(tracks, useSettings.getState().settings.preferredLanguages);
+        if (rel === audioSelRef.current) return;
+        audioSelRef.current = rel;
+        setAudioSel(rel);
+        if (payload.url.includes(`audio=${rel}`)) return; // source already targets this dub
+        const video = videoRef.current;
+        const vtrans = sourceModeRef.current === "p2p-transcode";
+        const at = Math.max(0, (video?.currentTime ?? 0) + timeline.offset);
+        timeline.setOffset(at);
+        gotFirstFrameRef.current = false;
+        setBuffering(true);
+        setSrcOverride({
+          url: p2pRemuxUrl(p2p.key, p2p.fileIdx, vtrans, at, rel),
+          mode: vtrans ? "p2p-transcode" : "p2p-remux",
+        });
+      } catch {
+        /* track list unavailable — playback continues on the current track */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [payload.p2p?.key, payload.p2p?.fileIdx, payload.p2p?.mode, payload.url, srcOverride?.mode, timeline]);
+
   // ---- Failure escalation ladder ----
   // direct → proxy (secure media proxy) → transcode (ffmpeg) → classified error
   // p2p-native → p2p-remux → p2p-transcode → classified error
@@ -840,7 +936,12 @@ function VideoStage({
           remuxTriedRef.current = true;
           sourceModeRef.current = "p2p-remux";
           setBuffering(true);
-          setSrcOverride({ url: p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx), mode: "p2p-remux" });
+          setSrcOverride({
+            url: p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx, false, undefined, audioSelRef.current),
+            mode: "p2p-remux",
+          });
+          // The unified dub-discovery effect (fires on srcOverride mode change)
+          // populates the track list and re-attaches if the preferred dub ≠ 0.
           return;
         }
         if (mode === "p2p-remux" && !vtransTriedRef.current && cachedTranscodeSupported()) {
@@ -848,7 +949,7 @@ function VideoStage({
           sourceModeRef.current = "p2p-transcode";
           setBuffering(true);
           setSrcOverride({
-            url: `${p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx)}&vtrans=h264`,
+            url: `${p2pRemuxUrl(payload.p2p.key, payload.p2p.fileIdx, true, undefined, audioSelRef.current)}`,
             mode: "p2p-transcode",
           });
           return;
@@ -2279,6 +2380,66 @@ function VideoStage({
               overflowing the viewport in RTL (button sits at the far right
               edge, panel extended outward). */}
           <div className="relative ml-auto flex items-center gap-1">
+            {/* Audio / dub — only when the engine listed MORE than one audio
+                track for a torrent remux (multi-dub releases). Panel mirrors
+                the subtitles panel geometry (group-anchored right-0). */}
+            {payload.p2p && audioTracks && audioTracks.length > 1 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAudioMenuOpen((v) => !v);
+                    setSubMenuOpen(false);
+                    setSettingsMenuOpen(false);
+                  }}
+                  className={cn("md-icon-btn md-state h-12! w-12!", audioMenuOpen || audioSel > 0 ? "text-accent!" : "text-white!")}
+                  aria-label="Audio / dub"
+                  aria-expanded={audioMenuOpen}
+                >
+                  <AudioLines className="w-4.5 h-4.5" />
+                </button>
+                {audioMenuOpen && (
+                  <div
+                    className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-72 max-w-[calc(100vw-2rem)] p-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="md-label-medium uppercase text-ink-muted mb-2 px-1">
+                      {homeT("audioPanelTitle", settings.uiLanguage)}
+                    </p>
+                    <div className="max-h-64 overflow-y-auto harbor-scroll flex flex-col gap-0.5">
+                      {audioTracks.map((t) => {
+                        const active = t.rel === audioSel;
+                        return (
+                          <button
+                            key={t.rel}
+                            type="button"
+                            onClick={() => switchAudioTrack(t.rel)}
+                            aria-pressed={active}
+                            className={cn(
+                              "md-state flex items-center gap-2 w-full text-start rounded-lg px-2.5 py-2 text-xs transition-colors",
+                              active ? "bg-accent/15 text-accent font-semibold" : "text-ink hover:bg-white/8",
+                            )}
+                          >
+                            {active ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+                            ) : (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/25 shrink-0" aria-hidden />
+                            )}
+                            <span className="truncate flex-1">{audioTrackLabel(t, homeT("audioTrackFallback", settings.uiLanguage))}</span>
+                            {t.rel === 0 && (
+                              <span className="md-chip h-5! px-1.5! text-[9px]! shrink-0">{homeT("audioOriginal", settings.uiLanguage)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-ink-subtle mt-2 px-1">
+                      {audioTracks.length} audio tracks · switching restarts the stream at the current position
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Subtitles — NOT a positioning context anymore: the panel anchors
               to the button GROUP above (see comment there). */}
             <div>

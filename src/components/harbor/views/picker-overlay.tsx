@@ -23,6 +23,7 @@ import {
   p2pPrepare,
   p2pStatus,
   p2pPlan,
+  pickAudioRel,
   refreshP2pCapabilities,
   type P2pPlaybackPlan,
 } from "@/lib/harbor/p2p";
@@ -602,6 +603,16 @@ function StreamRow({
         throw new Error(
           `This file uses ${plan.codec.video.toUpperCase()} video which browsers cannot play — unlock it with debrid instead.`,
         );
+      }
+      // Dub pre-selection: embed the preferred audio track in the first remux
+      // URL so the player never attaches to the wrong dub (the player-side
+      // discovery effect syncs its state from the same codec report).
+      if (plan.mode === "remux") {
+        const tracks = plan.codec?.audioTracks ?? [];
+        if (tracks.length > 0) {
+          const rel = pickAudioRel(tracks, useSettings.getState().settings.preferredLanguages);
+          if (rel > 0) plan.url = `${plan.url}&audio=${rel}`;
+        }
       }
       clearInterval(ticker);
       setP2pPhase("idle");

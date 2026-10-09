@@ -56,6 +56,8 @@ export type MetaVideo = {
   id: string;
   name?: string;
   title?: string;
+  /** Display name carried through episode-switch flows (switchEpisode → UpNext). */
+  episodeName?: string;
   released?: string;
   season?: number;
   episode?: number;
