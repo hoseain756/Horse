@@ -7,14 +7,17 @@
 
 import type { Stream } from "./types";
 import { getLocalEngine } from "./local-engine";
+import { browserEngineSupport, isBrowserEngineEnabled } from "./browser-engine";
 
 // ---------- server capabilities (probed once per session) ----------
 /** Where torrent streams can play: "external" (self-hosted engine via
  *  ENGINE_URL), "builtin" (sandbox gateway, torrent-service on :3031),
  *  "local" (engine running on the USER's own device — configured per-device
- *  in Settings → Integrations → P2P, browser-direct), or "none" (serverless
+ *  in Settings → Integrations → P2P, browser-direct), "browser" (the IN-
+ *  BROWSER engine: WebTorrent in the page, zero install — the browser itself
+ *  becomes the engine; web peers only, mp4/webm only), or "none" (serverless
  *  with no engine at all — a BitTorrent engine cannot run there). */
-export type TorrentMode = "external" | "builtin" | "local" | "none";
+export type TorrentMode = "external" | "builtin" | "local" | "browser" | "none";
 
 export type Capabilities = {
   proxy: boolean;
@@ -63,7 +66,13 @@ export function cachedTranscodeSupported(): boolean {
  *  "local". Server-configured engines (builtin/external) always win. */
 export function cachedTorrentMode(): TorrentMode | null {
   const server = capsCache?.torrent ?? null;
-  if (server === "none" && getLocalEngine()) return "local";
+  if (server === "none") {
+    if (getLocalEngine()) return "local";
+    // Zero-install path: the user opted in AND this browser can actually do it
+    // (WebRTC data channels + MSE). The live swarm is still verified at play
+    // time — this only unlocks the UI/playback route.
+    if (isBrowserEngineEnabled() && browserEngineSupport().supported) return "browser";
+  }
   return server;
 }
 
@@ -94,7 +103,7 @@ export type PlayVerdict = "direct" | "proxy" | "convert" | "external" | "unplaya
 export type StreamClass = {
   verdict: PlayVerdict;
   /** badge label key — resolved by the picker with the UI language */
-  badge: "plays-here" | "plays-proxy" | "plays-convert" | "external" | "not-playable";
+  badge: "plays-here" | "plays-proxy" | "plays-convert" | "plays-browser" | "external" | "not-playable";
   reasons: string[];
   container: string | null;
   videoCodec: string | null;
@@ -161,10 +170,30 @@ export function classifyStream(stream: Stream): StreamClass {
     // Environment truth first: on a serverless host without an external
     // engine, torrent streams simply cannot play — say so up-front instead of
     // teasing a P2P badge and failing after the user presses play.
-    if (cachedTorrentMode() === "none") {
+    const tMode = cachedTorrentMode();
+    if (tMode === "none") {
       verdict = "unplayable";
       badge = "not-playable";
       reasons.push("P2P/torrent streams cannot play on this serverless host — a debrid key or your own engine unlocks them");
+    } else if (tMode === "browser") {
+      // In-browser engine: no remux, no HEVC — honest gate before play.
+      const filename = stream.behaviorHints?.filename ?? stream.parsed?.filename ?? "";
+      const heavyExt = /^(mkv|avi|ts|wmv|flv|mpg|mpeg)$/i.exec(
+        filename.toLowerCase().match(/\.([a-z0-9]{2,4})$/)?.[1] ?? "",
+      );
+      if (videoBad) {
+        verdict = "unplayable";
+        badge = "not-playable";
+        reasons.push("HEVC/DoVi video cannot decode in the in-browser engine — debrid or the engine app unlocks it");
+      } else if (heavyExt) {
+        verdict = "unplayable";
+        badge = "not-playable";
+        reasons.push(`${heavyExt[1].toUpperCase()} containers need a remux the in-browser engine cannot do — mp4 releases play`);
+      } else {
+        verdict = "proxy";
+        badge = "plays-browser";
+        reasons.push("Plays through the in-browser engine (web peers over WebRTC)");
+      }
     } else {
       const support = cachedTranscodeSupported();
       if (videoBad && !support) {

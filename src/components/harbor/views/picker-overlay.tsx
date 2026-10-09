@@ -30,6 +30,7 @@ import {
   cachedEngineAvailable,
   type P2pPlaybackPlan,
 } from "@/lib/harbor/p2p";
+import { browserEngineStreamGate } from "@/lib/harbor/browser-engine";
 import { t } from "@/lib/harbor/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { PlayerOverlay } from "../player/player-overlay";
@@ -241,6 +242,7 @@ export function PickerOverlay({
           stream: playing,
           runtimeSeconds,
           ...(playing.p2p ? { p2p: playing.p2p } : {}),
+          ...(playing.p2pBrowser ? { p2pBrowser: playing.p2pBrowser } : {}),
         }}
       />
     );
@@ -334,7 +336,11 @@ export function PickerOverlay({
             <Network className="w-4 h-4 text-accent shrink-0" aria-hidden />
             <p className="min-w-0 flex-1">
               {t(
-                cachedTorrentMode() === "none" ? "p2pBannerServerless" : "p2pBannerBuiltin",
+                cachedTorrentMode() === "browser"
+                  ? "p2pBannerBrowser"
+                  : cachedTorrentMode() === "none"
+                    ? "p2pBannerServerless"
+                    : "p2pBannerBuiltin",
                 useSettings.getState().settings.uiLanguage,
               )}
             </p>
@@ -438,6 +444,12 @@ const BADGE_STYLES: Record<
     title: "Plays through the secure proxy (CORS/headers handled)",
     className: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
     dot: "bg-amber-400",
+  },
+  "plays-browser": {
+    label: "Via browser",
+    title: "Plays through the in-browser engine (web peers over WebRTC)",
+    className: "bg-purple-500/15 text-purple-300 border border-purple-500/30",
+    dot: "bg-purple-400",
   },
   "plays-convert": {
     label: "Convert",
@@ -566,6 +578,29 @@ function StreamRow({
     // Engine probe first — on serverless deployments the torrent-service can't
     // run; fail fast with guidance instead of polling peers against a 404.
     if (!(await p2pEngineAvailable())) {
+      // Zero-install rescue: the in-browser engine (WebTorrent in this page)
+      // when the user opted in and this browser can actually do it.
+      const gate = browserEngineStreamGate(stream);
+      if (gate === "ok") {
+        onPick({
+          ...stream,
+          url: "",
+          p2pBrowser: {
+            infoHash: stream.infoHash!.toLowerCase(),
+            fileIdx: stream.fileIdx ?? null,
+            filename: stream.behaviorHints?.filename ?? stream.parsed?.filename ?? null,
+          },
+        });
+        return;
+      }
+      if (gate === "hevc") {
+        fail(t("browserEngineHevc", lang));
+        return;
+      }
+      if (gate === "container") {
+        fail(t("browserEngineContainer", lang));
+        return;
+      }
       setEngineOffline(true);
       fail(t("p2pUnavailable", lang));
       return;

@@ -74,6 +74,10 @@ export type Settings = {
   streamSort: "score" | "addon";
   // P2P torrent engine (server-side webtorrent)
   p2pEnabled: boolean;
+  // In-browser torrent engine (WebTorrent/WebRTC — zero install). The user's
+  // browser becomes the engine: one switch, no app, no hosting. Honest limits
+  // documented in the P2P card (web peers only, no MKV/HEVC remux).
+  browserEngineEnabled: boolean;
 
   // Playback pipeline (secure media proxy + conversion)
   /** When the media proxy kicks in: auto (probe), always, or never. */
@@ -192,6 +196,9 @@ export const DEFAULT_SETTINGS: Settings = {
   pickerLayout: "stremio",
   streamSort: "addon",
   p2pEnabled: true,
+  // Zero-install path stays OFF until the user explicitly opts in (it uses
+  // their bandwidth and only reaches web-peer swarms — consent required).
+  browserEngineEnabled: false,
 
   proxyMode: "auto",
   transcodeMode: "ask",
@@ -277,6 +284,7 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   if (!/^[0-9A-Fa-f]{6}$/.test(out.subBorderColor)) out.subBorderColor = "#000000";
   out.cloudSyncEnabled = out.cloudSyncEnabled !== false;
   out.p2pEnabled = out.p2pEnabled !== false;
+  out.browserEngineEnabled = out.browserEngineEnabled === true;
   if (out.proxyMode !== "auto" && out.proxyMode !== "always" && out.proxyMode !== "never") out.proxyMode = "auto";
   if (out.transcodeMode !== "auto" && out.transcodeMode !== "ask" && out.transcodeMode !== "never") out.transcodeMode = "ask";
   out.playableOnly = out.playableOnly !== false;

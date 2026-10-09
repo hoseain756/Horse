@@ -24,6 +24,7 @@ import {
 } from "@/lib/harbor/themes";
 import { getWatchlist, getWatchlistLength } from "@/lib/harbor/cw";
 import { serverCapabilities, type TorrentMode } from "@/lib/harbor/playback";
+import { browserEngineSupport, detectDeviceClass, browserEngineSelfTest, type DeviceClass } from "@/lib/harbor/browser-engine";
 import { useTrakt, installTraktPushSync } from "@/lib/harbor/trakt";
 import { useSimkl } from "@/lib/harbor/simkl";
 import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
@@ -2699,6 +2700,17 @@ function P2pCard() {
   const [localTest, setLocalTest] = useState<LocalTestState>("idle");
   // One-click installer: platform is stable for the session, detect once (SSR-safe).
   const [platform] = useState<LocalPlatform>(() => detectLocalPlatform());
+  // In-browser engine (zero install): support is client-only — detect after
+  // mount to avoid SSR/hydration mismatch; the toggle lives in the settings store.
+  const browserEnabled = useSettings((s) => s.settings.browserEngineEnabled);
+  const [deviceSupport, setDeviceSupport] = useState<{ webrtc: boolean; mse: boolean; supported: boolean } | null>(null);
+  const [deviceClass, setDeviceClass] = useState<DeviceClass>("unknown");
+  const [browserTest, setBrowserTest] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [browserTestMsg, setBrowserTestMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setDeviceSupport(browserEngineSupport());
+    setDeviceClass(detectDeviceClass());
+  }, []);
 
   const check = async () => {
     setChecking(true);
@@ -2780,6 +2792,46 @@ function P2pCard() {
 
   const serverless = mode === "none" && !localCfg;
   const localActive = mode === "none" && !!localCfg;
+  // The zero-install path lights the card green only when it can actually run:
+  // user opted in AND this browser exposes WebRTC data channels + MSE. A
+  // configured local engine always wins (it remuxes/transcodes — the browser
+  // engine cannot).
+  const browserActive = serverless && browserEnabled && deviceSupport?.supported === true;
+
+  // One-click self-test: loads the WebTorrent bundle and joins a real,
+  // free-licensed swarm (Sintel) — proves CDN + WebRTC + WSS trackers live,
+  // on THIS device and network, with live peer counts. No content promotion:
+  // the probe torrent is a Blender CC sample.
+  const runBrowserTest = async () => {
+    setBrowserTest("testing");
+    setBrowserTestMsg(tr("browserEngineTestLoading"));
+    const res = await browserEngineSelfTest((s) => {
+      setBrowserTestMsg(
+        s.stage === "loading"
+          ? tr("browserEngineTestLoading")
+          : `${tr("browserEngineTestSwarm")} ${s.peers}`,
+      );
+    });
+    if (res.reason === "no-webrtc") {
+      setBrowserTest("fail");
+      setBrowserTestMsg(tr("browserEngineDeviceUnsupported"));
+      return;
+    }
+    if (res.reason === "load-failed") {
+      setBrowserTest("fail");
+      setBrowserTestMsg(tr("browserEngineTestLoadFailed"));
+      return;
+    }
+    if (res.ok) {
+      setBrowserTest("ok");
+      setBrowserTestMsg(
+        `${tr("browserEngineTestOk")} · ${res.peers} peers${res.speed > 0 ? ` · ${formatSpeed(res.speed)}` : ""}`,
+      );
+      return;
+    }
+    setBrowserTest("fail");
+    setBrowserTestMsg(tr("browserEngineTestNoPeers"));
+  };
   const activeCount = health?.torrents.length ?? 0;
   const totalSpeed = health?.torrents.reduce((a, t) => a + (t.downloadSpeed ?? 0), 0) ?? 0;
 
@@ -2956,7 +3008,7 @@ function P2pCard() {
             "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold",
             mode === null || (health === null && !serverless)
               ? "bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"
-              : serverless || health?.ok === false
+              : (serverless && !browserActive) || health?.ok === false
                 ? "bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]"
                 : "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]",
           )}
@@ -2968,13 +3020,15 @@ function P2pCard() {
               "w-1.5 h-1.5 rounded-full",
               mode === null || (health === null && !serverless)
                 ? "bg-[var(--md-sys-color-outline)]"
-                : serverless || health?.ok === false
+                : (serverless && !browserActive) || health?.ok === false
                   ? "bg-[var(--md-sys-color-error)]"
                   : "bg-[var(--md-sys-color-primary)]",
             )}
           />
           {serverless
-            ? tr("engineChipNone")
+            ? browserActive
+              ? tr("browserEngineChip")
+              : tr("engineChipNone")
             : localActive
               ? tr("localEngineChip")
               : mode === "external"
@@ -3009,7 +3063,7 @@ function P2pCard() {
         </p>
       )}
 
-      {!serverless && (
+      {(!serverless || browserActive) && (
         <div className="harbor-setting-row rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-high)] px-3.5 py-3">
           <div className="harbor-setting-row-label">
             <p className="md-label-large text-ink">{tr("p2pToggle")}</p>
@@ -3033,6 +3087,66 @@ function P2pCard() {
         >
           <p className="text-xs font-bold text-ink">{tr("engineServerlessTitle")}</p>
           <p className="md-body-small text-ink-muted"><RichBidi text={tr("engineServerlessBody")} /></p>
+
+          {/* Option 0 — the zero-install in-browser engine: one switch, one
+              test button. The only path that needs NO install and NO hosting. */}
+          <div className="space-y-2.5 rounded-[var(--md-sys-shape-corner-medium)] border border-accent/30 bg-accent/5 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Globe2 className="w-4 h-4 text-accent" aria-hidden />
+                <p className="text-xs font-bold text-ink">{tr("browserEngineTitle")}</p>
+              </div>
+              <Switch
+                checked={browserEnabled}
+                onCheckedChange={(v) => update({ browserEngineEnabled: v })}
+                aria-label={tr("browserEngineToggle")}
+              />
+            </div>
+            <p className="md-body-small text-ink-muted"><RichBidi text={tr("browserEngineBody")} /></p>
+            {deviceSupport !== null && !deviceSupport.supported && (
+              <p
+                className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] px-3 py-2 text-[11px] font-semibold text-[var(--md-sys-color-on-error-container)]"
+                role="note"
+              >
+                <CircleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
+                <span className="flex-1"><RichBidi text={tr("browserEngineDeviceUnsupported")} /></span>
+              </p>
+            )}
+            {deviceSupport !== null && deviceSupport.supported && (deviceClass === "console" || deviceClass === "tv") && (
+              <p className="text-[11px] text-ink-muted"><RichBidi text={tr("browserEngineConsoleNote")} /></p>
+            )}
+            {deviceSupport !== null && deviceSupport.supported && (
+              <>
+                <div>
+                  <Button variant="outline" onClick={() => void runBrowserTest()} disabled={browserTest === "testing"}>
+                    {browserTest === "testing" ? (
+                      <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 me-1.5" />
+                    )}
+                    {tr("browserEngineTest")}
+                  </Button>
+                </div>
+                {browserTestMsg && (
+                  <p
+                    className={cn(
+                      "text-[11px] leading-relaxed",
+                      browserTest === "ok"
+                        ? "font-semibold text-emerald-400"
+                        : browserTest === "fail"
+                          ? "text-amber-400"
+                          : "text-ink-muted",
+                    )}
+                    role="status"
+                  >
+                    <RichBidi text={browserTestMsg} />
+                  </p>
+                )}
+              </>
+            )}
+            <p className="text-[11px] text-ink-subtle"><RichBidi text={tr("browserEngineLimits")} /></p>
+          </div>
+
           <ul className="space-y-2.5">
             <li className="flex gap-2 text-xs text-ink-muted">
               <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" aria-hidden />

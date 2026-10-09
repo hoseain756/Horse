@@ -126,6 +126,9 @@ export type Stream = {
   cached?: Record<string, boolean>;
   /** Set when picked for playback via the server-side P2P torrent engine. */
   p2p?: { key: string; fileIdx: number; infoHash: string; mode: "native" | "remux" | "unknown" };
+  /** Set when picked for playback via the IN-BROWSER engine (WebTorrent in
+   *  the page — zero install; renders via MSE, no URL is involved). */
+  p2pBrowser?: { infoHash: string; fileIdx: number | null; filename: string | null };
 };
 
 export type ParsedStreamInfo = {

@@ -351,6 +351,82 @@ export const APP_STRINGS = {
     en: "Want it always-on without leaving your computer on? Oracle's free tier runs the engine 24/7 for $0 — step-by-step guide inside.",
     ar: "تريده دائماً في الخدمة دون إبقاء كمبيوترك شغّالاً؟ الطبقة المجانية من Oracle تشغّل المحرك 24/7 بـ $0 — الدليل خطوة بخطوة بالداخل.",
   },
+  // ---- in-browser engine (WebTorrent — zero install) ----
+  browserEngineTitle: { en: "In-browser engine — zero install", ar: "محرك داخل المتصفح — بدون تثبيت" },
+  browserEngineBody: {
+    en: "Turn this browser itself into the torrent engine: nothing to install, nothing to host, one switch. It joins the swarm over WebRTC and plays straight in the player.",
+    ar: "حوّل هذا المتصفح نفسه إلى محرك تورنت: لا شيء لتثبيته ولا شيء لاستضافته — مفتاح واحد فقط. ينضم إلى السرب عبر WebRTC ويشغّل الفيديو داخل المشغّل مباشرة.",
+  },
+  browserEngineToggle: { en: "Play torrents in this browser", ar: "تشغيل التورنتات داخل هذا المتصفح" },
+  browserEngineChip: { en: "Browser engine", ar: "محرك المتصفح" },
+  browserEngineTest: { en: "Test it now (one click)", ar: "جرّبه الآن (بضغطة واحدة)" },
+  browserEngineTestLoading: { en: "Loading the engine and contacting trackers…", ar: "جارٍ تحميل المحرك والاتصال بالتتبّعات…" },
+  browserEngineTestSwarm: { en: "Joining a real swarm — web peers so far:", ar: "جارٍ الانضمام إلى سرب حقيقي — أقران الويب حتى الآن:" },
+  browserEngineTestOk: {
+    en: "It works — reached real web peers from this network. Torrent streams with web peers will now play right here.",
+    ar: "يعمل — تم الوصول إلى أقران ويب حقيقيين من هذه الشبكة. تدفقات التورنت التي لديها أقران ويب ستُشغَّل هنا مباشرة.",
+  },
+  browserEngineTestNoPeers: {
+    en: "No web peers answered within 25s — the network may block WebRTC or the probe swarm is quiet. Real torrents may still work; the player shows live peer counts either way.",
+    ar: "لم يستجب أي أقران ويب خلال 25 ثانية — قد تحجب الشبكة WebRTC أو أن سرب الاختبار هادئ. قد تعمل التورنتات الحقيقية مع ذلك؛ سيعرض المشغّل عدّاد الأقران مباشرة في الحالتين.",
+  },
+  browserEngineTestLoadFailed: {
+    en: "Could not load the engine script (CDN blocked by network/filtering?) — check the connection and try again.",
+    ar: "تعذّر تحميل سكربت المحرك (شبكة/فلترة تحجب CDN؟) — تحقق من الاتصال وحاول مجدداً.",
+  },
+  browserEngineDeviceUnsupported: {
+    en: "This browser doesn't expose WebRTC data channels + MSE, so the in-browser engine can't run here (typical for PlayStation and older TV browsers).",
+    ar: "متصفح هذا الجهاز لا يوفر قنوات WebRTC و MSE، لذا لا يمكن تشغيل المحرك داخل المتصفح هنا (الشائع في بلايستيشن ومتصفحات التلفاز القديمة).",
+  },
+  browserEngineConsoleNote: {
+    en: "Console/TV browsers are limited: this may or may not work here — the test button is the truth. A computer or Android in the same home is the reliable engine host.",
+    ar: "متصفحات الكونسول/التلفاز محدودة: قد يعمل هذا هنا أو لا — زر الاختبار هو الفيصل. كمبيوتر أو أندرويد في المنزل نفسه هو المضيف الموثوق للمحرك.",
+  },
+  browserEngineLimits: {
+    en: "Honest limits: a browser only reaches “web peers” (WebRTC/WSS) — a subset of every swarm — and can't remux MKV or decode HEVC. The file downloads fully before playback starts (live progress shown). mp4/H.264 works best; MKV/HEVC need the engine app or debrid.",
+    ar: "حدود صادقة: المتصفح يصل فقط إلى «أقران الويب» (WebRTC/WSS) — جزء من كل سرب — ولا يستطيع تحويل MKV أو فك ترميز HEVC. يكتمل تنزيل الملف قبل بدء التشغيل (مع عرض التقدم مباشرة). إصدارات mp4/H.264 تعمل بأفضل شكل؛ أما MKV/HEVC فتحتاج تطبيق المحرك أو debrid.",
+  },
+  browserEngineJoining: { en: "Starting the in-browser engine…", ar: "جارٍ تشغيل المحرك داخل المتصفح…" },
+  browserEngineHevc: {
+    en: "This release is HEVC — the in-browser engine can't decode it. Debrid or the engine app unlocks it.",
+    ar: "هذا الإصدار بصيغة HEVC — المحرك داخل المتصفح لا يستطيع فك ترميزها. debrid أو تطبيق المحرك يفتحها.",
+  },
+  browserEngineContainer: {
+    en: "This file is MKV/AVI — the in-browser engine can't remux containers. mp4 releases play; MKV needs the engine app or debrid.",
+    ar: "هذا الملف بصيغة MKV/AVI — المحرك داخل المتصفح لا يستطيع تحويل الحاويات. إصدارات mp4 تعمل؛ أما MKV فتحتاج تطبيق المحرك أو debrid.",
+  },
+  browserEngineErrNoWebrtc: {
+    en: "This browser can't run the in-browser engine (no WebRTC data channels).",
+    ar: "لا يمكن لهذا المتصفح تشغيل المحرك داخل المتصفح (لا توجد قنوات WebRTC).",
+  },
+  browserEngineErrLoadFailed: {
+    en: "Couldn't load the in-browser engine script — the network may block the CDN.",
+    ar: "تعذّر تحميل سكربت المحرك داخل المتصفح — قد تحجب الشبكة CDN.",
+  },
+  browserEngineErrNoPeers: {
+    en: "No web peers answered — this torrent has no browser-reachable peers right now. Try the engine app or debrid.",
+    ar: "لم يستجب أي أقران ويب — لا يوجد لهذا التورنت أقران يمكن للمتصفح الوصول إليهم حالياً. جرّب تطبيق المحرك أو debrid.",
+  },
+  browserEngineErrMetadataTimeout: {
+    en: "Peers connected but the torrent metadata never arrived — the swarm is too quiet for the in-browser engine.",
+    ar: "اتصل أقران لكن بيانات التورنت لم تصل — السرب هادئ جداً بالنسبة للمحرك داخل المتصفح.",
+  },
+  browserEngineErrUnsupportedContainer: {
+    en: "This file's container can't play in the browser — only mp4/webm streams without remux.",
+    ar: "لا يمكن تشغيل حاوية هذا الملف في المتصفح — البث المباشر لملفات mp4/webm فقط.",
+  },
+  browserEngineErrNoVideoFile: {
+    en: "No video file found in this torrent.",
+    ar: "لم يُعثر على ملف فيديو في هذا التورنت.",
+  },
+  browserEngineErrRenderFailed: {
+    en: "The browser couldn't render this stream — the codecs may be unsupported.",
+    ar: "لم يستطع المتصفح عرض هذا البث — قد تكون الترميزات غير مدعومة.",
+  },
+  p2pBannerBrowser: {
+    en: "Torrents play through the in-browser engine (web peers over WebRTC) — zero install. Connect debrid for instant cached links.",
+    ar: "تعمل التورنتات عبر المحرك داخل المتصفح (أقران ويب عبر WebRTC) — بدون أي تثبيت. اربط debrid للحصول على روابط مخزنة فورية.",
+  },
   oneClickTitle: { en: "One-click start (computers)", ar: "تشغيل بضغطة واحدة (أجهزة الكمبيوتر)" },
   oneClickDesc: {
     en: "First time only: download the installer and run it once — it installs a small engine on this computer and registers the horse-engine:// trigger. After that, the Start button launches it and tests it automatically.",

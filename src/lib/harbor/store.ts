@@ -67,6 +67,9 @@ export type PlayerPayload = {
   resumeAt?: number;
   /** Set when the source is the server-side P2P torrent engine (drives the stats HUD). */
   p2p?: { key: string; fileIdx: number; infoHash: string; mode: "native" | "remux" | "unknown" };
+  /** Set when the source is the IN-BROWSER engine (WebTorrent renders into the
+   *  <video> via MSE — no URL; stats arrive through the engine's callbacks). */
+  p2pBrowser?: { infoHash: string; fileIdx: number | null; filename: string | null };
   /** The originating addon stream object — powers the proxy/convert ladder and fallback. */
   stream?: import("./types").Stream;
   /**

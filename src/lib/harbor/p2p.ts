@@ -225,6 +225,13 @@ export function p2pEngineAvailable(force = false): Promise<boolean> {
     engineProbe = { ok: false, at: Date.now() };
     return Promise.resolve(false);
   }
+  // In-browser engine mode: the PAGE itself is the engine — there is no
+  // server engine to probe (probing would hit the gateway's XTransformPort
+  // and stall/differ per host; the engine's own attach() verifies the swarm).
+  if (mode === "browser") {
+    engineProbe = { ok: false, at: Date.now() };
+    return Promise.resolve(false);
+  }
   if (mode === "external") void primeEngineMedia();
   const now = Date.now();
   if (!force && engineProbe && now - engineProbe.at < (engineProbe.ok ? 300_000 : 60_000)) {

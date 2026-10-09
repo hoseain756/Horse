@@ -34,7 +34,10 @@ export function middleware(req: NextRequest): NextResponse {
     "media-src 'self' data: blob: https: http:",
     "connect-src 'self' *", // addon catalogs/streams are user-supplied remote hosts
     "style-src 'self' 'unsafe-inline'", // Next injects inline styles
-    "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : ""),
+    // cdn.jsdelivr.net + unpkg.com: the in-browser torrent engine (WebTorrent)
+    // is loaded on demand from its official CDN bundle — zero bundle-weight
+    // for users who never enable it, and no node polyfill maze for the bundler.
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com" + (process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : ""),
     "font-src 'self' data:",
     "frame-ancestors 'none'",
     "base-uri 'self'",
