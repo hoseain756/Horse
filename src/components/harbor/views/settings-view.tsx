@@ -4,13 +4,14 @@
 
 // Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut } from "lucide-react";
+import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
 import { RichBidi } from "../common/bidi";
 import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
 import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
-import { useHorseAccount } from "@/lib/harbor/horse-account";
+import { useHorseAccount, fetchDevices, revokeDevice, exportAccountData, type DeviceRow } from "@/lib/harbor/horse-account";
+import type { MergeStrategy } from "@/lib/harbor/cloud-sync";
 import { usePwa } from "@/lib/harbor/pwa";
 import {
   THEME_PRESETS,
@@ -43,6 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -1093,7 +1095,18 @@ function DataPanel() {
   );
 }
 
-// ---------- HORSE platform account card ----------
+// ---------- HORSE platform account card (v2: email auth + devices + export) ----------
+type MergeChoice = MergeStrategy;
+
+function passwordStrength(pw: string): 0 | 1 | 2 | 3 {
+  if (pw.length < 10) return 0;
+  let score = 1;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw) && (/\d/.test(pw) || /[^A-Za-z0-9]/.test(pw))) score++;
+  if (pw.length >= 16 && /[^A-Za-z0-9]/.test(pw) && /\d/.test(pw)) score++;
+  return Math.min(3, score) as 0 | 1 | 2 | 3;
+}
+
 function HorseAccountCard() {
   const t = useT();
   const user = useHorseAccount((s) => s.user);
@@ -1102,39 +1115,91 @@ function HorseAccountCard() {
   const registerAction = useHorseAccount((s) => s.register);
   const loginAction = useHorseAccount((s) => s.login);
   const logoutAction = useHorseAccount((s) => s.logout);
+  const logoutAllAction = useHorseAccount((s) => s.logoutAllDevices);
   const deleteAccountAction = useHorseAccount((s) => s.deleteAccount);
   const pullAccountNow = useHorseAccount((s) => s.pullAccountNow);
+  const changePasswordAction = useHorseAccount((s) => s.changePassword);
   const { toast } = useToast();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // merge-strategy dialog state (one-time on login)
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeChoice, setMergeChoice] = useState<MergeChoice>("merge");
+  const [mergeOverwrite, setMergeOverwrite] = useState(false);
+  const [pendingCreds, setPendingCreds] = useState<{ email: string; password: string } | null>(null);
+
+  // devices / dialogs (signed-in)
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [devices, setDevices] = useState<DeviceRow[] | null>(null);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
 
   useEffect(() => {
     void useHorseAccount.getState().load();
   }, []);
 
+  useEffect(() => {
+    if (devicesOpen) {
+      void fetchDevices().then((r) => setDevices(r.devices ?? []));
+    }
+  }, [devicesOpen]);
+
+  const hasLocalData = () => {
+    try {
+      const addons = window.localStorage.getItem("harbor-web.installed-addons");
+      return !!addons && addons !== "[]";
+    } catch {
+      return false;
+    }
+  };
+
+  const runLogin = async (em: string, pw: string, strategy: MergeStrategy) => {
+    const res = await loginAction(em, pw, strategy, remember);
+    if (res.ok) {
+      setMergeOpen(false);
+      setMergeOverwrite(false);
+      setPendingCreds(null);
+      toast({
+        title: t("accountToastSignedIn", { name: em }),
+        description:
+          res.pulled && res.pulled > 0 ? t("accountToastPulled", { n: res.pulled }) : t("accountToastUpToDate"),
+      });
+      setPassword("");
+    } else {
+      setMergeOpen(false);
+      setPendingCreds(null);
+      setError(res.error ?? t("accountErrSignIn"));
+    }
+  };
+
   const submit = async () => {
-    const uname = username.trim().toLowerCase();
-    if (!uname || !password || busy) return;
+    const em = email.trim().toLowerCase();
+    if (!em || !password || busy) return;
     setError(null);
     if (mode === "login") {
-      const res = await loginAction(uname, password);
-      if (res.ok) {
-        toast({
-          title: t("accountToastSignedIn", { name: uname }),
-          description:
-            res.pulled && res.pulled > 0
-              ? t("accountToastPulled", { n: res.pulled })
-              : t("accountToastUpToDate"),
-        });
-        setPassword("");
-      } else {
-        setError(res.error ?? t("accountErrSignIn"));
+      // One-time merge decision when this device already has local data (spec).
+      if (hasLocalData()) {
+        setMergeChoice("merge");
+        setPendingCreds({ email: em, password });
+        setMergeOpen(true);
+        return;
       }
+      await runLogin(em, password, "merge");
     } else {
-      const res = await registerAction(uname, password);
+      if (passwordStrength(password) === 0) {
+        setError(t("accountErrPasswordShort"));
+        return;
+      }
+      const res = await registerAction(em, password, displayName.trim() || undefined);
       if (res.ok) {
         toast({
           title: t("accountToastCreated"),
@@ -1152,6 +1217,11 @@ function HorseAccountCard() {
     toast({ title: t("accountToastSignedOut"), description: t("accountToastSignedOutDesc") });
   };
 
+  const signOutAll = async () => {
+    await logoutAllAction();
+    toast({ title: t("accountToastSignedOut"), description: t("devicesToastRevoked") });
+  };
+
   const removeAccount = async () => {
     const res = await deleteAccountAction();
     if (res.ok) {
@@ -1167,12 +1237,46 @@ function HorseAccountCard() {
       toast({
         title: t("accountToastSyncedTitle"),
         description:
-          res.pulled && res.pulled > 0
-            ? t("accountToastPulled", { n: res.pulled })
-            : t("accountToastUpToDate"),
+          res.pulled && res.pulled > 0 ? t("accountToastPulled", { n: res.pulled }) : t("accountToastUpToDate"),
       });
     } else {
       toast({ title: t("accountToastSyncFailed"), description: res.error ?? t("accountTryAgain"), variant: "destructive" });
+    }
+  };
+
+  const doExport = async () => {
+    const res = await exportAccountData();
+    if (res.ok) toast({ title: t("exportDone") });
+    else toast({ title: t("exportFailed"), description: res.error, variant: "destructive" });
+  };
+
+  const doChangePassword = async () => {
+    if (pwNew.length < 10) {
+      toast({ title: t("accountErrPasswordShort"), variant: "destructive" });
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      toast({ title: t("accountErrPasswordMismatch"), variant: "destructive" });
+      return;
+    }
+    const res = await changePasswordAction(pwCurrent, pwNew);
+    if (res.ok) {
+      setPwOpen(false);
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+      toast({ title: t("passwordDone") });
+    } else {
+      toast({ title: t("passwordTitle"), description: res.error ?? t("accountErrGeneric"), variant: "destructive" });
+    }
+  };
+
+  const revokeOne = async (id: string) => {
+    const res = await revokeDevice(id);
+    if (res.ok) {
+      toast({ title: t("devicesToastRevoked") });
+      const r = await fetchDevices();
+      setDevices(r.devices ?? []);
     }
   };
 
@@ -1185,52 +1289,141 @@ function HorseAccountCard() {
     );
   }
 
+  const strength = passwordStrength(password);
+  const strengthColor = ["bg-danger", "bg-amber-400", "bg-emerald-400", "bg-emerald-500"][strength];
+  const strengthLabel = [t("accountStrengthWeak"), t("accountStrengthFair"), t("accountStrengthGood"), t("accountStrengthStrong")][strength];
+
   return (
     <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 relative overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" aria-hidden />
 
       {user ? (
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
-            <span className="w-10 h-10 rounded-full bg-accent text-black font-bold flex items-center justify-center shrink-0 md-title-medium" aria-hidden>
-              {user.username.charAt(0).toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <h3 className="md-title-small text-ink flex items-center gap-2">
-                  <UserRound className="w-4 h-4 text-accent" />
-                  {user.username}
-                </h3>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-ink-muted">
-                  {t("accountSignedInChip")}
-                </span>
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3 min-w-0">
+              <span className="w-10 h-10 rounded-full bg-accent text-black font-bold flex items-center justify-center shrink-0 md-title-medium" aria-hidden>
+                {(user.displayName || user.username).charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <h3 className="md-title-small text-ink flex items-center gap-2">
+                    <UserRound className="w-4 h-4 text-accent" />
+                    {user.displayName || user.username}
+                  </h3>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-ink-muted">
+                    {t("accountSignedInChip")}
+                  </span>
+                  {user.emailVerified ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-emerald-300">
+                      <MailCheck className="w-3 h-3" />
+                      {t("accountVerifyDone")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-amber-500/40 px-2 py-0.5 md-label-small text-amber-300">
+                      <MailWarning className="w-3 h-3" />
+                      <span className="truncate">{t("accountVerifyNotice")}</span>
+                    </span>
+                  )}
+                </div>
+                <p className="md-body-small text-ink-muted truncate max-w-md" dir="ltr">
+                  {user.email}
+                </p>
               </div>
-              <p className="md-body-small text-ink-muted max-w-md">
-                {t("accountSignedInDesc")}
-              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <Button size="sm" variant="outline" className="gap-1.5 min-h-11" disabled={busy} onClick={() => void syncFromAccount()}>
+                <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin")} />
+                {t("accountSyncNow")}
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5 min-h-11 hover:!text-danger" disabled={busy} onClick={() => void signOut()}>
+                <LogOut className="w-3.5 h-3.5" />
+                {t("accountSignOut")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 min-h-11 hover:!text-danger hover:!border-danger/40"
+                disabled={busy}
+                onClick={() => setConfirmDelete(true)}
+                aria-label={t("accountDelete")}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {t("accountDelete")}
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            <Button size="sm" variant="outline" className="gap-1.5 min-h-11" disabled={busy} onClick={() => void syncFromAccount()}>
-              <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin")} />
-              {t("accountSyncNow")}
-            </Button>
-            <Button size="sm" variant="outline" className="gap-1.5 min-h-11 hover:!text-danger" disabled={busy} onClick={() => void signOut()}>
-              <LogOut className="w-3.5 h-3.5" />
-              {t("accountSignOut")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 min-h-11 hover:!text-danger hover:!border-danger/40"
-              disabled={busy}
-              onClick={() => setConfirmDelete(true)}
-              aria-label={t("accountDelete")}
+
+          {/* management rows: change password / devices / export */}
+          <div className="grid gap-2 sm:grid-cols-3 max-w-2xl">
+            <button
+              type="button"
+              onClick={() => setPwOpen(true)}
+              className="md-state flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-raised px-3 md-body-small text-ink hover:text-accent"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              {t("accountDelete")}
-            </Button>
+              <KeyRound className="w-4 h-4 text-ink-subtle" />
+              {t("passwordTitle")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDevicesOpen((v) => !v)}
+              aria-expanded={devicesOpen}
+              className="md-state flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-raised px-3 md-body-small text-ink hover:text-accent"
+            >
+              <MonitorSmartphone className="w-4 h-4 text-ink-subtle" />
+              {t("devicesTitle")}
+              <ChevronDown className={cn("w-4 h-4 ms-auto transition-transform", devicesOpen && "rotate-180")} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void doExport()}
+              className="md-state flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-raised px-3 md-body-small text-ink hover:text-accent"
+            >
+              <Download className="w-4 h-4 text-ink-subtle" />
+              {t("exportBtn")}
+            </button>
           </div>
+
+          {devicesOpen && (
+            <div className="rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-canvas/40 p-3 max-h-72 overflow-y-auto" role="region" aria-label={t("devicesTitle")}>
+              <p className="md-label-small text-ink-subtle mb-2">{t("devicesDesc")}</p>
+              {devices === null ? (
+                <div className="flex items-center gap-2 py-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-ink-subtle" />
+                  <span className="md-body-small text-ink-subtle">{t("accountLoading")}</span>
+                </div>
+              ) : devices.length === 0 ? (
+                <p className="md-body-small text-ink-subtle">{t("devicesEmpty")}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {devices.map((d) => (
+                    <li key={d.id} className="flex items-center gap-2 flex-wrap rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-raised px-3 py-2">
+                      <MonitorSmartphone className="w-4 h-4 text-ink-subtle shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="md-body-small text-ink truncate" dir="ltr">
+                          {d.device}
+                          {d.current && <span className="text-accent"> · {t("devicesCurrent")}</span>}
+                        </p>
+                        <p className="md-label-small text-ink-subtle" dir="auto">
+                          {t("devicesLastSeen", { when: t.ago(new Date(d.lastSeenAt).getTime()) })}
+                        </p>
+                      </div>
+                      {!d.current && (
+                        <Button size="sm" variant="outline" className="min-h-9 hover:!text-danger" onClick={() => void revokeOne(d.id)}>
+                          {t("devicesSignOut")}
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {devices && devices.length > 1 && (
+                <Button size="sm" variant="outline" className="mt-2 min-h-11 hover:!text-danger" onClick={() => void signOutAll()}>
+                  <LogOut className="w-3.5 h-3.5" />
+                  {t("devicesSignOutAll")}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -1280,34 +1473,73 @@ function HorseAccountCard() {
           </div>
 
           <div className="grid gap-2.5 sm:grid-cols-2 max-w-xl">
-            <div>
-              <label htmlFor="horse-username" className="md-label-medium text-ink-muted mb-1 block">{t("accountUsername")}</label>
+            <div className="sm:col-span-2">
+              <label htmlFor="horse-email" className="md-label-medium text-ink-muted mb-1 block">{t("accountEmail")}</label>
               <input
-                id="horse-username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="horse-email"
+                type="email"
+                inputMode="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void submit()}
                 className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
-                placeholder={t("accountUsernamePlaceholder")}
-                autoComplete="username"
-                maxLength={24}
+                placeholder={t("accountEmailPlaceholder")}
+                autoComplete={mode === "login" ? "email" : "email"}
+                maxLength={254}
                 spellCheck={false}
+                dir="ltr"
               />
             </div>
-            <div>
+            {mode === "register" && (
+              <div className="sm:col-span-2">
+                <label htmlFor="horse-display" className="md-label-medium text-ink-muted mb-1 block">{t("accountDisplayName")}</label>
+                <input
+                  id="horse-display"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void submit()}
+                  className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                  placeholder={t("accountDisplayNamePlaceholder")}
+                  autoComplete="nickname"
+                  maxLength={40}
+                />
+              </div>
+            )}
+            <div className="sm:col-span-2">
               <label htmlFor="horse-password" className="md-label-medium text-ink-muted mb-1 block">{t("accountPassword")}</label>
-              <input
-                id="horse-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void submit()}
-                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
-                placeholder="••••••••"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                maxLength={128}
-              />
+              <div className="relative">
+                <input
+                  id="horse-password"
+                  type={showPw ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void submit()}
+                  className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink pe-11"
+                  placeholder="••••••••••"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  maxLength={128}
+                  aria-describedby="horse-password-hint"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute end-1.5 top-1/2 -translate-y-1/2 md-icon-btn !w-8 !h-8"
+                  aria-label={showPw ? t("accountHidePassword") : t("accountShowPassword")}
+                >
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {mode === "register" && password.length > 0 && (
+                <div className="mt-1.5" aria-live="polite">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 rounded-full bg-raised overflow-hidden" role="progressbar" aria-label={t("accountStrengthLabel")} aria-valuenow={strength} aria-valuemin={0} aria-valuemax={3}>
+                      <div className={cn("h-full rounded-full transition-all", strengthColor)} style={{ width: `${((strength + 1) / 4) * 100}%` }} />
+                    </div>
+                    <span className="md-label-small text-ink-subtle w-14 text-end">{strengthLabel}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1321,16 +1553,160 @@ function HorseAccountCard() {
             <button
               type="button"
               onClick={() => void submit()}
-              disabled={busy || !username.trim() || !password}
+              disabled={busy || !email.trim() || !password}
               className="md-btn-filled inline-flex items-center gap-2 min-h-11 px-5 disabled:opacity-50"
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />}
               {mode === "login" ? t("accountBtnSignIn") : t("accountBtnCreate")}
             </button>
-            <span className="md-label-small text-ink-subtle">{t("accountPasswordHint")}</span>
+            <span id="horse-password-hint" className="md-label-small text-ink-subtle">{t("accountPasswordHint")}</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 flex-wrap max-w-xl">
+            <label className="flex items-center gap-2 md-label-medium text-ink-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 accent-[var(--md-sys-color-primary)]"
+              />
+              {t("accountRememberDevice")}
+            </label>
+            {mode === "login" && (
+              <ForgotPasswordLink onDone={(msg, bad) => bad ? toast({ title: msg, variant: "destructive" }) : toast({ title: msg })} />
+            )}
           </div>
         </div>
       )}
+
+      {/* Merge-strategy dialog (spec: one-time decision on first login with local data) */}
+      <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setPendingCreds(null); } }}>
+        <DialogContent className="md-dialog max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-start">
+              <DownloadCloud className="w-4 h-4 text-accent" />
+              {t("mergeTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-start">{t("mergeDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2" role="radiogroup" aria-label={t("mergeTitle")}>
+            {([
+              ["merge", t("mergeOptMerge"), t("mergeOptMergeDesc"), true],
+              ["account", t("mergeOptAccount"), t("mergeOptAccountDesc"), false],
+              ["local", t("mergeOptLocal"), t("mergeOptLocalDesc"), false],
+            ] as [MergeChoice, string, string, boolean][]).map(([value, title, desc, recommended]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={mergeChoice === value}
+                onClick={() => setMergeChoice(value)}
+                className={cn(
+                  "md-state w-full text-start rounded-[var(--md-sys-shape-corner-small)] border px-3 py-2.5 min-h-11",
+                  mergeChoice === value ? "border-accent bg-accent-soft/40" : "border-edge-soft bg-raised",
+                )}
+              >
+                <span className="flex items-center gap-2 md-label-large text-ink">
+                  {title}
+                  {recommended && <span className="rounded-full bg-accent/20 text-accent px-2 py-0.5 md-label-small">★</span>}
+                </span>
+                <span className="block md-body-small text-ink-muted mt-0.5">{desc}</span>
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="min-h-11" onClick={() => { setMergeOpen(false); setPendingCreds(null); }}>
+              {t("accountCancel")}
+            </Button>
+            <Button className="min-h-11 md-btn-filled" onClick={() => {
+              if (!pendingCreds) return;
+              if (mergeChoice === "local") {
+                setMergeOverwrite(true);
+                return;
+              }
+              void runLogin(pendingCreds.email, pendingCreds.password, mergeChoice);
+            }}>
+              {t("mergeConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Overwrite-account confirmation (local-wins) */}
+      <AlertDialog open={mergeOverwrite} onOpenChange={setMergeOverwrite}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("mergeOverwriteConfirm")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("mergeOverwriteDesc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11">{t("accountCancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+              onClick={() => {
+                setMergeOverwrite(false);
+                if (pendingCreds) void runLogin(pendingCreds.email, pendingCreds.password, "local");
+              }}
+            >
+              {t("mergeOverwriteBtn")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Change-password dialog */}
+      <Dialog open={pwOpen} onOpenChange={setPwOpen}>
+        <DialogContent className="md-dialog max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-start">
+              <KeyRound className="w-4 h-4 text-accent" />
+              {t("passwordTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-start">{t("accountResetDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div>
+              <label htmlFor="pw-current" className="md-label-medium text-ink-muted mb-1 block">{t("passwordCurrent")}</label>
+              <input
+                id="pw-current"
+                type="password"
+                value={pwCurrent}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
+              <label htmlFor="pw-new" className="md-label-medium text-ink-muted mb-1 block">{t("passwordNew")}</label>
+              <input
+                id="pw-new"
+                type="password"
+                value={pwNew}
+                onChange={(e) => setPwNew(e.target.value)}
+                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label htmlFor="pw-confirm" className="md-label-medium text-ink-muted mb-1 block">{t("passwordConfirm")}</label>
+              <input
+                id="pw-confirm"
+                type="password"
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="min-h-11" onClick={() => setPwOpen(false)}>{t("accountCancel")}</Button>
+            <Button className="min-h-11 md-btn-filled" disabled={busy || !pwCurrent || pwNew.length < 10} onClick={() => void doChangePassword()}>
+              {t("passwordBtn")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete-account confirmation (danger) */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -1357,6 +1733,68 @@ function HorseAccountCard() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// Forgot-password inline dialog trigger (sign-in mode)
+function ForgotPasswordLink({ onDone }: { onDone: (msg: string, bad?: boolean) => void }) {
+  const t = useT();
+  const forgotAction = useHorseAccount((s) => s.forgotPassword);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    const em = email.trim().toLowerCase();
+    if (!em || busy) return;
+    setBusy(true);
+    const res = await forgotAction(em);
+    setBusy(false);
+    if (res.ok) {
+      setOpen(false);
+      onDone(t("accountForgotDone"));
+    } else {
+      onDone(res.error ?? t("accountForgotUnavailable"), true);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="md-label-medium text-accent hover:underline underline-offset-4 min-h-9"
+      >
+        {t("accountForgotPassword")}
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="md-dialog max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-start">{t("accountForgotTitle")}</DialogTitle>
+            <DialogDescription className="text-start">{t("accountForgotDesc")}</DialogDescription>
+          </DialogHeader>
+          <input
+            type="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void send()}
+            className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+            placeholder={t("accountEmailPlaceholder")}
+            aria-label={t("accountEmail")}
+            dir="ltr"
+            maxLength={254}
+          />
+          <DialogFooter>
+            <Button variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>{t("accountCancel")}</Button>
+            <Button className="min-h-11 md-btn-filled" disabled={busy || !email.trim()} onClick={() => void send()}>
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+              {t("accountForgotSend")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1389,14 +1827,14 @@ function CloudSyncCard() {
           ? "bg-danger"
           : "bg-ink-subtle";
   const statusLabel = !enabled
-    ? "Off"
+    ? t("syncStatusOff")
     : status === "synced"
-      ? "Up to date"
+      ? t("syncStatusSynced")
       : status === "syncing"
-        ? "Syncing…"
+        ? t("syncStatusSyncing")
         : status === "error"
-          ? "Sync error"
-          : "Idle";
+          ? t("syncStatusError")
+          : t("syncStatusIdle");
 
   return (
     <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 relative overflow-hidden">
@@ -1405,7 +1843,7 @@ function CloudSyncCard() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {enabled ? <CloudUpload className="w-4 h-4 text-accent" /> : <CloudOff className="w-4 h-4 text-ink-subtle" />}
-            <h3 className="md-title-small text-ink">Cloud sync</h3>
+            <h3 className="md-title-small text-ink">{t("cloudSyncTitle")}</h3>
             <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-ink-muted")}>
               <span className={cn("w-1.5 h-1.5 rounded-full", dot)} aria-hidden />
               {statusLabel}
@@ -1430,7 +1868,7 @@ function CloudSyncCard() {
             checked={enabled}
             onCheckedChange={(v) => {
               update({ cloudSyncEnabled: v });
-              toast({ title: v ? "Cloud sync enabled" : "Cloud sync disabled", description: v ? "A first sync will start now." : "Local data stays untouched." });
+              toast({ title: v ? t("cloudSyncTitle") : t("cloudSyncTitle"), description: v ? t("syncStatusSyncing") : t("syncStatusOff") });
               if (v) setTimeout(() => void useCloudSync.getState().boot(), 300);
             }}
             aria-label="Toggle cloud sync"

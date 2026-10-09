@@ -13,6 +13,7 @@ import {
 } from "./settings";
 import { Addon, parseAddonUrl } from "./types";
 import { sanitizeStoredProbe, type StoredProbe } from "./addon-probe";
+import { recordAddonRemoval, clearAddonRemoval } from "./tombstones";
 
 // ---------- View / navigation ----------
 export type View =
@@ -246,11 +247,13 @@ export const useAddons = create<AddonsState>((set, get) => ({
     };
     const next = [...existing, rec];
     persistAddons(next);
+    clearAddonRemoval(manifest.id); // re-installed → drop any tombstone
     set({ addons: next });
   },
   uninstall: (addonId) => {
     const next = get().addons.filter((a) => a.manifest.id !== addonId);
     persistAddons(next);
+    recordAddonRemoval(addonId); // tombstone so other devices don't resurrect it
     set({ addons: next });
   },
   setEnabled: (addonId, enabled) => {

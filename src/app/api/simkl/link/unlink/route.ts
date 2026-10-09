@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
+import { resolveSession } from "@/lib/harbor/auth/session";
 import { resolveLinkedAccount } from "@/lib/harbor/link-resolve";
 
 export const runtime = "nodejs";
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
-  const account = await resolveLinkedAccount(linkId).catch(() => null);
+  const session = await resolveSession(req);
+  const account = session ? await resolveLinkedAccount(linkId, session.uid).catch(() => null) : null;
   if (!account || account.provider !== "simkl") {
     return NextResponse.json({ ok: true, note: "already unlinked" });
   }

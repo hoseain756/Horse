@@ -10,6 +10,8 @@ import { installTvNavigation } from "@/lib/harbor/tvnav";
 import { useAuth } from "@/lib/harbor/auth";
 import { useCloudSync, installCloudSyncListeners } from "@/lib/harbor/cloud-sync";
 import { usePwa } from "@/lib/harbor/pwa";
+import { useHorseAccount } from "@/lib/harbor/horse-account";
+import { ResetPasswordDialog } from "./reset-password-dialog";
 import { GlassDock } from "./glass-dock";
 import { ArabicTextLayer } from "./ar-text-layer";
 import { FloatingSearch, focusFloatingSearch } from "./floating-search";
@@ -130,18 +132,52 @@ export function AppShell() {
   const tr = useT();
   const loadAuth = useAuth((s) => s.load);
   const authLoaded = useAuth((s) => s.loaded);
+  const accountLoaded = useHorseAccount((s) => s.loaded);
   const loaded = useSettings((s) => s.loaded);
   const { toast } = useToast();
   useEffect(() => {
     loadAuth();
   }, [loadAuth]);
 
-  // Cloud sync: pull once stores + auth state have hydrated, then keep pushing mutations
+  // HORSE account: silent session restore at boot (hashed-DB session via
+  // httpOnly cookie). /api/auth/me also transparently upgrades a legacy
+  // stateless cookie and applies the sliding renewal. Guest data is never
+  // touched when the session has expired — the card simply shows signed-out.
   useEffect(() => {
-    if (!loaded || !authLoaded) return;
+    void useHorseAccount.getState().load();
+  }, []);
+
+  // Hash deep links: #verify=<token> / #reset=<token> (email flows)
+  useEffect(() => {
+    const handleHash = () => {
+      const h = window.location.hash || "";
+      const verify = /^#verify=(.+)$/.exec(h);
+      const reset = /^#reset=(.+)$/.exec(h);
+      if (verify) {
+        history.replaceState(null, "", window.location.pathname);
+        void useHorseAccount
+          .getState()
+          .verifyEmail(decodeURIComponent(verify[1]))
+          .then((r) => toast({ title: r.ok ? tr("accountVerifyDone") : r.error || tr("accountVerifyInvalid"), variant: r.ok ? "default" : "destructive" }));
+      } else if (reset) {
+        history.replaceState(null, "", window.location.pathname);
+        const token = decodeURIComponent(reset[1]);
+        window.dispatchEvent(new CustomEvent("harbor:reset-password", { detail: token }));
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, [toast, tr]);
+
+  // Cloud sync: pull once stores + auth state + account restore have hydrated,
+  // then keep pushing mutations. Boot order matters: the account cookie makes
+  // the SERVER switch the bucket to acct:<uid>, so /me must resolve first.
+  useEffect(() => {
+    if (!loaded || !authLoaded || !accountLoaded) return;
     void useCloudSync.getState().boot();
     return installCloudSyncListeners();
-  }, [loaded, authLoaded]);
+  }, [loaded, authLoaded, accountLoaded]);
 
   // PWA: service worker + install prompt capture
   useEffect(() => {
@@ -402,6 +438,7 @@ export function AppShell() {
       <FloatingSearch />
       <CommandPalette />
       <ShortcutsOverlay />
+      <ResetPasswordDialog />
       {sharedTheme && (
         <SharedThemeBanner
           theme={sharedTheme}

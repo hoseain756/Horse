@@ -11,7 +11,8 @@ import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { SIMKL_API, resolveSimklClientId, envSimklClientSecret } from "@/lib/harbor/simkl-server";
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
-import { encryptToken, randomLinkId, getPendingLink, takePendingLink, type PendingLink } from "@/lib/harbor/vault";
+import { encryptSecret, getPendingLink, takePendingLink, type PendingLink } from "@/lib/harbor/vault";
+import { resolveSession } from "@/lib/harbor/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,8 +60,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 }
 
 /** Shared success path: fetch the profile (best-effort) and persist the token
- * encrypted in the vault, keyed on the provider. */
-async function finishAuthorized(accessToken: string, clientId: string): Promise<NextResponse> {
+ * encrypted in the vault, scoped to the SIGNED-IN user (per-account links). */
+async function finishAuthorized(req: NextRequest, accessToken: string, clientId: string): Promise<NextResponse> {
+  const session = await resolveSession(req);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Sign in to your HORSE account to link Simkl (links are saved per account)." },
+      { status: 401 },
+    );
+  }
   let username: string | null = null;
   let avatar: string | null = null;
   try {
@@ -83,13 +91,14 @@ async function finishAuthorized(accessToken: string, clientId: string): Promise<
   } catch {
     /* profile is cosmetic */
   }
-  const linkId = randomLinkId();
-  await db.linkedAccount.upsert({
-    where: { provider: "simkl" },
-    create: { provider: "simkl", accessTokenEnc: encryptToken(accessToken), username, avatar },
-    update: { accessTokenEnc: encryptToken(accessToken), username, avatar },
+  const row = await db.linkedAccount.upsert({
+    where: { provider_ownerUid: { provider: "simkl", ownerUid: session.uid } },
+    create: { ownerUid: session.uid, provider: "simkl", accessTokenEnc: "", username, avatar },
+    update: { username, avatar },
   });
-  return NextResponse.json({ status: "authorized", linkId, username, avatar });
+  const tokenEnc = encryptSecret(accessToken, `link:${row.id}`);
+  await db.linkedAccount.update({ where: { id: row.id }, data: { accessTokenEnc: tokenEnc } });
+  return NextResponse.json({ status: "authorized", linkId: row.id, username, avatar });
 }
 
 /** RFC-8628 device grant (current "OAuth 2.0" Simkl apps). While waiting the
@@ -123,7 +132,7 @@ async function pollOauth2(pollId: string, pending: PendingLink, clientId: string
 
   if (res.ok && data?.access_token) {
     takePendingLink(pollId);
-    return finishAuthorized(data.access_token, clientId);
+    return finishAuthorized(req, data.access_token, clientId);
   }
   const err = `${data?.error ?? ""} ${data?.error_description ?? ""} ${data?.message ?? ""}`.toLowerCase();
   if (err.includes("authorization_pending")) {
@@ -184,7 +193,7 @@ async function pollLegacyPin(pollId: string, pending: PendingLink, clientId: str
 
   if (res.ok && data?.access_token) {
     takePendingLink(pollId);
-    return finishAuthorized(data.access_token, clientId);
+    return finishAuthorized(req, data.access_token, clientId);
   }
   // While pending, Simkl answers 401 with an error body.
   if (res.status === 401) {

@@ -1,9 +1,8 @@
-// POST /api/auth/logout — revokes THIS device's session (DB row deleted) and
-// clears the session cookies. The client pushes one final sync BEFORE calling
-// this (so the account bucket stays fresh), then re-syncs its device bucket.
+// POST /api/auth/logout-all — revokes EVERY session for the current user
+// (all devices, including this one) and clears the cookie.
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/ensure-db";
-import { clearSessionCookie, resolveSession, revokeSession } from "@/lib/harbor/auth/session";
+import { clearSessionCookie, resolveSession, revokeAllSessions } from "@/lib/harbor/auth/session";
 import { audit, clientIp } from "@/lib/harbor/auth/util";
 
 export const runtime = "nodejs";
@@ -15,11 +14,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await ensureDb();
     const session = await resolveSession(req);
     if (session) {
-      await revokeSession(session.id);
-      await audit({ uid: session.uid, event: "logout", ip: clientIp(req) });
+      const count = await revokeAllSessions(session.uid);
+      await audit({ uid: session.uid, event: "logout_all", ip: clientIp(req), detail: { revoked: count } });
     }
   } catch (e) {
-    console.error("auth logout failed", e);
+    console.error("auth logout-all failed", e);
   }
   clearSessionCookie(res);
   return res;

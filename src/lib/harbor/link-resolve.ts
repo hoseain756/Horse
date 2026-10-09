@@ -4,7 +4,7 @@
 // callers use them to talk to the provider API directly.
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
-import { decryptToken } from "@/lib/harbor/vault";
+import { decryptSecret, encryptSecret } from "@/lib/harbor/vault";
 import { TRAKT_OAUTH, envTraktClientId, envTraktClientSecret } from "@/lib/harbor/trakt-server";
 import { SIMKL_API } from "@/lib/harbor/simkl-server";
 
@@ -16,12 +16,15 @@ export type ResolvedAccount = {
   avatar: string | null;
 };
 
-export async function resolveLinkedAccount(linkId: string): Promise<ResolvedAccount | null> {
+export async function resolveLinkedAccount(linkId: string, expectedUid?: string): Promise<ResolvedAccount | null> {
   if (!linkId || linkId.length > 64 || !/^[A-Za-z0-9_-]+$/.test(linkId)) return null;
   await ensureDb(); // create sqlite file + tables on cold serverless instances
   const row = await db.linkedAccount.findUnique({ where: { id: linkId } }).catch(() => null);
   if (!row) return null;
-  const accessToken = decryptToken(row.accessTokenEnc);
+  // Ownership (defense in depth): when the caller has a session, the link row
+  // MUST belong to that user (IDOR protection). BYO-token mode has no row.
+  if (expectedUid && row.ownerUid !== expectedUid) return null;
+  const accessToken = decryptSecret(row.accessTokenEnc, `link:${row.id}`);
   if (!accessToken) return null;
   const provider = row.provider === "simkl" ? "simkl" : "trakt";
 
@@ -40,7 +43,7 @@ export async function resolveLinkedAccount(linkId: string): Promise<ResolvedAcco
 }
 
 async function refreshTrakt(rowId: string, refreshEnc: string): Promise<ResolvedAccount | null> {
-  const refreshToken = decryptToken(refreshEnc);
+  const refreshToken = decryptSecret(refreshEnc, `link:${rowId}`);
   const clientId = envTraktClientId();
   const clientSecret = envTraktClientSecret();
   if (!refreshToken || !clientId) return null;
@@ -62,12 +65,11 @@ async function refreshTrakt(rowId: string, refreshEnc: string): Promise<Resolved
     if (!res.ok) return null;
     const data = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     if (!data.access_token) return null;
-    const { encryptToken } = await import("@/lib/harbor/vault");
     const row = await db.linkedAccount.update({
       where: { id: rowId },
       data: {
-        accessTokenEnc: encryptToken(data.access_token),
-        refreshTokenEnc: data.refresh_token ? encryptToken(data.refresh_token) : undefined,
+        accessTokenEnc: encryptSecret(data.access_token, `link:${rowId}`),
+        refreshTokenEnc: data.refresh_token ? encryptSecret(data.refresh_token, `link:${rowId}`) : undefined,
         expiresAt: new Date(Date.now() + (data.expires_in ?? 90 * 24 * 3600) * 1000),
       },
     });

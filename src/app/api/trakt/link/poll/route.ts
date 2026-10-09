@@ -8,7 +8,8 @@ import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { TRAKT_API, resolveTraktClientId, envTraktClientSecret } from "@/lib/harbor/trakt-server";
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
-import { encryptToken, randomLinkId, getPendingLink, takePendingLink } from "@/lib/harbor/vault";
+import { encryptSecret, getPendingLink, takePendingLink } from "@/lib/harbor/vault";
+import { resolveSession } from "@/lib/harbor/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const pending = getPendingLink(pollId);
   if (!pending || pending.provider !== "trakt") {
     return NextResponse.json({ status: "expired" });
+  }
+  // Per-user links (spec): linking Trakt REQUIRES a signed-in HORSE account —
+  // tokens live under acct:<uid> instead of one global row.
+  const session = await resolveSession(req);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Sign in to your HORSE account to link Trakt (links are saved per account)." },
+      { status: 401 },
+    );
   }
 
   const clientId = await resolveTraktClientId();
@@ -110,27 +120,33 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         /* profile is cosmetic */
       }
 
-      const linkId = randomLinkId();
       const expiresAt = new Date(Date.now() + (data.expires_in ?? 90 * 24 * 3600) * 1000);
-      await db.linkedAccount.upsert({
-        where: { provider: "trakt" },
+      const row = await db.linkedAccount.upsert({
+        where: { provider_ownerUid: { provider: "trakt", ownerUid: session.uid } },
         create: {
+          ownerUid: session.uid,
           provider: "trakt",
-          accessTokenEnc: encryptToken(data.access_token),
-          refreshTokenEnc: data.refresh_token ? encryptToken(data.refresh_token) : null,
+          accessTokenEnc: "",
+          refreshTokenEnc: null,
           expiresAt,
           username,
           avatar,
         },
         update: {
-          accessTokenEnc: encryptToken(data.access_token),
-          refreshTokenEnc: data.refresh_token ? encryptToken(data.refresh_token) : null,
           expiresAt,
           username,
           avatar,
         },
       });
-      return NextResponse.json({ status: "authorized", linkId, username, avatar });
+      // Tokens are bound to the row id (AAD) — write after the row exists so
+      // the envelope's authenticated data covers the stable row identity.
+      const tokenEnc = encryptSecret(data.access_token, `link:${row.id}`);
+      const refreshEnc = data.refresh_token ? encryptSecret(data.refresh_token, `link:${row.id}`) : null;
+      await db.linkedAccount.update({
+        where: { id: row.id },
+        data: { accessTokenEnc: tokenEnc, refreshTokenEnc: refreshEnc },
+      });
+      return NextResponse.json({ status: "authorized", linkId: row.id, username, avatar });
     }
 
     if (res.status === 400) {

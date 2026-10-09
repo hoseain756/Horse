@@ -7,10 +7,12 @@
 //   - Addon rows                                        → per-addon mirror
 //   - LibraryItem rows                                  → watchlist + continue-watching mirror
 // GET prefers the blob; if no blob exists the snapshot is reconstructed from the tables.
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
-import { sessionUid } from "@/lib/harbor/account-auth";
+import { sessionUid } from "@/lib/harbor/auth/session";
+import { decryptSecret, encryptSecret } from "@/lib/harbor/vault";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -92,10 +94,15 @@ type UserList = {
   updatedAt: number;
 };
 
+type RemovedAddon = { id: string; t: number };
+
 type Snapshot = {
   v: 1;
   settings: unknown | null;
   addons: AddonRecordSlim[] | null;
+  /** Tombstones: addons removed on any device — prevents resurrection on
+   * boot-adopt / union merges. Expire after 90 days (client-side GC). */
+  removedAddons: RemovedAddon[];
   cw: Record<string, LocalCwEntry>;
   watchlist: WatchlistEntry[];
   history: unknown[];
@@ -108,6 +115,7 @@ const EMPTY: Snapshot = {
   v: 1,
   settings: null,
   addons: null,
+  removedAddons: [],
   cw: {},
   watchlist: [],
   history: [],
@@ -145,8 +153,8 @@ function deviceKey(device: string): string {
  * across devices instead of staying per-browser. Anonymous requests keep
  * the classic webdevice:<deviceId> bucket.
  */
-function bucketFor(req: NextRequest, device: string): { pid: string; account: boolean } {
-  const uid = sessionUid(req);
+async function bucketFor(req: NextRequest, device: string): Promise<{ pid: string; account: boolean }> {
+  const uid = await sessionUid(req);
   if (uid) return { pid: `acct:${uid}`, account: true };
   return { pid: deviceKey(device), account: false };
 }
@@ -167,6 +175,12 @@ function sanitizeSnapshot(raw: unknown): Snapshot {
   out.watchlist = Array.isArray(s.watchlist) ? (s.watchlist as WatchlistEntry[]) : [];
   out.history = Array.isArray(s.history) ? s.history.slice(0, 500) : [];
   out.lists = sanitizeLists(s.lists);
+  out.removedAddons = Array.isArray(s.removedAddons)
+    ? (s.removedAddons as RemovedAddon[])
+        .slice(0, 200)
+        .filter((r) => r && typeof r.id === "string" && r.id.length <= 128 && typeof r.t === "number")
+        .map((r) => ({ id: r.id, t: r.t }))
+    : [];
   return out;
 }
 
@@ -177,8 +191,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid device id" }, { status: 400 });
   }
   await ensureDb(); // create sqlite file + tables on cold serverless instances
-  const { pid } = bucketFor(req, device);
+  const { pid } = await bucketFor(req, device);
   try {
+    // Cheap freshness check: when the client already has this version
+    // (?since=<updatedAt>), skip all heavy reads and say "unchanged".
+    const since = req.nextUrl.searchParams.get("since");
+    if (since) {
+      const blobOnly = await db.appSettings.findUnique({ where: { profileId: pid }, select: { updatedAt: true } });
+      if (blobOnly && blobOnly.updatedAt.getTime() <= Number(since)) {
+        return NextResponse.json(
+          { unchanged: true, updatedAt: blobOnly.updatedAt.toISOString() },
+          { headers: { "cache-control": "no-store" } },
+        );
+      }
+    }
     const [blob, addons, library, listRows] = await Promise.all([
       db.appSettings.findUnique({ where: { profileId: pid } }),
       db.addon.findMany({ where: { profileId: pid }, orderBy: { order: "asc" } }),
@@ -189,7 +215,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     let snap: Snapshot;
     if (blob) {
       try {
-        snap = sanitizeSnapshot(JSON.parse(blob.data));
+        // Encrypted-at-rest blob (v2); older rows are transparent plaintext.
+        const plain = decryptSecret(blob.data) ?? blob.data;
+        snap = sanitizeSnapshot(JSON.parse(plain));
       } catch {
         snap = { ...EMPTY };
       }
@@ -225,7 +253,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           flags: safeJson<Record<string, unknown> | null>(a.flags, null) ?? undefined,
         };
         return {
-          transportUrl: a.transportUrl,
+          transportUrl: decryptSecret(a.urlEnc, a.id) ?? "",
           enabled: a.enabled,
           order: a.order,
           probe: a.probeOk === null ? undefined : {
@@ -297,26 +325,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "snapshot too large" }, { status: 413 });
   }
   const snap = sanitizeSnapshot(body.snapshot);
-  const { pid } = bucketFor(req, device);
+  const { pid } = await bucketFor(req, device);
   const now = new Date();
   await ensureDb(); // create sqlite file + tables on cold serverless instances
 
   try {
-    // 1) Canonical blob
+    // 1) Canonical blob — ENCRYPTED at rest (it embeds manifest URLs with
+    //    possible debrid keys + the user's TMDB key). Legacy plaintext rows
+    //    are transparently upgraded by this write.
     await db.appSettings.upsert({
       where: { profileId: pid },
-      create: { profileId: pid, data: JSON.stringify(snap) },
-      update: { data: JSON.stringify(snap) },
+      create: { profileId: pid, data: encryptSecret(JSON.stringify(snap)) },
+      update: { data: encryptSecret(JSON.stringify(snap)) },
     });
 
-    // 2) Mirror addons (replace-all per device)
+    // 2) Mirror addons (replace-all per device). transportUrl can embed
+    //    private tokens (debrid keys) — stored ENCRYPTED (urlEnc) bound to
+    //    the row id (AAD), with a sha256 identity hash (urlHash) for the
+    //    unique index.
     const incoming = (snap.addons ?? []).slice(0, 60);
     await db.addon.deleteMany({ where: { profileId: pid } });
     if (incoming.length > 0) {
       await db.addon.createMany({
-        data: incoming.map((a, i) => ({
-          id: `${pid}:${a.manifest.id}`,
-          transportUrl: a.transportUrl,
+        data: incoming.map((a, i) => {
+          const rowId = `${pid}:${a.manifest.id}`;
+          return {
+          id: rowId,
+          urlHash: crypto.createHash("sha256").update(a.transportUrl).digest("hex"),
+          urlEnc: encryptSecret(a.transportUrl, rowId),
           name: a.manifest.name,
           version: a.manifest.version ?? null,
           logo: a.manifest.logo ?? null,
@@ -338,7 +374,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           probeMs: a.probe?.ms ?? null,
           probeError: a.probe?.error ?? null,
           probedAt: a.probe?.probedAt ? new Date(a.probe.probedAt) : null,
-        })),
+          };
+        }),
       });
     }
 

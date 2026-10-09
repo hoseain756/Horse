@@ -14,9 +14,11 @@
 // Install bar: labeled, dir="ltr" (URLs never clip at the start), 56dp Install
 // button stacked below on compact / inline on md+, disabled until a plausible
 // URL. Health pill fully translated (no "checked 5/5").
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Puzzle, Plus, Trash2, ExternalLink, Check, Eye, EyeOff, Activity, Loader2, RefreshCw } from "lucide-react";
 import { useAddons, useNav } from "@/lib/harbor/store";
+import { useHorseAccount } from "@/lib/harbor/horse-account";
+import { UserPlus, X } from "lucide-react";
 import { fetchManifest } from "@/lib/harbor/api";
 import { describeProbe, probeAddon, type StoredProbe } from "@/lib/harbor/addon-probe";
 import { PageHeader } from "../chrome/page-header";
@@ -141,6 +143,7 @@ export function AddonsView() {
   return (
     <div className="pb-16 px-4 md:px-8 max-w-5xl">
       <PageHeader view="addons" />
+      <GuestSyncPrompt />
       <p className="md-body-medium text-ink-muted mb-4 max-w-2xl">
         <RichBidi text={tr("addonsIntro")} />
       </p>
@@ -465,6 +468,69 @@ function AddonCard({
           <Trash2 className="w-4.5 h-4.5" aria-hidden />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------- guest sync prompt (dismissible, once per session) ----------
+function GuestSyncPrompt() {
+  const tr = useT();
+  const user = useHorseAccount((s) => s.user);
+  const loaded = useHorseAccount((s) => s.loaded);
+  const push = useNav((s) => s.push);
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Deferred read (setState-in-effect lint-safe): null = not yet resolved.
+    const id = setTimeout(() => {
+      try {
+        setDismissed(sessionStorage.getItem("harbor-web.guest-prompt") === "off");
+      } catch {
+        setDismissed(false);
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
+
+  if (loaded && user) return null;
+  if (dismissed !== false) return null;
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      sessionStorage.setItem("harbor-web.guest-prompt", "off");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div
+      className="mb-4 flex items-center gap-3 flex-wrap rounded-[var(--md-sys-shape-corner-large)] border border-accent/30 bg-accent-soft/30 px-4 py-3"
+      role="note"
+      aria-label={tr("guestPromptTitle")}
+    >
+      <UserPlus className="w-5 h-5 text-accent shrink-0" aria-hidden />
+      <p className="md-body-small text-ink flex-1 min-w-40">{tr("guestPromptTitle")}</p>
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-h-11 gap-1.5"
+        onClick={() => {
+          push({ kind: "view", view: "settings" });
+          setTimeout(() => window.dispatchEvent(new CustomEvent("harbor:settings-section", { detail: "data" })), 60);
+        }}
+      >
+        {tr("guestPromptCta")}
+      </Button>
+      <button
+        type="button"
+        onClick={dismiss}
+        className="md-icon-btn !w-9 !h-9"
+        aria-label={tr("guestPromptDismiss")}
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }
