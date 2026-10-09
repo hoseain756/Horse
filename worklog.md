@@ -1692,3 +1692,21 @@ Work Log:
 Stage Summary:
 - Root cause one-liner: build-time segment-config static extractor rejects expressions (60*60*3); literals only.
 - Vercel deploy should now pass the "Collecting page data" phase; next likely friction point = none known (env vars renamed to HORSE_* in Task 47, .env.example documents them).
+
+---
+Task ID: 49
+Agent: Z.ai Code (main)
+Task: HORSE platform accounts — native signup/login + cross-device addon sync on login (user request: "إنشاء حساب أو تسجيل الدخول... جلب الإضافات المضافة من جهاز آخر")
+
+Work Log:
+- Design: server-ENFORCED sync bucket. New HorseUser model (scrypt hashes). httpOnly AES-256-GCM session cookie (horse_session, 30d, keyed from HORSE_TOKEN_SECRET:auth-session:v1). /api/sync GET+POST now derive the bucket via bucketFor(): session present → acct:<uid> (client device param ignored — cannot be spoofed); anonymous → legacy webdevice:<deviceId>.
+- New server lib src/lib/harbor/account-auth.ts: scrypt hash/verify (timing-safe), session cookie create/read, username normalize (3–24 [a-z0-9_.-]), password validate (8–128), fixed-window in-memory rate limit per IP.
+- New routes: POST /api/auth/register (409 on taken username), /api/auth/login (generic 401, never reveals username existence), /api/auth/logout, GET /api/auth/me. All runtime nodejs + force-dynamic.
+- Client: cloud-sync.ts gained mergeAccountSnapshotIntoLocal() (addons UNION by transportUrl — local kept, account-only appended; settings/cw/watchlist/history/themes/lists adopt-when-missing — same semantics as boot()) and pushNow(force?) bypass for account flows. New store src/lib/harbor/horse-account.ts: load/register/login/logout/pullAccountNow; login = cookie → merge → push (the cross-device handoff); logout = final acct push → clear → device push.
+- UI: HorseAccountCard in Settings → Data (above Cloud sync card) — signed-out: segmented Sign in/Create account toggle + username/password (min-h-11 touch targets, Enter submits, autocomplete attrs) + honest error alerts; signed-in: avatar initial, username, Signed in chip, Sync now (pull) + Sign out. All strings via i18n APP_STRINGS keys account* (en + ar + arOther plural) — no literal-UI warnings added.
+- OPS: dev server restart REQUIRED after db:push (HorseUser was 500ing on the pre-restart Prisma client — worklog 547 lesson repeated). Also: .next/dev/lock stale after pkill → rm lock + clean single restart. Proven restart pattern held.
+- Verified (curl): register ok; push w/ cookie → acct bucket; authed GET sees acct addon (1), anon GET sees 0; anon push to device bucket invisible to authed GET (0); duplicate register 409; wrong password 401; login ok; me true; logout clears. Verified (agent-browser): card renders in Data tab; UI register → signed-in state + acct bucket seeded (Cloud sync shows Up to date); UI sign out → UI login back. Lint 0 errors. QA users/buckets cleaned after tests.
+
+Stage Summary:
+- Feature complete end-to-end locally. Next: user should commit/push (auto-watcher) then Redeploy on Vercel to ship it; Vercel deployment URL protection (SSO) still needs disabling in dashboard (Task 47/48 context).
+- Known limits (documented): rate limiter is per-instance (serverless multi-instance = per-function); account bucket is SQLite/local on Vercel (/tmp/horse.db ephemeral) — for durable cross-DEVICE sync on Vercel, point HORSE_DATABASE_URL at a hosted DB (Turso/Neon) later.

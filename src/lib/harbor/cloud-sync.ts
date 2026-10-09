@@ -5,7 +5,7 @@
 "use client";
 
 import { create } from "zustand";
-import { useAddons, useSettings } from "./store";
+import { useAddons, useSettings, type AddonRecord } from "./store";
 import { loadSettings, saveSettings, type Settings } from "./settings";
 import { useAuth } from "./auth";
 
@@ -29,7 +29,7 @@ type CloudSyncState = {
   error: string | null;
   boot: () => Promise<void>;
   pull: () => Promise<boolean>;
-  pushNow: () => Promise<void>;
+  pushNow: (force?: boolean) => Promise<void>;
   schedulePush: () => void;
 };
 
@@ -128,9 +128,9 @@ export const useCloudSync = create<CloudSyncState>((set, get) => ({
     }
   },
 
-  pushNow: async () => {
+  pushNow: async (force?: boolean) => {
     const settings = useSettings.getState().settings;
-    if (settings.cloudSyncEnabled === false) return;
+    if (settings.cloudSyncEnabled === false && !force) return;
     set((s) => ({ status: s.status === "error" ? "error" : "syncing" }));
     try {
       const body = {
@@ -237,6 +237,85 @@ function readJson(key: string): unknown {
   } catch {
     return null;
   }
+}
+
+/**
+ * HORSE account handoff (called right after login/register).
+ * The session cookie makes the server serve the acct:<uid> bucket; we merge
+ * it into local state with generous semantics so nothing is lost:
+ *   - addons: UNION by transportUrl (local set kept, account-only appended)
+ *   - settings / cw / watchlist / history / themes / lists: adopt-when-missing
+ * Returns the number of addons pulled from the account.
+ */
+export async function mergeAccountSnapshotIntoLocal(): Promise<number> {
+  const res = await fetch(`/api/sync?device=${encodeURIComponent(syncKey())}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`GET /api/sync ${res.status}`);
+  const { snapshot } = (await res.json()) as {
+    snapshot: {
+      settings: unknown | null;
+      addons: unknown[] | null;
+      cw: Record<string, unknown>;
+      watchlist: unknown[];
+      history: unknown[];
+      userThemes: unknown | null;
+      lists: unknown[] | null;
+      updatedAt: string;
+    } | null;
+  };
+  if (!snapshot) return 0;
+  let pulled = 0;
+
+  // Addons: union — keep the local set, append account-only addons.
+  if (Array.isArray(snapshot.addons) && snapshot.addons.length > 0) {
+    const localArr = (readJson(SYNCED_ADDONS) as AddonRecord[] | null) ?? [];
+    const seen = new Set(localArr.map((a) => a.transportUrl));
+    const additions: AddonRecord[] = [];
+    for (const a of snapshot.addons as Array<Partial<AddonRecord> & { transportUrl?: unknown }>) {
+      if (!a || typeof a.transportUrl !== "string" || !a.manifest || typeof a.manifest.id !== "string") continue;
+      if (seen.has(a.transportUrl)) continue;
+      seen.add(a.transportUrl);
+      additions.push({
+        manifest: a.manifest,
+        transportUrl: a.transportUrl,
+        enabled: a.enabled !== false,
+        order: localArr.length + additions.length,
+        ...(a.probe ? { probe: a.probe } : {}),
+      });
+    }
+    if (additions.length > 0) {
+      window.localStorage.setItem(SYNCED_ADDONS, JSON.stringify([...localArr, ...additions]));
+      useAddons.getState().load();
+      pulled = additions.length;
+    }
+  }
+
+  // Settings + simple keys: adopt only when absent locally (same as boot).
+  if (snapshot.settings && typeof snapshot.settings === "object") {
+    if (!window.localStorage.getItem("harbor-web.settings")) {
+      const incoming = snapshot.settings as Partial<Settings>;
+      saveSettings({
+        ...useSettings.getState().settings,
+        ...incoming,
+        cloudSyncEnabled: useSettings.getState().settings.cloudSyncEnabled,
+      });
+      useSettings.getState().load();
+    }
+  }
+  const simpleAdopt: [string, string | null][] = [
+    [SYNCED_CW, snapshot.cw && Object.keys(snapshot.cw).length > 0 ? JSON.stringify(snapshot.cw) : null],
+    [SYNCED_WATCHLIST, snapshot.watchlist && snapshot.watchlist.length > 0 ? JSON.stringify(snapshot.watchlist) : null],
+    [SYNCED_HISTORY, snapshot.history && snapshot.history.length > 0 ? JSON.stringify(snapshot.history) : null],
+    [SYNCED_USER_THEMES, snapshot.userThemes ? JSON.stringify(snapshot.userThemes) : null],
+    [SYNCED_LISTS, snapshot.lists && snapshot.lists.length > 0 ? JSON.stringify(snapshot.lists) : null],
+  ];
+  for (const [key, value] of simpleAdopt) {
+    if (value && !window.localStorage.getItem(key)) {
+      window.localStorage.setItem(key, value);
+    }
+  }
+  return pulled;
 }
 
 /**

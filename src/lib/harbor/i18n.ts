@@ -405,6 +405,37 @@ export const APP_STRINGS = {
   // ---- footer ----
   footerTagline: { en: "Horse — an open-source media center. Not affiliated with Stremio. Addons are user-installed; Horse hosts no content.", ar: "Horse — مركز وسائط مفتوح المصدر. غير تابع لـ Stremio. الإضافات يثبّتها المستخدم؛ ولا يستضيف Horse أي محتوى." },
   footerCredit: { en: "Inspired by the Harbor desktop app: github.com/harborstremio/harbor (MIT). This is a web port.", ar: "مستوحى من تطبيق Harbor لسطح المكتب: github.com/harborstremio/harbor (‏MIT). هذه نسخة ويب." },
+
+  // ---- HORSE platform account (settings → data) ----
+  accountTitle: { en: "HORSE account", ar: "حساب HORSE" },
+  accountSignedInChip: { en: "Signed in", ar: "مسجّل الدخول" },
+  accountNotSignedInChip: { en: "Not signed in", ar: "غير مسجّل الدخول" },
+  accountSignedInDesc: { en: "Your addons, settings, watchlist and history are stored on this account. Sign in on any device and they arrive automatically.", ar: "إضافاتك وإعداداتك وقائمة مشاهدتك وسجلّك محفوظة على هذا الحساب. سجّل الدخول من أي جهاز وتصلك تلقائيًا." },
+  accountLoggedOutDesc: { en: "Create an account or sign in — the addons and library you add on any device are restored here automatically after sign-in.", ar: "أنشئ حسابًا أو سجّل الدخول — الإضافات والمكتبة التي تضيفها على أي جهاز تُستعاد هنا تلقائيًا بعد تسجيل الدخول." },
+  accountUsername: { en: "Username", ar: "اسم المستخدم" },
+  accountUsernamePlaceholder: { en: "e.g. horse_rider", ar: "مثال: horse_rider" },
+  accountPassword: { en: "Password", ar: "كلمة المرور" },
+  accountModeLabel: { en: "Account mode", ar: "نمط الحساب" },
+  accountTabSignIn: { en: "Sign in", ar: "تسجيل الدخول" },
+  accountTabCreate: { en: "Create account", ar: "إنشاء حساب" },
+  accountBtnSignIn: { en: "Sign in & pull my data", ar: "دخول وجلب بياناتي" },
+  accountBtnCreate: { en: "Create account & save this device", ar: "إنشاء حساب وحفظ هذا الجهاز" },
+  accountSyncNow: { en: "Sync now", ar: "مزامنة الآن" },
+  accountSignOut: { en: "Sign out", ar: "تسجيل الخروج" },
+  accountPasswordHint: { en: "Password: 8+ characters · stored hashed (scrypt)", ar: "كلمة المرور: 8 أحرف فأكثر · تُخزَّن مشفَّرة (scrypt)" },
+  accountLoading: { en: "Loading account…", ar: "جارٍ تحميل الحساب…" },
+  accountToastSignedIn: { en: "Signed in as {name}", ar: "تم تسجيل الدخول باسم {name}" },
+  accountToastPulled: { en: "Pulled {n} new addon(s) from your account.", ar: "تم جلب إضافة واحدة جديدة من حسابك.", arOther: "تم جلب {n} إضافات جديدة من حسابك." },
+  accountToastUpToDate: { en: "Your account is up to date.", ar: "حسابك محدَّث بالكامل." },
+  accountToastCreated: { en: "Account created", ar: "تم إنشاء الحساب" },
+  accountToastCreatedDesc: { en: "This device's addons and library are now saved to your account.", ar: "أُضيفت إضافات ومكتبة هذا الجهاز إلى حسابك." },
+  accountToastSignedOut: { en: "Signed out", ar: "تم تسجيل الخروج" },
+  accountToastSignedOutDesc: { en: "A final sync was saved to your account.", ar: "حُفظت مزامنة أخيرة في حسابك." },
+  accountToastSyncedTitle: { en: "Synced from account", ar: "تمت المزامنة من الحساب" },
+  accountToastSyncFailed: { en: "Sync failed", ar: "فشلت المزامنة" },
+  accountTryAgain: { en: "Try again.", ar: "حاول مجددًا." },
+  accountErrSignIn: { en: "Sign-in failed.", ar: "فشل تسجيل الدخول." },
+  accountErrRegister: { en: "Could not create the account.", ar: "تعذر إنشاء الحساب." },
 } as const satisfies Record<string, { en: string; ar: string; arOther?: string }>;
 
 export type AppStringKey = keyof typeof APP_STRINGS;

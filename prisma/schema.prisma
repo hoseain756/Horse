@@ -14,6 +14,18 @@ datasource db {
   url = env("HORSE_DATABASE_URL")
 }
 
+// HORSE platform account — native username/password login. When signed in,
+// /api/sync stores the user's cloud bucket under acct:<id> (server-enforced
+// via the httpOnly session cookie), so addons/settings/library follow the
+// account across devices. Passwords are scrypt-hashed (account-auth.ts).
+model HorseUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String // scrypt$<salt>$<hash> (base64url parts)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // Multi-profile support (mirrors Harbor's profiles system)
 model Profile {
   id        String   @id @default(cuid())

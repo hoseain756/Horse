@@ -9,6 +9,7 @@
 // GET prefers the blob; if no blob exists the snapshot is reconstructed from the tables.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sessionUid } from "@/lib/harbor/account-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,6 +137,19 @@ function deviceKey(device: string): string {
   return `webdevice:${device}`;
 }
 
+/**
+ * Effective sync bucket for this request. When a HORSE session cookie is
+ * present the bucket is server-enforced to acct:<uid> (the client-supplied
+ * device param is ignored) — this is what makes data follow the ACCOUNT
+ * across devices instead of staying per-browser. Anonymous requests keep
+ * the classic webdevice:<deviceId> bucket.
+ */
+function bucketFor(req: NextRequest, device: string): { pid: string; account: boolean } {
+  const uid = sessionUid(req);
+  if (uid) return { pid: `acct:${uid}`, account: true };
+  return { pid: deviceKey(device), account: false };
+}
+
 function sanitizeSnapshot(raw: unknown): Snapshot {
   const s = (raw ?? {}) as Partial<Snapshot>;
   const out: Snapshot = { ...EMPTY, updatedAt: new Date().toISOString() };
@@ -161,7 +175,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!DEVICE_RE.test(device)) {
     return NextResponse.json({ error: "invalid device id" }, { status: 400 });
   }
-  const pid = deviceKey(device);
+  const { pid } = bucketFor(req, device);
   try {
     const [blob, addons, library, listRows] = await Promise.all([
       db.appSettings.findUnique({ where: { profileId: pid } }),
@@ -281,7 +295,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "snapshot too large" }, { status: 413 });
   }
   const snap = sanitizeSnapshot(body.snapshot);
-  const pid = deviceKey(device);
+  const { pid } = bucketFor(req, device);
   const now = new Date();
 
   try {

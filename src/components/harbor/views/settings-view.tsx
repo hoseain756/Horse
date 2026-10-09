@@ -4,12 +4,13 @@
 
 // Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert } from "lucide-react";
+import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
 import { RichBidi } from "../common/bidi";
 import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
 import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
+import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { usePwa } from "@/lib/harbor/pwa";
 import {
   THEME_PRESETS,
@@ -1047,6 +1048,7 @@ function DataPanel() {
 
   return (
     <div className="space-y-3 max-w-3xl">
+      <HorseAccountCard />
       <CloudSyncCard />
       <SectionCard className="space-y-1">
         <SettingRow title="Export backup" description={`Save settings, addons, watchlist (${getWatchlist().length} items) to a .harbx file`}>
@@ -1077,6 +1079,226 @@ function DataPanel() {
           <span />
         </SettingRow>
       </SectionCard>
+    </div>
+  );
+}
+
+// ---------- HORSE platform account card ----------
+function HorseAccountCard() {
+  const t = useT();
+  const user = useHorseAccount((s) => s.user);
+  const loaded = useHorseAccount((s) => s.loaded);
+  const busy = useHorseAccount((s) => s.busy);
+  const registerAction = useHorseAccount((s) => s.register);
+  const loginAction = useHorseAccount((s) => s.login);
+  const logoutAction = useHorseAccount((s) => s.logout);
+  const pullAccountNow = useHorseAccount((s) => s.pullAccountNow);
+  const { toast } = useToast();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void useHorseAccount.getState().load();
+  }, []);
+
+  const submit = async () => {
+    const uname = username.trim().toLowerCase();
+    if (!uname || !password || busy) return;
+    setError(null);
+    if (mode === "login") {
+      const res = await loginAction(uname, password);
+      if (res.ok) {
+        toast({
+          title: t("accountToastSignedIn", { name: uname }),
+          description:
+            res.pulled && res.pulled > 0
+              ? t("accountToastPulled", { n: res.pulled })
+              : t("accountToastUpToDate"),
+        });
+        setPassword("");
+      } else {
+        setError(res.error ?? t("accountErrSignIn"));
+      }
+    } else {
+      const res = await registerAction(uname, password);
+      if (res.ok) {
+        toast({
+          title: t("accountToastCreated"),
+          description: t("accountToastCreatedDesc"),
+        });
+        setPassword("");
+      } else {
+        setError(res.error ?? t("accountErrRegister"));
+      }
+    }
+  };
+
+  const signOut = async () => {
+    await logoutAction();
+    toast({ title: t("accountToastSignedOut"), description: t("accountToastSignedOutDesc") });
+  };
+
+  const syncFromAccount = async () => {
+    const res = await pullAccountNow();
+    if (res.ok) {
+      toast({
+        title: t("accountToastSyncedTitle"),
+        description:
+          res.pulled && res.pulled > 0
+            ? t("accountToastPulled", { n: res.pulled })
+            : t("accountToastUpToDate"),
+      });
+    } else {
+      toast({ title: t("accountToastSyncFailed"), description: res.error ?? t("accountTryAgain"), variant: "destructive" });
+    }
+  };
+
+  if (!loaded) {
+    return (
+      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 min-h-[96px] flex items-center gap-3" aria-hidden>
+        <Loader2 className="w-4 h-4 animate-spin text-ink-subtle" />
+        <span className="md-body-small text-ink-subtle">{t("accountLoading")}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" aria-hidden />
+
+      {user ? (
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="w-10 h-10 rounded-full bg-accent text-black font-bold flex items-center justify-center shrink-0 md-title-medium" aria-hidden>
+              {user.username.charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                <h3 className="md-title-small text-ink flex items-center gap-2">
+                  <UserRound className="w-4 h-4 text-accent" />
+                  {user.username}
+                </h3>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-ink-muted">
+                  {t("accountSignedInChip")}
+                </span>
+              </div>
+              <p className="md-body-small text-ink-muted max-w-md">
+                {t("accountSignedInDesc")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="outline" className="gap-1.5 min-h-11" disabled={busy} onClick={() => void syncFromAccount()}>
+              <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin")} />
+              {t("accountSyncNow")}
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 min-h-11 hover:!text-danger" disabled={busy} onClick={() => void signOut()}>
+              <LogOut className="w-3.5 h-3.5" />
+              {t("accountSignOut")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                {mode === "login" ? (
+                  <UserRound className="w-4 h-4 text-ink-subtle" />
+                ) : (
+                  <UserPlus className="w-4 h-4 text-ink-subtle" />
+                )}
+                <h3 className="md-title-small text-ink">{t("accountTitle")}</h3>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-raised border border-edge-soft px-2 py-0.5 md-label-small text-ink-muted">
+                  {t("accountNotSignedInChip")}
+                </span>
+              </div>
+              <p className="md-body-small text-ink-muted max-w-md">
+                {t("accountLoggedOutDesc")}
+              </p>
+            </div>
+            <div className="flex rounded-[var(--md-sys-shape-corner-full)] border border-edge-soft bg-raised p-1 shrink-0" role="tablist" aria-label={t("accountModeLabel")}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "login"}
+                onClick={() => { setMode("login"); setError(null); }}
+                className={cn(
+                  "min-h-9 px-4 rounded-full md-label-medium transition-colors",
+                  mode === "login" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {t("accountTabSignIn")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "register"}
+                onClick={() => { setMode("register"); setError(null); }}
+                className={cn(
+                  "min-h-9 px-4 rounded-full md-label-medium transition-colors",
+                  mode === "register" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {t("accountTabCreate")}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 max-w-xl">
+            <div>
+              <label htmlFor="horse-username" className="md-label-medium text-ink-muted mb-1 block">{t("accountUsername")}</label>
+              <input
+                id="horse-username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void submit()}
+                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                placeholder={t("accountUsernamePlaceholder")}
+                autoComplete="username"
+                maxLength={24}
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label htmlFor="horse-password" className="md-label-medium text-ink-muted mb-1 block">{t("accountPassword")}</label>
+              <input
+                id="horse-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void submit()}
+                className="md-field-outlined w-full px-3 min-h-11 text-sm text-ink"
+                placeholder="••••••••"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                maxLength={128}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p role="alert" className="rounded-[var(--md-sys-shape-corner-small)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] md-body-small px-3 py-2 max-w-xl">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={busy || !username.trim() || !password}
+              className="md-btn-filled inline-flex items-center gap-2 min-h-11 px-5 disabled:opacity-50"
+            >
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+              {mode === "login" ? t("accountBtnSignIn") : t("accountBtnCreate")}
+            </button>
+            <span className="md-label-small text-ink-subtle">{t("accountPasswordHint")}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
