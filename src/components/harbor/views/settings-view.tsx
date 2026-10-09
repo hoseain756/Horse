@@ -33,6 +33,16 @@ import { RatingsSettingsCard } from "../chrome/ratings-row";
 import { useLinking } from "@/lib/harbor/linking";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -1092,12 +1102,14 @@ function HorseAccountCard() {
   const registerAction = useHorseAccount((s) => s.register);
   const loginAction = useHorseAccount((s) => s.login);
   const logoutAction = useHorseAccount((s) => s.logout);
+  const deleteAccountAction = useHorseAccount((s) => s.deleteAccount);
   const pullAccountNow = useHorseAccount((s) => s.pullAccountNow);
   const { toast } = useToast();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     void useHorseAccount.getState().load();
@@ -1138,6 +1150,15 @@ function HorseAccountCard() {
   const signOut = async () => {
     await logoutAction();
     toast({ title: t("accountToastSignedOut"), description: t("accountToastSignedOutDesc") });
+  };
+
+  const removeAccount = async () => {
+    const res = await deleteAccountAction();
+    if (res.ok) {
+      toast({ title: t("accountToastDeleted"), description: t("accountToastDeletedDesc") });
+    } else {
+      toast({ title: t("accountToastDeleteFailed"), description: res.error ?? t("accountTryAgain"), variant: "destructive" });
+    }
   };
 
   const syncFromAccount = async () => {
@@ -1189,7 +1210,7 @@ function HorseAccountCard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             <Button size="sm" variant="outline" className="gap-1.5 min-h-11" disabled={busy} onClick={() => void syncFromAccount()}>
               <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin")} />
               {t("accountSyncNow")}
@@ -1197,6 +1218,17 @@ function HorseAccountCard() {
             <Button size="sm" variant="outline" className="gap-1.5 min-h-11 hover:!text-danger" disabled={busy} onClick={() => void signOut()}>
               <LogOut className="w-3.5 h-3.5" />
               {t("accountSignOut")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 min-h-11 hover:!text-danger hover:!border-danger/40"
+              disabled={busy}
+              onClick={() => setConfirmDelete(true)}
+              aria-label={t("accountDelete")}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t("accountDelete")}
             </Button>
           </div>
         </div>
@@ -1299,6 +1331,31 @@ function HorseAccountCard() {
           </div>
         </div>
       )}
+
+      {/* Delete-account confirmation (danger) */}
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-danger" />
+              {t("accountDeleteConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("accountDeleteConfirmDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11">{t("accountCancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+              onClick={() => void removeAccount()}
+            >
+              <Trash2 className="w-4 h-4" />
+              {t("accountDeleteConfirmBtn")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

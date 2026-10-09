@@ -28,6 +28,7 @@ type HorseAccountState = {
   register: (username: string, password: string) => Promise<AccountActionResult>;
   login: (username: string, password: string) => Promise<AccountActionResult>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<AccountActionResult>;
   pullAccountNow: () => Promise<AccountActionResult>;
 };
 
@@ -144,6 +145,33 @@ export const useHorseAccount = create<HorseAccountState>((set) => ({
       }
       set({ busy: false });
       return { ok: true, pulled };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: readErr(e) };
+    }
+  },
+
+  deleteAccount: async () => {
+    set({ busy: true });
+    try {
+      await fetch("/api/auth/account", {
+        method: "DELETE",
+        signal: AbortSignal.timeout(20_000),
+      }).then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          throw new Error(typeof data.error === "string" ? data.error : `Request failed (${res.status})`);
+        }
+      });
+      set({ user: null, busy: false });
+      // Local data intentionally stays on this device; refresh the DEVICE
+      // bucket so it keeps its own backup independent of the deleted account.
+      try {
+        await useCloudSync.getState().pushNow(true);
+      } catch {
+        /* non-fatal */
+      }
+      return { ok: true };
     } catch (e) {
       set({ busy: false });
       return { ok: false, error: readErr(e) };

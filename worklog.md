@@ -1760,3 +1760,20 @@ Work Log:
 
 Stage Summary:
 - Code is Turso-ready end-to-end. Operator TODO: turso.com signup → create db → copy URL + token → set 2 env vars on Vercel (keep HORSE_TOKEN_SECRET!) → redeploy → accounts/durиable sync live. Old lost accounts (incl. user's test1) are unrecoverable; re-register after the switch.
+
+---
+Task ID: 52
+Agent: Z.ai Code (main)
+Task: Delete all existing accounts (operator + QA) + build native Delete-account feature; confirm durable storage story for addons/Trakt/Simkl/TMDB
+
+Work Log:
+- Local wipe: deleted ALL HorseUser rows (test1 [QA], horse [operator's local test]) + acct:* buckets (incl. orphan acct:cmv0lrtnv…) via project-root Prisma script → 0 users, 0 acct rows remain.
+- New DELETE /api/auth/account (src/app/api/auth/account/route.ts): session-enforced self-delete only; wipes acct:<uid> bucket (appSettings/addon/libraryItem/customList/watchEvent) THEN the user row; clears session cookie; rate-limited 5/min; handles stale-cookie (deleted:false + cookie cleared).
+- Client: useHorseAccount.deleteAccount() → DELETE call → user null → device-bucket re-push (local data intentionally preserved).
+- UI (Settings → Data → HORSE account, signed-in state): third danger button "Delete account" (Trash2, min-h-11, flex-wrap row) + shadcn AlertDialog confirm — bilingual i18n keys accountDelete*/accountCancel/accountToastDelete* (en+ar). Danger tokens verified (−-color-danger exists; border-danger/40 already used elsewhere).
+- Verified (curl): register→push→DELETE {"ok":true,"deleted":true}→login 401→anon DELETE 401; DB counts users 0 / acct rows 0. Verified (agent-browser): UI register → 3 buttons → dialog renders → confirm → "Not signed in"; 0 console errors. Lint 0 errors.
+- Storage story for operator: addons/settings/library/custom-lists/Trakt+Simkl vault rows (LinkedAccount) + ServerConfig fallbacks ALL live in the same database — durable across devices the moment HORSE_DATABASE_URL points at Turso (+HORSE_DB_AUTH_TOKEN). TMDB token is a Vercel env var (survives deploys by design).
+- Production follow-up: after deploy, self-deleted qa_deploy1 via saved session cookie (p1.jar).
+
+Stage Summary:
+- Users can now fully self-serve: register, sync, sign out, sign in on other devices, and permanently delete their account + server data. Old unreachable production accounts become moot once Turso is plugged (fresh durable DB).

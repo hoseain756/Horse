@@ -436,6 +436,14 @@ export const APP_STRINGS = {
   accountTryAgain: { en: "Try again.", ar: "حاول مجددًا." },
   accountErrSignIn: { en: "Sign-in failed.", ar: "فشل تسجيل الدخول." },
   accountErrRegister: { en: "Could not create the account.", ar: "تعذر إنشاء الحساب." },
+  accountDelete: { en: "Delete account", ar: "حذف الحساب" },
+  accountDeleteConfirmTitle: { en: "Delete this account?", ar: "حذف هذا الحساب؟" },
+  accountDeleteConfirmDesc: { en: "This cannot be undone. The account and everything synced to it (addons, library, history) will be erased from the server. Data on this device stays.", ar: "لا يمكن التراجع عن ذلك. سيُمحى الحساب وكل بياناته المتزامنة (الإضافات والمكتبة والسجل) من الخادم. تبقى البيانات على هذا الجهاز." },
+  accountDeleteConfirmBtn: { en: "Yes, delete permanently", ar: "نعم، احذف نهائيًا" },
+  accountCancel: { en: "Cancel", ar: "إلغاء" },
+  accountToastDeleted: { en: "Account deleted", ar: "تم حذف الحساب" },
+  accountToastDeletedDesc: { en: "The account and its server data were erased. Local data on this device was kept.", ar: "مُحي الحساب وبياناته من الخادم. أُبقيت البيانات المحلية على هذا الجهاز." },
+  accountToastDeleteFailed: { en: "Could not delete the account", ar: "تعذر حذف الحساب" },
 } as const satisfies Record<string, { en: string; ar: string; arOther?: string }>;
 
 export type AppStringKey = keyof typeof APP_STRINGS;
