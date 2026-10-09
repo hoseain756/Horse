@@ -2020,3 +2020,23 @@ Stage Summary:
 - BLOCKER (owner action required): Vercel deployments fail instantly since 13:54Z with no log access from the sandbox (no token). User should open https://vercel.com/hoseain354-6689/horse → Deployments → the red failed deployment → read the error (most likely: usage/plan limit banner, paused project, or a changed Build & Dev Settings / env var).
 - Key facts for future sessions: project = horse under team hoseain354-6689; production alias horse-1.vercel.app; GitHub deployment statuses are the reliable out-of-band health signal (api.github.com/repos/hoseain756/Horse/commits/<sha>/status, context "Vercel").
 - Next candidates: after the user restores Vercel deploys, verify production end-to-end (engine installer 200, CSP jsdelivr, pairing API JSON, TorBox resolve); Kids PIN gate; fix auth/ratelimit.ts Postgres placeholder syntax; dedupe the two autopush watcher instances (kill one) to stop the push-race noise.
+
+---
+Task ID: 63
+Agent: Z.ai Code (main)
+Task: RESOLVED — the Vercel deploy outage. User pasted the real build log; root cause was a .gitignore-swallowed module.
+
+Work Log:
+- User's Vercel log showed the truth my 0s-latency timestamp read had obscured: the build RAN (~43s) and failed in Turbopack compile with 4x "Module not found: Can't resolve './local-engine'" (import traces: p2p.ts:25, playback.ts:9, player-overlay.tsx:32, settings-view.tsx:32).
+- Root cause: .gitignore line 44 pattern `local-*` matched src/lib/harbor/local-engine.ts → the file Task 57 created at 13:45 never entered git → every Vercel clone since 13:53Z (commit 9c0818d) compiled without it. Sandbox builds always passed (file present locally; gitignored = invisible to git status → "working tree clean" was misleading). This also re-dates the "instant failure" reading — the deployment/status GitHub timestamps were skewed; Vercel really queued ~3.5min then built then failed.
+- FIX: removed the `local-*` ignore rule (guarded nothing — no local-* files at root), `git add src/lib/harbor/local-engine.ts`, committed 1feb921.
+- NEW VERIFICATION STEP (should become standard): fresh-clone build — `git clone` the repo to /tmp, `bun install --frozen-lockfile`, `bun run build` → EXIT:0, no Module-not-found. This replicates Vercel exactly and catches ANY missing-file class of failure before push. (bun install from lockfile: 5.5s.)
+- Pushed 1feb921 (auto-push watcher actually beat the manual push) → GitHub status "Vercel | success | Deployment has completed".
+- PRODUCTION VERIFIED LIVE on horse-1.vercel.app: homepage 200; /engine/install-linux.sh 200 (one-click engine); /api/pairing/status?code=ZZZZZZ → {"status":"missing"} (pairing relay live, single-use semantics intact); POST /api/debrid/user torbox+invalid → {"error":"Invalid TorBox API key"} (TorBox provider live, validates against real API); CSP contains jsdelivr (in-browser engine allowed). ALL of today's features are on production.
+- Cleanup: /tmp/verify-clone removed. Dev server untouched (plain mode, capabilities torrent:"builtin", debrid:true).
+
+Stage Summary:
+- The 6-hour outage is fully closed: root cause = overly-broad .gitignore pattern ate a source module; fix = 1feb921 tracked + deployed; verified end-to-end on production.
+- LESSON for future sessions: "working tree clean" ≠ "everything committed" — before pushing features, run the fresh-clone build test (clone → bun install --frozen-lockfile → bun run build) whenever any new file was created; audit with `git ls-files --others -i --exclude-standard -- src/`.
+- The `local-*` pattern removal is safe (nothing matched it); other broad patterns remain (test, prompt — they guard non-src paths, no collision today).
+- Next candidates (unchanged): TorBox 'my torrents' management view, auth/ratelimit.ts Postgres placeholder fix, Kids PIN gate, About capabilities badge, dedupe the two gh-autopush watcher instances.
