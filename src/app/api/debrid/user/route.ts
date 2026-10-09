@@ -6,17 +6,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   AD_API,
   RD_API,
+  TB_API,
   UpstreamError,
   bearer,
   fetchJson,
   guardDebrid,
+  torboxHeaders,
   validApiKey,
 } from "@/lib/harbor/debrid-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type UserResult = { username: string; premium: boolean; expiresAt: number | null };
+type UserResult = { username: string; premium: boolean; expiresAt: number | null; planName?: string | null };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!guardDebrid(req, "debrid-user")) {
@@ -28,8 +30,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
-  if (body.service !== "realdebrid" && body.service !== "alldebrid") {
-    return NextResponse.json({ error: "invalid service (realdebrid | alldebrid)" }, { status: 400 });
+  if (body.service !== "realdebrid" && body.service !== "alldebrid" && body.service !== "torbox") {
+    return NextResponse.json({ error: "invalid service (realdebrid | alldebrid | torbox)" }, { status: 400 });
   }
   if (!validApiKey(body.apiKey)) {
     return NextResponse.json({ error: "invalid API key (10-200 characters required)" }, { status: 400 });
@@ -40,7 +42,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const result =
       body.service === "realdebrid"
         ? await realDebridUser(apiKey)
-        : await allDebridUser(apiKey);
+        : body.service === "alldebrid"
+          ? await allDebridUser(apiKey)
+          : await torboxUser(apiKey);
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof UpstreamError) {
@@ -117,4 +121,54 @@ async function allDebridUser(apiKey: string): Promise<UserResult> {
     premium,
     expiresAt: premiumUntil > 0 ? premiumUntil * 1000 : null,
   };
+}
+
+// ---------------- TorBox ----------------
+
+// TorBox `plan` is a numeric tier code (torbox.app pricing):
+//   0 = Free, 1 = Essential, 2 = Pro, 3 = Standard.
+function torboxPlanName(plan: number): string {
+  if (plan === 1) return "Essential";
+  if (plan === 2) return "Pro";
+  if (plan === 3) return "Standard";
+  return "Free";
+}
+
+async function torboxUser(apiKey: string): Promise<UserResult> {
+  const r = await fetchJson(`${TB_API}/user/me`, { headers: torboxHeaders(apiKey) }, "TorBox user");
+  if (r.status === 401 || r.status === 403) {
+    throw new UpstreamError("Invalid TorBox API key", 401);
+  }
+  if (r.status !== 200) {
+    throw new UpstreamError(`TorBox responded ${r.status}`, 502);
+  }
+  const d = r.data as {
+    success?: unknown;
+    detail?: unknown;
+    data?: {
+      email?: unknown;
+      plan?: unknown;
+      is_subscribed?: unknown;
+      premium_expires_at?: unknown;
+    } | null;
+  };
+  if (d.success !== true || !d.data || typeof d.data !== "object") {
+    // TorBox wraps auth failures in a 200 envelope too — read the detail.
+    const detail = typeof d.detail === "string" && /auth|token|key/i.test(d.detail)
+      ? "Invalid TorBox API key"
+      : `TorBox: ${typeof d.detail === "string" ? d.detail : "user request rejected"}`;
+    throw new UpstreamError(detail, /auth|token|key/i.test(String(d.detail)) ? 401 : 502);
+  }
+  const email = typeof d.data.email === "string" && d.data.email.length > 0 ? d.data.email : null;
+  if (!email) throw new UpstreamError("TorBox returned no account identifier", 502);
+  const plan = typeof d.data.plan === "number" && Number.isFinite(d.data.plan) ? d.data.plan : 0;
+  let expiresAt: number | null = null;
+  if (typeof d.data.premium_expires_at === "string") {
+    const parsed = Date.parse(d.data.premium_expires_at);
+    if (Number.isFinite(parsed)) expiresAt = parsed;
+  }
+  // A paid/trial plan (tier > 0) counts as premium while it has not expired;
+  // after the trial/subscription lapses TorBox itself drops the tier back to 0.
+  const premium = plan > 0 && (expiresAt === null || expiresAt > Date.now());
+  return { username: email, premium, expiresAt, planName: torboxPlanName(plan) };
 }

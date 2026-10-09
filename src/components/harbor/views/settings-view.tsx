@@ -2443,11 +2443,13 @@ function SimklCard() {
 
 function DebridCard() {
   const { toast } = useToast();
+  const tr = useT();
   const service = useDebrid((s) => s.service);
   const apiKey = useDebrid((s) => s.apiKey);
   const username = useDebrid((s) => s.username);
   const premium = useDebrid((s) => s.premium);
   const expiresAt = useDebrid((s) => s.expiresAt);
+  const planName = useDebrid((s) => s.planName);
   const status = useDebrid((s) => s.status);
   const loaded = useDebrid((s) => s.loaded);
   const error = useDebrid((s) => s.error);
@@ -2463,9 +2465,9 @@ function DebridCard() {
     load();
   }, [load]);
 
-  const svc: DebridService = svcOverride ?? (loaded ? service : "realdebrid");
+  const svc: DebridService = svcOverride ?? (loaded ? service : "torbox");
 
-  const serviceName = svc === "realdebrid" ? "Real-Debrid" : "AllDebrid";
+  const serviceName = svc === "realdebrid" ? "Real-Debrid" : svc === "alldebrid" ? "AllDebrid" : "TorBox";
   const isConnected = apiKey !== null && service === svc;
 
   const doValidate = async () => {
@@ -2513,7 +2515,7 @@ function DebridCard() {
               premium ? "bg-accent-soft text-accent" : "bg-raised text-ink-muted",
             )}
           >
-            {premium ? "Premium" : "Non-premium"}
+            {svc === "torbox" && planName ? planName : premium ? "Premium" : "Non-premium"}
           </span>
         )}
       </div>
@@ -2526,6 +2528,7 @@ function DebridCard() {
       >
         {(
           [
+            ["torbox", "TorBox"],
             ["realdebrid", "Real-Debrid"],
             ["alldebrid", "AllDebrid"],
           ] as const
@@ -2560,7 +2563,7 @@ function DebridCard() {
                 premium ? "bg-accent-soft text-accent" : "bg-raised text-ink-muted",
               )}
             >
-              {premium ? "Premium" : "Non-premium"}
+              {service === "torbox" && planName ? planName : premium ? "Premium" : "Non-premium"}
             </span>
             {expiresAt !== null && Number.isFinite(expiresAt) && (
               <span className="text-xs text-ink-subtle">
@@ -2591,7 +2594,13 @@ function DebridCard() {
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder={svc === "realdebrid" ? "Your Real-Debrid API key" : "Your AllDebrid API key"}
+              placeholder={
+                svc === "realdebrid"
+                  ? "Your Real-Debrid API key"
+                  : svc === "alldebrid"
+                    ? "Your AllDebrid API key"
+                    : "Your TorBox API key"
+              }
               className="md-field-outlined px-3 font-mono text-xs bg-transparent"
               autoComplete="off"
               spellCheck={false}
@@ -2600,12 +2609,22 @@ function DebridCard() {
           <p className="text-xs text-ink-subtle">
             Find it on your{" "}
             <a
-              href={svc === "realdebrid" ? "https://real-debrid.com/account" : "https://alldebrid.com/api/"}
+              href={
+                svc === "realdebrid"
+                  ? "https://real-debrid.com/account"
+                  : svc === "alldebrid"
+                    ? "https://alldebrid.com/api/"
+                    : "https://torbox.app/settings"
+              }
               target="_blank"
               rel="noreferrer noopener"
               className="text-accent underline underline-offset-2"
             >
-              {svc === "realdebrid" ? "real-debrid.com/account" : "alldebrid.com/api"}
+              {svc === "realdebrid"
+                ? "real-debrid.com/account"
+                : svc === "alldebrid"
+                  ? "alldebrid.com/api"
+                  : "torbox.app/settings"}
             </a>{" "}
             page, then validate it here.
           </p>
@@ -2624,6 +2643,12 @@ function DebridCard() {
       )}
 
       <div className="mt-4 pt-4 border-t border-edge-soft space-y-2">
+        {svc === "torbox" && (
+          <p className="flex items-start gap-2 text-[11px] text-ink-subtle">
+            <Zap className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+            <RichBidi text={tr("debridTorboxFreeNote")} />
+          </p>
+        )}
         <p className="text-xs text-ink-subtle">
           Your key is stored in this browser only and relayed server-side per request. Torrent streams
           cached by the service unlock instantly; uncached torrents are skipped (honest error).

@@ -7,6 +7,7 @@ import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 
 export const RD_API = "https://api.real-debrid.com/rest/1.0";
 export const AD_API = "https://api.alldebrid.com/v4";
+export const TB_API = "https://api.torbox.app/v1/api";
 
 export const CALL_TIMEOUT_MS = 15_000;
 export const TOTAL_BUDGET_MS = 45_000;
@@ -90,6 +91,12 @@ export function makeBudget(): (step: string) => void {
 
 export function bearer(key: string): Record<string, string> {
   return { Authorization: `Bearer ${key}`, Accept: "application/json" };
+}
+
+/** TorBox speaks Bearer for JSON calls (token also travels as ?token= on
+ *  requestdl because the resulting CDN link must stay playable standalone). */
+export function torboxHeaders(key: string): Record<string, string> {
+  return { ...bearer(key), "User-Agent": "HarborWeb/1.0" };
 }
 
 export function formBody(fields: Record<string, string>): string {

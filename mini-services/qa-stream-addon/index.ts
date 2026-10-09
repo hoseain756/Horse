@@ -1,6 +1,6 @@
 // QA-only mini service — dynamic Stremio stream addon used by the agent-browser
-// E2E test of the IN-BROWSER torrent engine (NOT shipped to users as content:
-// it serves whatever infoHash the test seeded in /tmp/qa-infohash.json).
+// E2E tests (NOT shipped to users as content: it serves whatever infoHash the
+// test seeded in /tmp/qa-infohash.json as {infoHash, filename?, title?}).
 // Port 3033. Run: bun run dev (bun --hot index.ts)
 import type Bun from "bun";
 
@@ -49,12 +49,13 @@ const server = Bun.serve({
     // Catch-all stream route: /stream/movie/ttXXXX.json / /stream/series/ttX:1:1.json
     const m = /^\/stream\/(movie|series)\/([^/]+)\.json$/.exec(p);
     if (m) {
-      let infoHash: string | null = null;
+      let seeded: { infoHash?: string; filename?: string; title?: string } = {};
       try {
-        infoHash = (await Bun.file(INFOHASH_FILE).json()).infoHash ?? null;
+        seeded = await Bun.file(INFOHASH_FILE).json();
       } catch {
-        infoHash = null;
+        seeded = {};
       }
+      const infoHash = typeof seeded.infoHash === "string" ? seeded.infoHash : null;
       if (!infoHash) {
         return Response.json({ streams: [] }, { headers: cors });
       }
@@ -63,8 +64,11 @@ const server = Bun.serve({
           streams: [
             {
               infoHash,
-              title: "QA · in-browser engine test (H.264/AAC mp4)",
-              behaviorHints: { filename: "qa-sample.mp4", notWebReady: false },
+              title: seeded.title ?? "QA · debrid test torrent (H.264/AAC mp4)",
+              behaviorHints: {
+                filename: seeded.filename ?? "qa-sample.mp4",
+                notWebReady: false,
+              },
             },
           ],
         },

@@ -473,6 +473,10 @@ export const APP_STRINGS = {
   },
   debridUnlocking: { en: "Unlocking with debrid…", ar: "جارٍ الفتح عبر debrid…" },
   debridUnlockFailed: { en: "Debrid unlock failed", ar: "فشل الفتح عبر debrid" },
+  debridTorboxFreeNote: {
+    en: "TorBox works on the FREE plan: cached torrents play instantly; uncached ones download on TorBox first (free = 1 active download slot) — press play again in a few minutes. Watched torrents stay in your TorBox dashboard.",
+    ar: "يعمل TorBox على الخطة المجانية: التورنتات المخزّنة مؤقتًا تُشغَّل فورًا؛ أما غير المخزّنة فيُحمَّل أولًا على TorBox (المجانية = خانة تنزيل نشطة واحدة) — اضغط تشغيل من جديد بعد بضع دقائق. تبقى التورنتات التي شاهدتها في لوحة حسابك على TorBox.",
+  },
   noPlayableStream: {
     en: "No browser-playable stream found. Open the stream picker to choose manually — torrent streams unlock with debrid, or play via the P2P engine when available.",
     ar: "لم يُعثر على بث قابل للتشغيل في المتصفح. افتح منتقي البثوث للاختيار يدوياً — تُفتح التورنتات عبر debrid، أو تُشغَّل عبر محرك P2P عند توافره.",

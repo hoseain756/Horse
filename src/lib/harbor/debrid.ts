@@ -9,7 +9,7 @@ import { create } from "zustand";
 
 const DEBRID_KEY = "harbor-web.debrid";
 
-export type DebridService = "realdebrid" | "alldebrid";
+export type DebridService = "realdebrid" | "alldebrid" | "torbox";
 
 export type DebridResolveResult = { url: string; filename?: string } | { error: string };
 
@@ -19,6 +19,7 @@ type StoredDebrid = {
   username: string | null;
   premium: boolean;
   expiresAt: number | null;
+  planName?: string | null;
 };
 
 type DebridState = {
@@ -27,6 +28,7 @@ type DebridState = {
   username: string | null;
   premium: boolean;
   expiresAt: number | null;
+  planName: string | null;
   status: "idle" | "valid" | "invalid" | "checking";
   loaded: boolean;
   error: string | null;
@@ -49,11 +51,12 @@ function readStored(): StoredDebrid | null {
     const d = JSON.parse(raw) as Partial<StoredDebrid>;
     if (!d || typeof d.apiKey !== "string" || d.apiKey.length < 10) return null;
     return {
-      service: d.service === "alldebrid" ? "alldebrid" : "realdebrid",
+      service: d.service === "alldebrid" ? "alldebrid" : d.service === "torbox" ? "torbox" : "realdebrid",
       apiKey: d.apiKey,
       username: typeof d.username === "string" ? d.username : null,
       premium: d.premium === true,
       expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
+      planName: typeof d.planName === "string" ? d.planName : null,
     };
   } catch {
     return null;
@@ -76,6 +79,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
   username: null,
   premium: false,
   expiresAt: null,
+  planName: null,
   status: "idle",
   loaded: false,
   error: null,
@@ -88,6 +92,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
       username: stored?.username ?? null,
       premium: stored?.premium ?? false,
       expiresAt: stored?.expiresAt ?? null,
+      planName: stored?.planName ?? null,
       status: stored ? "valid" : "idle",
       loaded: true,
       error: null,
@@ -95,8 +100,8 @@ export const useDebrid = create<DebridState>((set, get) => ({
   },
 
   save: (service, apiKey) => {
-    const { username, premium, expiresAt } = get();
-    const next: StoredDebrid = { service, apiKey, username, premium, expiresAt };
+    const { username, premium, expiresAt, planName } = get();
+    const next: StoredDebrid = { service, apiKey, username, premium, expiresAt, planName };
     writeStored(next);
     set({ service, apiKey, error: null });
   },
@@ -109,6 +114,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
       username: null,
       premium: false,
       expiresAt: null,
+      planName: null,
       status: "idle",
       error: null,
     });
@@ -128,6 +134,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
         username?: string | null;
         premium?: boolean;
         expiresAt?: number | null;
+        planName?: string | null;
       };
       if (!res.ok || typeof data.username !== "string") {
         set({ status: "invalid", error: data.error ?? `Service responded ${res.status}` });
@@ -139,6 +146,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
         username: data.username,
         premium: data.premium === true,
         expiresAt: typeof data.expiresAt === "number" ? data.expiresAt : null,
+        planName: typeof data.planName === "string" ? data.planName : null,
       };
       writeStored(next);
       set({
@@ -147,6 +155,7 @@ export const useDebrid = create<DebridState>((set, get) => ({
         username: next.username,
         premium: next.premium,
         expiresAt: next.expiresAt,
+        planName: next.planName,
         status: "valid",
         error: null,
       });
