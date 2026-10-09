@@ -1,9 +1,16 @@
 "use client";
 
 // Harbor Web — "Add to list" popover (detail view) — assign any title to user lists
+// Placement is owned by Radix Popover (portal at the end of <body> +
+// collision-aware popper): opening it can never widen, clip, or shift the
+// page — it flips above when out of room, shifts to stay 12px inside the
+// viewport, and is capped at min(70vh, available space) with internal
+// scrolling. The visual design (panel, items, colors, radius, typography)
+// is unchanged — only the placement engine changed.
 import { useEffect, useRef, useState } from "react";
 import { ListPlus, Check, Plus, FolderOpen } from "lucide-react";
 import { useNav } from "@/lib/harbor/store";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   getLists,
   getListsContaining,
@@ -38,7 +45,6 @@ export function AddToListButton({
   const [member, setMember] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const push = useNav((s) => s.push);
   const { toast } = useToast();
@@ -51,28 +57,13 @@ export function AddToListButton({
 
   const count = member.size;
 
-  const openMenu = () => {
-    refresh(); // load fresh list state when the menu opens
-    setOpen(true);
+  // Radix owns outside-click + Escape + focus return; we only load fresh
+  // list state whenever the popover opens.
+  const onOpenChange = (next: boolean) => {
+    if (next) refresh();
+    else setCreating(false);
+    setOpen(next);
   };
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setOpen(false);
-      }
-    };
-    window.addEventListener("pointerdown", onDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (creating) inputRef.current?.focus();
@@ -90,42 +81,42 @@ export function AddToListButton({
   };
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => (open ? setOpen(false) : openMenu())}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        title={count > 0 ? `In ${count} ${count === 1 ? "list" : "lists"}` : "Add to list"}
-        className={cn(
-          variant === "icon"
-            ? cn(
-                "harbor-tv-focus flex h-[52px] w-[52px] items-center justify-center rounded-full",
-                "border border-edge-soft bg-raised/80 text-ink backdrop-blur-md transition-all",
-                "hover:bg-raised hover:scale-[1.04] active:scale-95 md-state",
-                count > 0 && "bg-accent-soft text-accent border-accent/40",
-              )
-            : cn(
-                "flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors",
-                count > 0 ? "bg-accent-soft text-accent" : "bg-raised/80 backdrop-blur text-ink hover:bg-raised",
-              ),
-        )}
-      >
-        <ListPlus className={variant === "icon" ? "h-5 w-5" : "h-4 w-4"} />
-        {variant === "row" &&
-          (count > 0 ? `In ${count} ${count === 1 ? "list" : "lists"}` : "Add to list")}
-        {variant === "icon" && <span className="sr-only">{count > 0 ? `In ${count} lists` : "Add to list"}</span>}
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          aria-label="Lists"
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={count > 0 ? `In ${count} ${count === 1 ? "list" : "lists"}` : "Add to list"}
           className={cn(
-            "absolute z-50 mt-2 w-72 rounded-[var(--md-sys-shape-corner-large)] border border-edge-soft bg-elevated shadow-[var(--md-sys-elevation-3)] overflow-hidden harbor-pop-in",
-            variant === "icon" ? "left-1/2 -translate-x-1/2" : "left-0",
+            variant === "icon"
+              ? cn(
+                  "harbor-tv-focus flex h-[52px] w-[52px] items-center justify-center rounded-full",
+                  "border border-edge-soft bg-raised/80 text-ink backdrop-blur-md transition-all",
+                  "hover:bg-raised hover:scale-[1.04] active:scale-95 md-state",
+                  count > 0 && "bg-accent-soft text-accent border-accent/40",
+                )
+              : cn(
+                  "flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors",
+                  count > 0 ? "bg-accent-soft text-accent" : "bg-raised/80 backdrop-blur text-ink hover:bg-raised",
+                ),
           )}
         >
+          <ListPlus className={variant === "icon" ? "h-5 w-5" : "h-4 w-4"} />
+          {variant === "row" &&
+            (count > 0 ? `In ${count} ${count === 1 ? "list" : "lists"}` : "Add to list")}
+          {variant === "icon" && <span className="sr-only">{count > 0 ? `In ${count} lists` : "Add to list"}</span>}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        role="menu"
+        aria-label="Lists"
+        side="bottom"
+        align={variant === "icon" ? "center" : "start"}
+        sideOffset={8}
+        collisionPadding={12}
+        className="max-h-[min(70vh,var(--radix-popover-content-available-height))] w-72 overflow-y-auto overscroll-contain rounded-[var(--md-sys-shape-corner-large)] border border-edge-soft bg-elevated p-0 shadow-[var(--md-sys-elevation-3)] harbor-pop-in"
+      >
+        <div>
           <div className="px-4 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
             Your lists
           </div>
@@ -220,7 +211,7 @@ export function AddToListButton({
             )}
           </div>
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

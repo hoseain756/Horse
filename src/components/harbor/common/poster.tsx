@@ -11,11 +11,19 @@ export function PosterImage({
   alt,
   className,
   landscape,
+  eager,
+  srcSet,
+  sizes,
 }: {
   src?: string;
   alt: string;
   className?: string;
   landscape?: boolean;
+  /** Above-the-fold art (detail hero): eager load + high fetch priority. */
+  eager?: boolean;
+  /** Optional responsive candidates (see heroBackdropArt in detail-view). */
+  srcSet?: string;
+  sizes?: string;
 }) {
   const [state, setState] = useState({
     src,
@@ -45,8 +53,11 @@ export function PosterImage({
       { }
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={sizes}
         alt={alt}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : undefined}
         decoding="async"
         onLoad={() => setState((s) => ({ ...s, loaded: true }))}
         onError={() => {

@@ -1025,6 +1025,20 @@ html[data-tv="on"] [role="button"]:focus-visible {
 .harbor-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .harbor-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* ===== Shared page container (detail page cinematic hero, Task 32) =====
+   ONE container for the hero content column and every section below the
+   hero (cast, episodes, rails, hints): capped at 1440px, centered, fluid
+   side padding 16 → 48px. All sections align to the same inline-start
+   edge as the hero column (mirrors automatically in RTL via logical
+   margin/padding properties). Wide sections then use the full container
+   width — no large dead side areas on big screens. */
+.harbor-page-container {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-inline: clamp(16px, 4vw, 48px);
+}
+
 /* Hide scrollbar for Chrome-like sidebars in rail modes */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

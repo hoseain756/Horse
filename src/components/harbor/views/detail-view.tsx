@@ -15,7 +15,7 @@
 // Business logic (meta loading, resume, watchlist, picker push) is unchanged
 // from the Harbor port — this is a presentation refactor.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft, Play, Plus, Check, Star, RotateCcw, Layers, ChevronDown, Share2,
 } from "lucide-react";
@@ -32,8 +32,49 @@ import { RatingsRow } from "../chrome/ratings-row";
 import { useT } from "@/hooks/use-t";
 import { useToast } from "@/hooks/use-toast";
 import { EpisodesSection } from "../episodes/episodes-section";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /* ---------- small presentational atoms ---------- */
+
+/** Full-bleed hero backdrop art, following the app's image rules:
+ *  - TMDB backdrops use the NATIVE CDN srcset ladder (w780 → w1280 →
+ *    original; the TMDB CDN serves AVIF/WebP via Accept header) — same
+ *    ladder as tmdbBackdropTiers in home-hero.
+ *  - Metahub backgrounds go through the /api/img transform proxy
+ *    (AVIF/WebP + width fit) — same rule as the episodes thumbnails.
+ *  - Anything else keeps its plain src (never breaks).
+ *  The hero always spans the full viewport width, so sizes="100vw". */
+function heroBackdropArt(url: string | undefined): { src: string; srcSet?: string } {
+  if (!url) return { src: "" };
+  const tmdb = url.match(/image\.tmdb\.org\/t\/p\/[^/]+(\/.+)$/);
+  if (tmdb) {
+    const at = (slug: string) => `https://image.tmdb.org/t/p/${slug}${tmdb[1]}`;
+    return {
+      src: at("w1280"),
+      srcSet: [
+        `${at("w780")} 780w`,
+        `${at("w1280")} 1280w`,
+        `${at("original")} 1920w`,
+        `${at("original")} 2560w`,
+      ].join(", "),
+    };
+  }
+  const mh = url.match(/images\.metahub\.space\/background\/(?:small|medium|large|xlarge|original)\/(.+)$/);
+  if (mh) {
+    const proxied = (slug: string, w: number) =>
+      `/api/img?u=${encodeURIComponent(`https://images.metahub.space/background/${slug}/${mh[1]}`)}&w=${w}&q=80`;
+    return {
+      src: proxied("medium", 1280),
+      srcSet: `${proxied("medium", 1280)} 1280w, ${proxied("large", 1920)} 1920w, ${proxied("large", 2560)} 2560w`,
+    };
+  }
+  return { src: url };
+}
 
 /** Subtle bullet divider for the single-line metadata row. */
 function MetaBullet() {
@@ -188,32 +229,12 @@ export function DetailView({ type, id }: { type: string; id: string }) {
     [meta, tmdb.details, push, settings.instantPlay],
   );
 
-  /* ---------- expandable secondary menu ---------- */
+  /* ---------- expandable secondary menu ----------
+     Placement is owned by Radix (portal + collision-aware popper): the menu
+     renders outside the document flow at the end of <body>, so opening it
+     can never widen, clip, or shift the page. State stays here only to
+     rotate the chevron. */
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuWrapRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside pointer + Escape; return focus to the trigger on Esc.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (menuWrapRef.current && !menuWrapRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setMenuOpen(false);
-        menuWrapRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-      }
-    };
-    window.addEventListener("pointerdown", onDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [menuOpen]);
 
   const openStreams = useCallback(() => {
     setMenuOpen(false);
@@ -272,27 +293,19 @@ export function DetailView({ type, id }: { type: string; id: string }) {
 
   if (loading) {
     return (
-      <div className="px-4 pt-[72px] pb-16 md:px-8 md:pt-20">
+      <div className="min-w-0 pb-16">
         {back}
-        {/* hero card skeleton */}
+        {/* hero skeleton — mirrors the real hero (card <600px, full-bleed band ≥600px) */}
         <div
-          className="harbor-skeleton mx-auto aspect-[16/11] max-w-5xl rounded-[28px] sm:aspect-[16/8] md:aspect-[21/8] md:rounded-[36px]"
+          className="harbor-skeleton mx-auto aspect-[16/11] max-w-5xl rounded-[28px] max-[599px]:mx-4 max-[599px]:mt-[72px] min-[600px]:mx-0 min-[600px]:mt-0 min-[600px]:aspect-auto min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:rounded-none"
           aria-hidden
         />
-        {/* metadata row skeleton */}
-        <div className="mt-5 flex justify-center" aria-hidden>
-          <div className="harbor-skeleton h-6 w-72 rounded-full" />
-        </div>
-        {/* synopsis skeleton */}
-        <div className="mx-auto mt-4 max-w-xl space-y-2" aria-hidden>
-          <div className="harbor-skeleton mx-auto h-4 w-full rounded-lg" />
-          <div className="harbor-skeleton mx-auto h-4 w-3/4 rounded-lg" />
-        </div>
-        {/* action row skeleton */}
-        <div className="mt-7 flex items-center justify-center gap-3" aria-hidden>
-          <div className="harbor-skeleton h-[52px] w-44 rounded-full" />
-          <div className="harbor-skeleton h-[52px] w-[52px] rounded-full" />
-          <div className="harbor-skeleton h-[52px] w-[52px] rounded-full" />
+        {/* content column skeleton (same container as the real column) */}
+        <div className="harbor-page-container mt-6 space-y-3" aria-hidden>
+          <div className="harbor-skeleton h-6 w-72 max-w-full rounded-full" />
+          <div className="harbor-skeleton h-4 w-full max-w-xl rounded-lg" />
+          <div className="harbor-skeleton h-4 w-2/3 max-w-md rounded-lg" />
+          <div className="harbor-skeleton h-[52px] w-64 max-w-full rounded-full" />
         </div>
         <div className="sr-only">{tr("loadingDetails")}</div>
       </div>
@@ -318,54 +331,98 @@ export function DetailView({ type, id }: { type: string; id: string }) {
   const genre = meta.genres?.find((g) => g && g.trim().length > 0) ?? null;
   const hasAnyMeta = imdbScore || year || runtime || genre;
 
+  // Full-bleed backdrop sources (native TMDB ladder / proxied Metahub ladder)
+  const backdrop = heroBackdropArt(tmdb.backdrop ?? meta.background ?? meta.poster);
+  const hasLogo = Boolean(tmdb.logo || meta.logo);
+
   return (
-    <div className="pb-16">
+    <div className="min-w-0 pb-16">
       {back}
 
-      {/* ================= 1 · HERO ARTWORK CARD =================
-          The official logo lives INSIDE the card's bottom scrim. No chips,
-          ratings, text or buttons float over the artwork anymore. */}
-      <section className="px-4 pt-[72px] md:px-8 md:pt-20" aria-label={meta.name}>
-        <div className="harbor-pop-in relative mx-auto aspect-[16/11] max-w-5xl overflow-hidden rounded-[28px] border border-edge-soft bg-raised shadow-[0_36px_90px_-36px_rgba(0,0,0,0.9)] sm:aspect-[16/8] md:aspect-[21/8] md:rounded-[36px]">
+      {/* ================= 1 · CINEMATIC HERO =================
+          <600px: contained rounded artwork card — compact layout untouched.
+          ≥600px: full-bleed landscape backdrop spanning the viewport from the
+          top edge (behind the Back button), fading into the page background
+          at the bottom. Scrims keep text readable; both mirror in RTL. */}
+      <section aria-label={meta.name} className="relative max-[599px]:px-4 max-[599px]:pt-[72px]">
+        {/* sr-only h1 keeps the document outline in both hero variants */}
+        <h1 className="sr-only">{meta.name}</h1>
+        <div className="harbor-pop-in relative mx-auto aspect-[16/11] w-full max-w-5xl overflow-hidden rounded-[28px] border border-edge-soft bg-raised shadow-[0_36px_90px_-36px_rgba(0,0,0,0.9)] min-[600px]:aspect-auto min-[600px]:h-[clamp(360px,52vh,680px)] min-[600px]:max-w-none min-[600px]:rounded-none min-[600px]:border-0 min-[600px]:shadow-none">
           <PosterImage
-            src={tmdb.backdrop ?? meta.background ?? meta.poster}
+            src={backdrop.src}
+            srcSet={backdrop.srcSet}
+            sizes="100vw"
+            eager
             alt={meta.name}
-            className="absolute inset-0"
+            className="absolute inset-0 min-[600px]:object-[50%_30%]"
             landscape
           />
-          {/* Bottom scrim — legibility bed for the embedded logo */}
-          <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
-          {/* Embedded official title logo (sr-only h1 keeps document outline) */}
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-center px-5 pb-5 md:pb-9">
-            {tmdb.logo || meta.logo ? (
-              <>
-                <h1 className="sr-only">{meta.name}</h1>
-                <img
-                  src={tmdb.logo ?? meta.logo}
-                  alt=""
-                  className="max-h-14 w-auto max-w-[78%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.95)] transition-transform duration-500 sm:max-h-16 md:max-h-24"
-                  loading="lazy"
-                />
-              </>
+          {/* ≥600px scrims: directional gradient from the content (inline-start)
+              side — mirrors in RTL — plus the bottom fade into the page. */}
+          <div aria-hidden className="absolute inset-0 hidden bg-gradient-to-r from-canvas/90 via-canvas/40 to-transparent min-[600px]:block rtl:bg-gradient-to-l" />
+          <div aria-hidden className="absolute inset-x-0 bottom-0 hidden h-[45%] bg-gradient-to-t from-canvas via-canvas/55 to-transparent min-[600px]:block" />
+          {/* <600px card scrim — legibility bed for the embedded compact logo */}
+          <div aria-hidden className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/45 to-transparent min-[600px]:hidden" />
+          {/* Embedded compact logo (<600px only; ≥600px it lives in the column) */}
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-center px-5 pb-5 min-[600px]:hidden">
+            {hasLogo ? (
+              <img
+                src={tmdb.logo ?? meta.logo}
+                alt=""
+                aria-hidden
+                className="max-h-14 w-auto max-w-[78%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.95)]"
+                loading="lazy"
+              />
             ) : (
-              <h1 className="font-display text-center text-3xl font-bold tracking-tight text-white drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)] md:text-5xl">
+              <div
+                aria-hidden
+                className="font-display text-center text-3xl font-bold tracking-tight text-white drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)]"
+              >
                 {meta.name}
-              </h1>
+              </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* ============ 2 · SINGLE-LINE METADATA ROW ============
-          One horizontal, non-wrapping line directly below the card.
-          Scrolls horizontally on the narrowest screens — never wraps. */}
-      {hasAnyMeta && (
-        <div className="mx-auto mt-4 max-w-3xl">
-          {/* Outer scroller + inner w-max row: centers when it fits, scrolls
-              from the true start edge when it doesn't (no justify-center
-              scroll-trap). Single line — never wraps. */}
-          <div className="no-scrollbar overflow-x-auto">
-            <div className="flex w-max min-w-full flex-nowrap items-center justify-center gap-2.5 px-4 py-0.5 md:px-6">
+      {/* ============ HERO CONTENT COLUMN ============
+          ONE inline-start-aligned column (mirrors in RTL) holding the title
+          logo, metadata row, synopsis and actions — overlapping the hero's
+          lower part on ≥600px. 600–839px widens to ~70%; ≥840px caps at
+          600px. <600px: same elements, centered under the card (unchanged).
+          pointer-events pass through the wrapper so the artwork behind the
+          empty side stays hoverable; the column itself re-enables them. */}
+      <div className="harbor-page-container relative z-10 min-[600px]:pointer-events-none min-[600px]:-mt-[clamp(96px,14vh,168px)]">
+        <div className="flex min-w-0 flex-col items-center text-center min-[600px]:pointer-events-auto min-[600px]:max-w-[70%] min-[600px]:items-start min-[600px]:text-start min-[840px]:max-w-[600px]">
+          {/* ≥600px title logo (sr-only h1 above carries the semantics) */}
+          {hasLogo ? (
+            <img
+              src={tmdb.logo ?? meta.logo}
+              alt=""
+              aria-hidden
+              loading="eager"
+              decoding="async"
+              className="hidden max-h-16 w-auto max-w-full object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.95)] min-[600px]:block min-[840px]:max-h-24"
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="hidden font-display text-3xl font-bold tracking-tight text-white drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)] min-[600px]:block min-[840px]:text-5xl"
+            >
+              {meta.name}
+            </div>
+          )}
+
+          {/* ============ 2 · SINGLE-LINE METADATA ROW ============
+              One horizontal, non-wrapping line. Scrolls horizontally on the
+              narrowest screens — never wraps; never widens the page. */}
+          {hasAnyMeta && (
+            <div className="mx-auto mt-4 w-full max-w-3xl min-[600px]:mx-0 min-[600px]:mt-2 min-[600px]:max-w-none">
+              {/* Outer scroller + inner w-max row: centers when it fits, scrolls
+                  from the true start edge when it doesn't (no justify-center
+                  scroll-trap). Single line — never wraps. */}
+              <div className="no-scrollbar overflow-x-auto">
+                <div className="flex w-max min-w-full flex-nowrap items-center justify-center gap-2.5 px-4 py-0.5 min-[600px]:justify-start min-[600px]:px-0">
               {imdbScore && (
                 <span
                   className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-2.5 py-1 text-[13px] font-bold text-amber-300 tabular-nums"
@@ -421,7 +478,7 @@ export function DetailView({ type, id }: { type: string; id: string }) {
           </div>
           {/* Provider rating chips (deep links) — subtle, centered; hidden
               entirely when ratings are off / no provider data. */}
-          <div className="mt-2 flex justify-center px-4 md:px-6">
+          <div className="mt-2 flex justify-center px-4 min-[600px]:justify-start min-[600px]:px-0">
             <RatingsRow
               type={meta.type}
               imdbId={/^tt\d+$/.test(meta.id) ? meta.id : undefined}
@@ -434,15 +491,20 @@ export function DetailView({ type, id }: { type: string; id: string }) {
         </div>
       )}
 
-      {/* ================== 3 · SYNOPSIS ================== */}
-      {meta.description && (
-        <p className="mx-auto mt-4 max-w-2xl px-4 text-center text-sm leading-[1.8] text-ink-muted md:px-6 md:text-[15px]">
-          {meta.description}
-        </p>
-      )}
+          {/* ================== 3 · SYNOPSIS ==================
+              ≥600px: start-aligned, 60ch measure, 3-line clamp — inside the
+              column. <600px: centered, no clamp (layout unchanged). */}
+          {meta.description && (
+            <p className="mx-auto mt-4 max-w-2xl px-4 text-center text-sm leading-[1.8] text-ink-muted min-[600px]:mx-0 min-[600px]:max-w-[60ch] min-[600px]:px-0 min-[600px]:text-start min-[600px]:line-clamp-3 md:text-[15px]">
+              {meta.description}
+            </p>
+          )}
 
-      {/* ========== 4 · CENTERED ACTION CONTROLS + EXPANDABLE MENU ========== */}
-      <div className="mx-auto mt-6 flex items-center justify-center gap-2.5 px-4 md:gap-3">
+          {/* ========== 4 · ACTION CONTROLS + EXPANDABLE MENU ==========
+              The primary CTA and its menu trigger stay together as one split
+              group; the row wraps between groups (long labels never widen it). */}
+          <div className="mx-auto mt-6 flex min-w-0 flex-wrap items-center justify-center gap-2.5 px-4 min-[600px]:mx-0 min-[600px]:justify-start min-[600px]:px-0 md:gap-3">
+            <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
         {/* Primary CTA */}
         {meta.type === "series" && nextVideo && resume > 0 ? (
           <button
@@ -464,83 +526,68 @@ export function DetailView({ type, id }: { type: string; id: string }) {
           </button>
         )}
 
-        {/* Secondary expandable menu (spinner/dropdown button) */}
-        <div ref={menuWrapRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label={tr("moreOptions")}
-            className="harbor-tv-focus flex h-[52px] w-[52px] items-center justify-center rounded-full border border-edge-soft bg-raised/80 text-ink backdrop-blur-md transition-all hover:scale-[1.04] hover:bg-raised active:scale-95 md-state"
-          >
-            <motion.span
-              animate={{ rotate: menuOpen ? 180 : 0 }}
-              transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
-              className="flex"
+        {/* Secondary expandable menu — Radix DropdownMenu. Rendered through a
+            portal with collision-aware popper positioning (top of body, out of
+            the document flow): opening it can never widen/clip/shift the page.
+            Flips above when out of room, shifts to stay 12px inside the
+            viewport, max-height = min(70vh, available space) with internal
+            scrolling. Visual design unchanged (same panel + item classes).
+            a11y: aria-haspopup/expanded/controls, focus into menu + back to
+            trigger, arrow-key navigation, Esc/outside-click close. */}
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={tr("moreOptions")}
+              className="harbor-tv-focus flex h-[52px] w-[52px] items-center justify-center rounded-full border border-edge-soft bg-raised/80 text-ink backdrop-blur-md transition-all hover:scale-[1.04] hover:bg-raised active:scale-95 md-state"
             >
-              <ChevronDown className="h-5 w-5" aria-hidden />
-            </motion.span>
-          </button>
-
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                role="menu"
-                aria-label={tr("moreOptions")}
-                initial={{ opacity: 0, x: "-50%", y: -8, scale: 0.95 }}
-                animate={{ opacity: 1, x: "-50%", y: 0, scale: 1 }}
-                exit={{ opacity: 0, x: "-50%", y: -6, scale: 0.97 }}
-                transition={{ duration: 0.19, ease: [0.2, 0, 0, 1] }}
-                className="absolute top-full left-1/2 z-40 mt-2 w-60 origin-top overflow-hidden rounded-2xl border border-edge-soft bg-elevated/95 shadow-[var(--md-sys-elevation-3)] backdrop-blur-xl"
+              <motion.span
+                animate={{ rotate: menuOpen ? 180 : 0 }}
+                transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
+                className="flex"
               >
-                <ul className="p-1.5">
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        toggleWatchlistFromMenu();
-                        setMenuOpen(false);
-                      }}
-                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
-                    >
-                      {inList ? (
-                        <Check className="h-4 w-4 text-accent" aria-hidden />
-                      ) : (
-                        <Plus className="h-4 w-4" aria-hidden />
-                      )}
-                      {inList ? tr("inWatchlistItem") : tr("addToWatchlist")}
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={openStreams}
-                      title={tr("streamsHint")}
-                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
-                    >
-                      <Layers className="h-4 w-4" aria-hidden />
-                      {tr("availableStreams")}
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={onShare}
-                      className="md-state harbor-tv-focus flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink transition-colors hover:bg-raised"
-                    >
-                      <Share2 className="h-4 w-4" aria-hidden />
-                      {tr("share")}
-                    </button>
-                  </li>
-                </ul>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                <ChevronDown className="h-5 w-5" aria-hidden />
+              </motion.span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="bottom"
+            align="center"
+            sideOffset={8}
+            collisionPadding={12}
+            className="max-h-[min(70vh,var(--radix-dropdown-menu-content-available-height))] w-60 overflow-y-auto overscroll-contain rounded-2xl border border-edge-soft bg-elevated/95 p-1.5 shadow-[var(--md-sys-elevation-3)] backdrop-blur-xl"
+          >
+            <DropdownMenuItem
+              onSelect={() => {
+                toggleWatchlistFromMenu();
+              }}
+              className="md-state harbor-tv-focus flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink outline-none transition-colors hover:bg-raised focus:bg-raised focus:text-ink data-[highlighted]:bg-raised data-[highlighted]:text-ink"
+            >
+              {inList ? (
+                <Check className="h-4 w-4 text-accent" aria-hidden />
+              ) : (
+                <Plus className="h-4 w-4" aria-hidden />
+              )}
+              {inList ? tr("inWatchlistItem") : tr("addToWatchlist")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={openStreams}
+              title={tr("streamsHint")}
+              className="md-state harbor-tv-focus flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink outline-none transition-colors hover:bg-raised focus:bg-raised focus:text-ink data-[highlighted]:bg-raised data-[highlighted]:text-ink"
+            >
+              <Layers className="h-4 w-4" aria-hidden />
+              {tr("availableStreams")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={onShare}
+              className="md-state harbor-tv-focus flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3.5 text-start text-sm font-medium text-ink outline-none transition-colors hover:bg-raised focus:bg-raised focus:text-ink data-[highlighted]:bg-raised data-[highlighted]:text-ink"
+            >
+              <Share2 className="h-4 w-4" aria-hidden />
+              {tr("share")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+            </div>
 
         {/* Custom user lists — compact circular icon variant (Task 30) */}
         <AddToListButton
@@ -554,11 +601,14 @@ export function DetailView({ type, id }: { type: string; id: string }) {
             imdbRating: meta.imdbRating,
           }}
         />
+          </div>
+        </div>
       </div>
 
-      {/* Cast & crew — quiet centered lines under the action row */}
+      {/* Cast & crew — shared container, start-aligned ≥600px (mirrors RTL) */}
       {(meta.cast?.length || meta.director?.length) && (
-        <div className="mx-auto mt-8 flex max-w-2xl flex-col items-center gap-2 px-4 text-center md:px-6">
+        <div className="harbor-page-container mt-8">
+          <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 px-4 text-center min-[600px]:mx-0 min-[600px]:items-start min-[600px]:px-0 min-[600px]:text-start">
           {meta.director && meta.director.length > 0 && (
             <p className="text-[13px] leading-relaxed">
               <span className="me-2 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
@@ -575,6 +625,7 @@ export function DetailView({ type, id }: { type: string; id: string }) {
               <span className="font-medium text-ink harbor-clamp-2">{meta.cast.slice(0, 4).join(", ")}</span>
             </p>
           )}
+          </div>
         </div>
       )}
 
@@ -596,8 +647,10 @@ export function DetailView({ type, id }: { type: string; id: string }) {
 
       {/* Movie: default video behavior — Cinemeta movies have behaviorHints.defaultVideoId or just play id */}
       {meta.type === "movie" && !meta.genres?.length && (
-        <div className="mx-auto mt-8 max-w-2xl px-4 text-center md:px-6">
-          <p className="text-xs text-ink-subtle">{tr("pressPlayHint")}</p>
+        <div className="harbor-page-container mt-8">
+          <p className="mx-auto max-w-2xl text-center text-xs text-ink-subtle min-[600px]:mx-0 min-[600px]:text-start">
+            {tr("pressPlayHint")}
+          </p>
         </div>
       )}
     </div>
@@ -624,14 +677,14 @@ function TmdbRecsRail({ items }: { items: Meta[] }) {
   const push = useNav((s) => s.push);
   if (items.length === 0) return null;
   return (
-    <section className="mt-12" aria-label={tr("recommendedByTmdb")}>
-      <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
+    <section className="harbor-page-container mt-12" aria-label={tr("recommendedByTmdb")}>
+      <div className="mb-3 flex items-center gap-2">
         <Layers className="h-5 w-5 text-accent" aria-hidden />
         <h2 className="md-title-medium text-ink">{tr("recommendedTitle")}</h2>
         <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{tr("viaTmdb")}</span>
       </div>
       {/* Hover headroom: pt-3/-mt-3 keeps the header→card gap while giving the hover lift room inside the scroll clip */}
-      <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
+      <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2 pt-3 -mt-3">
         {items.map((m) => (
           <div key={`${m.type}-${m.id}`} className="w-[104px] shrink-0 md:w-[126px]">
             <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
@@ -685,21 +738,21 @@ function SimilarRail({
   const items: Meta[] | null = data && data.genre === genre ? data.items : null;
 
   return (
-    <section className="mt-12" aria-label={tr("moreLikeThis")}>
-      <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
+    <section className="harbor-page-container mt-12" aria-label={tr("moreLikeThis")}>
+      <div className="mb-3 flex items-center gap-2">
         <Layers className="h-5 w-5 text-accent" aria-hidden />
         <h2 className="md-title-medium text-ink">{tr("moreLikeThis")}</h2>
         <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{genre}</span>
       </div>
       {items === null ? (
-        <div className="flex gap-3 overflow-hidden px-4 md:px-8" aria-hidden>
+        <div className="flex gap-3 overflow-hidden" aria-hidden>
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="harbor-skeleton aspect-[2/3] w-[112px] shrink-0 rounded-xl md:w-[136px]" />
           ))}
         </div>
       ) : items.length === 0 ? null : (
         /* Hover headroom: same pt-3/-mt-3 contract as TmdbRecsRail above */
-        <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
+        <div className="harbor-scroll-x overflow-x-auto flex gap-3 pb-2 pt-3 -mt-3">
           {items.map((m) => (
             <div key={`${m.id}`} className="w-[104px] shrink-0 md:w-[126px]">
               <MetaCard

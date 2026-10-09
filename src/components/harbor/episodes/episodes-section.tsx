@@ -371,7 +371,7 @@ export function EpisodesSection({
   if (videos.length === 0 || seasons.length === 0) {
     return (
       <section className="episodes-scope mt-12 w-full" aria-label={tr("episodesTitle")}>
-        <div className="mx-auto max-w-[1440px] px-4 md:px-8">
+        <div className="harbor-page-container">
           <h2 className="md-title-medium mb-3 text-ink">{tr("episodesTitle")}</h2>
           <p className="text-sm text-ink-subtle">{tr("noEpisodes")}</p>
         </div>
@@ -393,7 +393,7 @@ export function EpisodesSection({
 
   return (
     <section className="episodes-scope mt-12 w-full" aria-label={tr("episodesTitle")}>
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
+      <div className="harbor-page-container">
         <h2 className="md-title-medium mb-3 text-ink">{tr("episodesTitle")}</h2>
 
         <div className="episodes-body">
