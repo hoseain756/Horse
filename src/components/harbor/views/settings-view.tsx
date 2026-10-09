@@ -609,7 +609,7 @@ function ThemePanel() {
       <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h2 className="md-title-large font-display font-bold text-ink flex items-center gap-2">
+            <h2 className="md-title-medium font-display font-bold text-ink flex items-center gap-2">
               <Brush className="w-[18px] h-[18px] text-accent" /> Theme Studio
             </h2>
             <p className="md-body-small text-ink-muted mt-0.5">
@@ -1184,7 +1184,7 @@ function AboutPanel() {
           {/* Brand lockup: primary galloping-horse mark + app name */}
           <div className="flex items-center gap-3">
             <HorseMark className="h-12 w-auto text-accent" label="Horse logo" />
-            <h2 className="md-title-large font-display font-bold text-ink">Horse</h2>
+            <h2 className="md-title-medium font-display font-bold text-ink">Horse</h2>
           </div>
           {canInstall && (
             <Button
@@ -1261,7 +1261,7 @@ function IntegrationsPanel() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h2 className="md-title-large font-display font-bold text-ink mb-1">{tr("integrationsTitle")}</h2>
+        <h2 className="md-title-medium font-display font-bold text-ink mb-1">{tr("integrationsTitle")}</h2>
         <p className="md-body-medium text-ink-muted">
           <RichBidi text={tr("integrationsIntro")} />
         </p>

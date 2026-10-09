@@ -1504,3 +1504,20 @@ Work Log:
 Stage Summary:
 - All 14 commits are safely committed locally; nothing lost. Push remains BLOCKED solely by the missing GitHub PAT (sandbox rollback wiped ~/.git-credentials) — watcher + credential helper are re-armed so a fresh PAT auto-pushes everything within a minute.
 - ACTION NEEDED FROM OPERATOR: paste a fresh GitHub PAT (classic, repo scope) for hoseain756 — it will be stored in ~/.git-credentials (outside the repo) and the pending commits will go out automatically.
+---
+Task ID: sizes-global-shrink (user: "راجع جميع الاحجام لانني اعتقد انها تبدو كبيرة راجع كل شي")
+Agent: main (orchestrator)
+Task: Global size audit + reduction — everything read oversized (phones AND desktop).
+
+Work Log:
+- MEASURED BEFORE (agent-browser 360 + 1280, screenshots kept): --home-scale 1.35@1280, dock 72px/440px, rail headers md-title-large (22px!), cards 130/150px (2.4 visible on phone), hero cap 720px×scale, grids 5-7 cols on md+.
+- SCALE LADDER RE-TUNED (globals.css): --home-scale 1.15/1.25/1.35/1.5/1.65/1.8 → 1.08/1.15/1.22/1.32/1.42/1.52 (≈8-16% smaller at every breakpoint; phone stays 1). Hero ceiling 720px→640px & 67svh→64svh. Content-well --cw-card-w 320→300px base, 69vw→66vw cap.
+- DOCK LADDER RE-TUNED (every window class): height 64/68/72/88→60/64/66/78, tabs 48/52/56/68→44/48/50/60, icons 24/26/32→22/24/28, widths 340/380/420/440/520→330/360/400/420/490; <360: 58/42/22→54/40/20; landscape ≤480h: 52/40/22→48/38/20. 44px tab floor kept = minimum touch target. --nav-clearance auto-derives. Dock fractional-index math reads live rects → immune.
+- TYPOGRAPHY: every section/dialog header md-title-large (22px) → md-title-medium (16px/600) across 12 files (rail, home, section-rails, anime, detail, calendar, list-detail, settings, library, picker-overlay, account, theme-studio) — all 21 usages verified to be headers, never content titles. Rail title icon w-5→w-4.5; "View all" chip min-h-11→min-h-9.
+- CARDS: rail cards 130/150→120/138px (home ×2 + skeleton, section-rails ×2 + skeleton, anime, rail skeleton); Top-10 110/130→102/120px; detail recs/similar 112/136→104/126px (+skeleton). Grid view md:5/lg:6/xl:7→md:6/lg:7/xl:8 cols.
+- VERIFY (agent-browser, clean .next restart per Turbopack stale-chunk lesson, fresh session): measured AFTER: --home-scale 1.22@1280 ✓, rail headers 16px md-title-medium ✓ (4/4 rails), Top-10 card 120px + rail cards 138px ✓, dock 66px/420px@1280 ✓, hero 512px ✓. Screenshots: home 360 + rails 360/1280 + detail 1280 — visibly more content per screen (9+ posters vs 7 at 1280). Interactions: dock tap → view switch ✓, rail card → detail ✓, hero swipe → carousel advanced to dot 2, drag-sync dots intact ✓. Console (fresh session): 0 errors — the transient detail-view 829:14 parse entry was again the stale-buffer artifact (eslint parses clean). Lint: 0 errors (164 pre-existing warnings).
+- NOT changed: M3 type scale bodies (already standard), phone grid-cols-3 (touch), poster chips, player internals, indicator ladder (already tuned in a previous round).
+
+Stage Summary:
+- The whole app reads ~10% tighter: every token ladder (home scale, dock, hero) plus all hardcoded card widths and 22px section headers reduced coherently; touch floors (44px) preserved; no JS gesture math touched (all reads live rects/tokens). Screenshots before/after saved under /tmp.
+- GitHub push STILL BLOCKED (no PAT since rollback) — 17 commits now pending locally; watcher re-armed, pushes automatically the moment ~/.git-credentials is filled.

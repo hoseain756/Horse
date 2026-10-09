@@ -370,7 +370,7 @@ export function ThemeStudio({ open, onClose }: { open: boolean; onClose: () => v
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
       <DialogContent className="md-dialog max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 md-title-large font-display">
+          <DialogTitle className="flex items-center gap-2 md-title-medium font-display">
             <Palette className="w-5 h-5 text-accent" /> Theme Studio
           </DialogTitle>
           <DialogDescription>
@@ -564,7 +564,7 @@ export function ThemeStudio({ open, onClose }: { open: boolean; onClose: () => v
                 }}
               >
                 <div className="md-dialog w-full max-w-lg p-5">
-                  <h3 className="md-title-large font-display font-bold text-ink mb-1">Theme link</h3>
+                  <h3 className="md-title-medium font-display font-bold text-ink mb-1">Theme link</h3>
                   <p className="md-body-small text-ink-muted mb-3">
                     Paste a shared theme link (or the raw hbtheme1 code). Nothing is sent to any server.
                   </p>

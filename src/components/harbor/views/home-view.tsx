@@ -163,13 +163,13 @@ export function HomeView() {
         {rows.map((row) =>
           row.loading ? (
             <section key={row.key} aria-label={`${row.title} loading`}>
-              <h2 className="md-title-large text-ink px-4 md:px-8 mb-2.5">{row.title}</h2>
+              <h2 className="md-title-medium text-ink px-4 md:px-8 mb-2.5">{row.title}</h2>
               <RailSkeleton />
             </section>
           ) : row.metas.length > 0 ? (
             <Rail key={row.key} title={row.title}>
               {row.metas.slice(0, 24).map((m) => (
-                <div key={m.id} className="shrink-0 w-[130px] md:w-[150px]">
+                <div key={m.id} className="shrink-0 w-[120px] md:w-[138px]">
                   <MetaCard meta={m} onOpen={() => openMeta(m)} />
                 </div>
               ))}
@@ -195,7 +195,7 @@ function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void 
   return (
     <section aria-label="Top 10 today">
       <div className="flex items-baseline justify-between px-4 md:px-8 mb-2.5">
-        <h2 className="md-title-large text-ink">Top 10 Today</h2>
+        <h2 className="md-title-medium text-ink">Top 10 Today</h2>
         <span className="md-body-small text-ink-subtle">trending on Stremio</span>
       </div>
       {/* Hover headroom: pt-3/-mt-1 keeps the 18px header→card gap while giving the hover lift room inside the scroll clip */}
@@ -215,7 +215,7 @@ function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void 
             >
               {i + 1}
             </span>
-            <div className="w-[110px] md:w-[130px] relative z-10">
+            <div className="w-[102px] md:w-[120px] relative z-10">
               <MetaCard meta={m} onOpen={() => onOpen(m)} />
             </div>
           </div>
@@ -270,10 +270,10 @@ function AddonRail({
     >
       {loading
         ? Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[130px] md:w-[150px] aspect-[2/3]" />
+            <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[120px] md:w-[138px] aspect-[2/3]" />
           ))
         : metas.slice(0, 24).map((m) => (
-            <div key={m.id} className="shrink-0 w-[130px] md:w-[150px]">
+            <div key={m.id} className="shrink-0 w-[120px] md:w-[138px]">
               <MetaCard meta={m} onOpen={() => onOpen(m)} />
             </div>
           ))}

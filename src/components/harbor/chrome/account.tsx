@@ -56,7 +56,7 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="md-dialog max-w-sm">
         <DialogHeader>
-          <DialogTitle className="md-title-large font-display flex items-center gap-2">
+          <DialogTitle className="md-title-medium font-display flex items-center gap-2">
             <User className="w-5 h-5 text-accent" /> Sign in to Stremio
           </DialogTitle>
         </DialogHeader>

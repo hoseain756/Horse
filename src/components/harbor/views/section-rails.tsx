@@ -162,7 +162,7 @@ export function SectionRails({
             <RailReveal key={spec.key} index={addonCatalogRows.length + i}>
               {isLoading ? (
                 <section>
-                  <h2 className="md-title-large text-ink px-4 md:px-8 mb-2.5">{spec.title}</h2>
+                  <h2 className="md-title-medium text-ink px-4 md:px-8 mb-2.5">{spec.title}</h2>
                   <RailSkeleton />
                 </section>
               ) : (
@@ -177,7 +177,7 @@ export function SectionRails({
                   }
                 >
                   {(rows[spec.key] ?? []).slice(0, 24).map((m) => (
-                    <div key={m.id} className="shrink-0 w-[130px] md:w-[150px]">
+                    <div key={m.id} className="shrink-0 w-[120px] md:w-[138px]">
                       <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
                     </div>
                   ))}
@@ -244,10 +244,10 @@ function AddonCatalogRail({
       >
         {loading
           ? Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[130px] md:w-[150px] aspect-[2/3]" />
+              <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[120px] md:w-[138px] aspect-[2/3]" />
             ))
           : metas.slice(0, 24).map((m) => (
-              <div key={m.id} className="shrink-0 w-[130px] md:w-[150px]">
+              <div key={m.id} className="shrink-0 w-[120px] md:w-[138px]">
                 <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
               </div>
             ))}

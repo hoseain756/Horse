@@ -539,7 +539,7 @@ function EmptyCalendar() {
   return (
     <div className="md-card-outlined p-10 text-center">
       <Tv className="w-10 h-10 mx-auto text-ink-subtle mb-3" />
-      <h2 className="md-title-large text-ink mb-1">No tracked series yet</h2>
+      <h2 className="md-title-medium text-ink mb-1">No tracked series yet</h2>
       <p className="md-body-medium text-ink-muted mb-5 max-w-sm mx-auto">
         Add shows to your watchlist or start watching, and their weekly episode air dates will
         appear here automatically.

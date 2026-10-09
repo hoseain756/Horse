@@ -247,7 +247,7 @@ export function PickerOverlay({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 py-4 border-b border-edge-soft shrink-0 sm:px-5">
           <div className="min-w-0">
-            <h2 className="md-title-large text-ink">Choose a stream</h2>
+            <h2 className="md-title-medium text-ink">Choose a stream</h2>
             <p className="text-xs text-ink-subtle truncate">
               {type === "series" ? `Series · ${targetId}` : targetId}
               {season ? ` · S${season}:E${episode}` : ""}

@@ -262,7 +262,7 @@ export function ListDetailView({ listId }: { listId: string }) {
           }}
         >
           <div className="w-full max-w-lg md-dialog p-5 harbor-pop-in">
-            <h3 className="md-title-large text-ink mb-1">Share “{list.name}”</h3>
+            <h3 className="md-title-medium text-ink mb-1">Share “{list.name}”</h3>
             <p className="md-body-small text-ink-subtle mb-3">
               Copy this link to share your list. It contains only titles and poster URLs — nothing
               is sent to any server.
@@ -317,7 +317,7 @@ export function ListDetailView({ listId }: { listId: string }) {
           }}
         >
           <div className="w-full max-w-md md-dialog p-5">
-            <h2 className="md-title-large text-ink mb-4">Edit list</h2>
+            <h2 className="md-title-medium text-ink mb-4">Edit list</h2>
             <label className="block md-label-medium text-ink-muted mb-1.5" htmlFor="list-name">
               Name
             </label>

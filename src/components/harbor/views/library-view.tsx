@@ -260,7 +260,7 @@ export function LibraryView() {
           }}
         >
           <div className="md-dialog w-full max-w-md p-5 harbor-pop-in">
-            <h2 className="md-title-large font-display font-bold text-ink mb-4">Create a new list</h2>
+            <h2 className="md-title-medium font-display font-bold text-ink mb-4">Create a new list</h2>
             <label className="block md-label-medium text-ink-muted mb-1.5" htmlFor="new-list-name">
               Name
             </label>

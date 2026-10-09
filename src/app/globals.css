@@ -1315,11 +1315,12 @@ html[data-kids="on"][data-appearance="light"] {
   --nav-zoom: min(var(--ui-zoom, 1), 1.1);
   --nav-kids: 1; /* kids mode → 1.08 (max +8%) */
 
-  /* --- Window class: compact phone (360–599) = base --- */
-  --nav-height: calc(64px * var(--nav-zoom) * var(--nav-kids));
-  --nav-tab-height: calc(48px * var(--nav-zoom) * var(--nav-kids));
-  --nav-icon-size: calc(24px * var(--nav-zoom) * var(--nav-kids));
-  --nav-width: min(calc(100vw - 32px), calc(340px * var(--nav-zoom) * var(--nav-kids)));
+  /* --- Window class: compact phone (360–599) = base (re-tuned down 2026-10-09;
+         44px tab = minimum touch target) --- */
+  --nav-height: calc(60px * var(--nav-zoom) * var(--nav-kids));
+  --nav-tab-height: calc(44px * var(--nav-zoom) * var(--nav-kids));
+  --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
+  --nav-width: min(calc(100vw - 32px), calc(330px * var(--nav-zoom) * var(--nav-kids)));
   --nav-max: calc(100vw - 16px); /* hard viewport guard (requirement 4) */
   --nav-side-margin: calc(16px * var(--nav-zoom));
   --nav-bottom-offset: calc(16px * var(--nav-zoom));
@@ -1349,14 +1350,16 @@ html[data-kids="on"][data-appearance="light"] {
 }
 
 /* Window-class ladder. Same specificity as the base block → source order wins;
-   each class only re-declares SIZE tokens (glass colors stay shared). */
+   each class only re-declares SIZE tokens (glass colors stay shared).
+   RE-TUNED DOWN 2026-10-09 (user: "الأحجام تبدو كبيرة"): capsule −6–12% in
+   every class, icons −2px per class; 44px tab floor preserved (touch target). */
 /* Small phone (<360): tighter capsule + 6px inner padding */
 @media (max-width: 359.98px) {
   :root {
-    --nav-height: calc(58px * var(--nav-zoom) * var(--nav-kids));
-    --nav-tab-height: calc(42px * var(--nav-zoom) * var(--nav-kids));
-    --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
-    --nav-width: min(calc(100vw - 24px), calc(300px * var(--nav-zoom) * var(--nav-kids)));
+    --nav-height: calc(54px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(40px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(20px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: min(calc(100vw - 24px), calc(290px * var(--nav-zoom) * var(--nav-kids)));
     --nav-side-margin: calc(12px * var(--nav-zoom));
     --nav-bottom-offset: calc(12px * var(--nav-zoom));
     --nav-padding: calc(6px * var(--nav-zoom));
@@ -1365,36 +1368,36 @@ html[data-kids="on"][data-appearance="light"] {
 /* Tablet portrait / medium (600–839) */
 @media (min-width: 600px) {
   :root {
-    --nav-height: calc(68px * var(--nav-zoom) * var(--nav-kids));
-    --nav-tab-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
-    --nav-icon-size: calc(24px * var(--nav-zoom) * var(--nav-kids));
-    --nav-width: calc(380px * var(--nav-zoom) * var(--nav-kids));
+    --nav-height: calc(64px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(48px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(360px * var(--nav-zoom) * var(--nav-kids));
     --nav-bottom-offset: calc(20px * var(--nav-zoom));
   }
 }
 /* Tablet landscape / small desktop (840–1199) */
 @media (min-width: 840px) {
   :root {
-    --nav-height: calc(72px * var(--nav-zoom) * var(--nav-kids));
-    --nav-tab-height: calc(56px * var(--nav-zoom) * var(--nav-kids));
-    --nav-icon-size: calc(26px * var(--nav-zoom) * var(--nav-kids));
-    --nav-width: calc(420px * var(--nav-zoom) * var(--nav-kids));
+    --nav-height: calc(66px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(50px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(24px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(400px * var(--nav-zoom) * var(--nav-kids));
     --nav-bottom-offset: calc(24px * var(--nav-zoom));
   }
 }
 /* Desktop / large (1200–1599): same chrome size, wider capsule */
 @media (min-width: 1200px) {
   :root {
-    --nav-width: calc(440px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(420px * var(--nav-zoom) * var(--nav-kids));
   }
 }
 /* TV / extra-large (≥1600) */
 @media (min-width: 1600px) {
   :root {
-    --nav-height: calc(88px * var(--nav-zoom) * var(--nav-kids));
-    --nav-tab-height: calc(68px * var(--nav-zoom) * var(--nav-kids));
-    --nav-icon-size: calc(32px * var(--nav-zoom) * var(--nav-kids));
-    --nav-width: calc(520px * var(--nav-zoom) * var(--nav-kids));
+    --nav-height: calc(78px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(60px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(28px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: calc(490px * var(--nav-zoom) * var(--nav-kids));
     --nav-bottom-offset: calc(32px * var(--nav-zoom));
   }
 }
@@ -1402,10 +1405,10 @@ html[data-kids="on"][data-appearance="light"] {
    class also matches (e.g. 915×412). */
 @media (max-height: 480px) {
   :root {
-    --nav-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
-    --nav-tab-height: calc(40px * var(--nav-zoom) * var(--nav-kids));
-    --nav-icon-size: calc(22px * var(--nav-zoom) * var(--nav-kids));
-    --nav-width: min(70vw, calc(360px * var(--nav-zoom) * var(--nav-kids)));
+    --nav-height: calc(48px * var(--nav-zoom) * var(--nav-kids));
+    --nav-tab-height: calc(38px * var(--nav-zoom) * var(--nav-kids));
+    --nav-icon-size: calc(20px * var(--nav-zoom) * var(--nav-kids));
+    --nav-width: min(70vw, calc(340px * var(--nav-zoom) * var(--nav-kids)));
     --nav-bottom-offset: calc(8px * var(--nav-zoom));
     --nav-padding: calc(6px * var(--nav-zoom));
   }
@@ -1614,9 +1617,9 @@ html[data-kids="on"] {
   /* Responsive scale driver (round-21b). Ladder lives right after this block. */
   --home-scale: 1;
 
-  /* Hero container — 67svh is intrinsically proportional; the ceiling scales
+  /* Hero container — 64svh is intrinsically proportional; the ceiling scales
      so tall phones stay sane while big screens grow with the viewport. */
-  --hero-height: clamp(440px, 67svh, calc(720px * var(--home-scale)));
+  --hero-height: clamp(430px, 64svh, calc(640px * var(--home-scale)));
   --hero-fade: #000000; /* OLED black dissolve target (spec) */
   --hero-scrim-top: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0) 10%);
   --hero-scrim-fade: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 65%, var(--hero-fade) 88%);
@@ -1675,7 +1678,7 @@ html[data-kids="on"] {
   /* Continue watching row */
   --cw-gap: calc(16px * min(var(--home-scale), 1.5));
   --cw-pad: calc(16px * min(var(--home-scale), 1.5));
-  --cw-card-w: min(69vw, calc(320px * var(--home-scale)));
+  --cw-card-w: min(66vw, calc(300px * var(--home-scale)));
   --cw-card-radius: calc(16px * min(var(--home-scale), 1.35));
   --cw-card-border: rgba(255, 255, 255, 0.22);
   --cw-card-bg: #1a1a1a;
@@ -1704,27 +1707,29 @@ html[data-kids="on"] {
   --cw-header-mb: calc(16px * var(--home-scale));
 }
 
-/* Proportional scale ladder (round-21b): phones 1× → small tablets 1.15× →
-   large tablets / iPad landscape 1.25× → laptops 1.35× → desktops 1.5× →
-   large monitors 1.65× → extra-large screens 1.8×. Must stay AFTER the base
-   block (same specificity, source order wins). */
+/* Proportional scale ladder (round-21b, RE-TUNED DOWN per user request
+   "راجع جميع الاحجام… تبدو كبيرة" 2026-10-09): phones 1× → small tablets
+   1.08× → large tablets 1.15× → laptops 1.22× → desktops 1.32× → large
+   monitors 1.42× → extra-large 1.52×. The previous ladder (1.15/1.25/1.35/
+   1.5/1.65/1.8) made every hero/card element read oversized. Must stay AFTER
+   the base block (same specificity, source order wins). */
 @media (min-width: 600px) {
-  :root { --home-scale: 1.15; }
+  :root { --home-scale: 1.08; }
 }
 @media (min-width: 840px) {
-  :root { --home-scale: 1.25; }
+  :root { --home-scale: 1.15; }
 }
 @media (min-width: 1024px) {
-  :root { --home-scale: 1.35; }
+  :root { --home-scale: 1.22; }
 }
 @media (min-width: 1440px) {
-  :root { --home-scale: 1.5; }
+  :root { --home-scale: 1.32; }
 }
 @media (min-width: 1920px) {
-  :root { --home-scale: 1.65; }
+  :root { --home-scale: 1.42; }
 }
 @media (min-width: 2560px) {
-  :root { --home-scale: 1.8; }
+  :root { --home-scale: 1.52; }
 }
 
 /* Indicator size ladder (separate from content: dots must stay discreet at

@@ -55,8 +55,8 @@ export function Rail({
     <section className={`relative group/rail ${className ?? ""}`} aria-label={title}>
       <div className="flex items-baseline justify-between px-4 md:px-8 mb-2.5">
         <div className="flex items-baseline gap-2.5 min-w-0">
-          {TitleIcon && <TitleIcon className="w-5 h-5 text-accent self-center shrink-0" />}
-          <h2 className="md-title-large text-ink truncate">{title}</h2>
+          {TitleIcon && <TitleIcon className="w-4.5 h-4.5 text-accent self-center shrink-0" />}
+          <h2 className="md-title-medium text-ink truncate">{title}</h2>
           {subtitle && (
             <span className="md-body-small text-ink-subtle truncate hidden sm:inline">{subtitle}</span>
           )}
@@ -65,7 +65,7 @@ export function Rail({
           <button
             type="button"
             onClick={onViewAll}
-            className="md-chip md-state harbor-tv-focus shrink-0 !min-h-11"
+            className="md-chip md-state harbor-tv-focus shrink-0 !min-h-9"
           >
             View all
           </button>
@@ -123,7 +123,7 @@ export function RailSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="flex gap-3 px-4 md:px-8 pb-3 overflow-hidden" aria-hidden>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[130px] md:w-[150px] aspect-[2/3]" />
+        <div key={i} className="harbor-skeleton rounded-xl shrink-0 w-[120px] md:w-[138px] aspect-[2/3]" />
       ))}
     </div>
   );

@@ -4,7 +4,7 @@
 // Powered by AniList (public metadata, no auth) via the /api/anilist server proxy.
 // Cards resolve to playable Stremio metas through Cinemeta search on click.
 // A "Stremio catalogs" section below shows Cinemeta anime rails + addon catalogs.
-// M3 (m3-3c): header → md-headline-small, rail headers → md-title-large, CTAs →
+// M3 (m3-3c): header → md-headline-small, rail headers → md-title-medium, CTAs →
 // .md-btn-filled/.md-btn-tonal, badges → .md-chip with on-media scrim overrides.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles, Flame, Trophy, CalendarClock, Film, RotateCcw, ListVideo, SearchX } from "lucide-react";
@@ -184,7 +184,7 @@ export function AnimeView() {
           if (row.loading) {
             return (
               <section key={key} aria-label={`${title} loading`}>
-                <h2 className="md-title-large text-ink px-4 md:px-8 mb-2.5 flex items-center gap-2">
+                <h2 className="md-title-medium text-ink px-4 md:px-8 mb-2.5 flex items-center gap-2">
                   <Icon className="w-5 h-5 text-accent" /> {title}
                 </h2>
                 <RailSkeleton />
@@ -202,7 +202,7 @@ export function AnimeView() {
       {addonsLoaded && (
         <div className="mt-10">
           <div className="px-4 md:px-8 mb-1">
-            <h2 className="md-title-large text-ink flex items-center gap-2">
+            <h2 className="md-title-medium text-ink flex items-center gap-2">
               <ListVideo className="w-5 h-5 text-accent" />
               Stremio catalogs
             </h2>
@@ -307,7 +307,7 @@ function AnimeRail({
   return (
     <Rail title={title} titleIcon={Icon}>
       {items.map((m) => (
-        <div key={m.id} className="shrink-0 w-[130px] md:w-[150px]">
+        <div key={m.id} className="shrink-0 w-[120px] md:w-[138px]">
           <AnimeCard media={m} onOpen={() => onOpen(m)} />
         </div>
       ))}

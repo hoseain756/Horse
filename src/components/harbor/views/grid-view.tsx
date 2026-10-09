@@ -386,7 +386,7 @@ export function GridView({ query, title }: { query: CatalogQuery; title: string 
         </div>
       )}
 
-      <div className="px-4 md:px-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4">
+      <div className="px-4 md:px-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3 md:gap-4">
         {metas.map((m) => (
           <MetaCard key={m.id} meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
         ))}

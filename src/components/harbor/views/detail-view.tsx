@@ -659,7 +659,7 @@ function EpisodeList({
   return (
     <div className="mx-auto mt-12 max-w-3xl px-4 md:px-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="md-title-large text-ink">{tr("episodesTitle")}</h2>
+        <h2 className="md-title-medium text-ink">{tr("episodesTitle")}</h2>
         <button
           type="button"
           onClick={() => setSortDesc((v) => !v)}
@@ -755,13 +755,13 @@ function TmdbRecsRail({ items }: { items: Meta[] }) {
     <section className="mt-12" aria-label={tr("recommendedByTmdb")}>
       <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
         <Layers className="h-5 w-5 text-accent" aria-hidden />
-        <h2 className="md-title-large text-ink">{tr("recommendedTitle")}</h2>
+        <h2 className="md-title-medium text-ink">{tr("recommendedTitle")}</h2>
         <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{tr("viaTmdb")}</span>
       </div>
       {/* Hover headroom: pt-3/-mt-3 keeps the header→card gap while giving the hover lift room inside the scroll clip */}
       <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
         {items.map((m) => (
-          <div key={`${m.type}-${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
+          <div key={`${m.type}-${m.id}`} className="w-[104px] shrink-0 md:w-[126px]">
             <MetaCard meta={m} onOpen={() => push({ kind: "detail", type: m.type, id: m.id })} />
           </div>
         ))}
@@ -816,7 +816,7 @@ function SimilarRail({
     <section className="mt-12" aria-label={tr("moreLikeThis")}>
       <div className="mb-3 flex items-center gap-2 px-4 md:px-8">
         <Layers className="h-5 w-5 text-accent" aria-hidden />
-        <h2 className="md-title-large text-ink">{tr("moreLikeThis")}</h2>
+        <h2 className="md-title-medium text-ink">{tr("moreLikeThis")}</h2>
         <span className="md-chip md-label-small !h-6 !px-2 cursor-default!">{genre}</span>
       </div>
       {items === null ? (
@@ -829,7 +829,7 @@ function SimilarRail({
         /* Hover headroom: same pt-3/-mt-3 contract as TmdbRecsRail above */
         <div className="harbor-scroll-x overflow-x-auto flex gap-3 px-4 pb-2 pt-3 -mt-3 md:px-8">
           {items.map((m) => (
-            <div key={`${m.id}`} className="w-[112px] shrink-0 md:w-[136px]">
+            <div key={`${m.id}`} className="w-[104px] shrink-0 md:w-[126px]">
               <MetaCard
                 meta={m}
                 onOpen={() => push({ kind: "detail", type: m.type || type, id: m.id })}
