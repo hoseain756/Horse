@@ -1724,3 +1724,19 @@ Work Log:
 
 Stage Summary:
 - Feature VERIFIED SHIPPED (commit e06cc43). Remaining user actions: (1) disable Vercel Authentication toggle (screenshot showed still ON) → Save; (2) know the limit: on Vercel SQLite lives at /tmp/horse.db (ephemeral per cold start) — accounts/sync survive locally but NOT durably on Vercel until HORSE_DATABASE_URL points at a hosted DB (Turso recommended, libSQL-compatible; free tier). Next session candidate: wire Turso adapter + user setup guide.
+
+---
+Task ID: 50
+Agent: Z.ai Code (main)
+Task: Fix production account-registration 500 ("Could not create the account") — Vercel cold-start has no DB file; user QA'd register test1/huss09$12
+
+Work Log:
+- Operator QA request: create account test1 / huss09$12. Local: register+login+me all OK. Production (horse-hoseain354-6689.vercel.app): 500 "Could not create the account". Side-finding: production homepage now HTTP 200 → Vercel Authentication was successfully disabled by operator.
+- Root cause: HORSE_DATABASE_URL=file:/tmp/horse.db is ephemeral per serverless instance; no runtime step ever creates the file/tables (db push is build-time only; /tmp is wiped per instance). First DB query on a cold instance → "no such table"/"unable to open" → 500. Anonymous device-sync was unaffected UX-wise only because cloud-sync.ts degrades to localStorage.
+- Fix: new src/lib/ensure-db.ts — memoized ensureDb(): mkdir + create zero-byte sqlite file (valid empty db), then idempotent CREATE TABLE/INDEX IF NOT EXISTS DDL mirroring schema.prisma (10 tables + 8 indexes dumped from live db for fidelity); never throws; resets memo on failure to retry next request. Non-file URLs (future Turso) skip bootstrap.
+- Wired ensureDb() into ALL DB touchpoints: auth register/login/me, sync GET+POST, trakt link poll/unlink, simkl link poll/unlink, server-config get/set, link-resolve.resolveLinkedAccount.
+- Verification: cold-instance simulation (env → nonexistent /tmp file) → DDL applied, user create/read/delete + sync-shaped query OK, 2nd ensureDb memoized; warm local dev unaffected (register+sync OK after hot reload); lint 0 errors. QA rows cleaned.
+- Committed 361bb40; auto-push → Vercel rebuild. Production register to be re-polled post-deploy.
+
+Stage Summary:
+- Production registration should now work on cold starts (self-healing per-instance DB). HONEST LIMIT: /tmp is still ephemeral across cold starts — accounts added while an instance is warm vanish when Vercel recycles it. Durable cross-device sync on production still requires a hosted DB (Turso — libSQL-compatible, free tier; next candidate task).
