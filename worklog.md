@@ -1635,3 +1635,21 @@ Stage Summary:
 - Only file changed: `src/components/harbor/views/detail-view.tsx` (22+/10-). Cause of gap: the hero section's mobile-only 72px top padding that reserved a row for the old back button.
 - Committed; auto-push watcher will sync to origin/main.
 - Floating search note: suppressed on detail pages by design (floating-search.tsx `suppressed`), opposite corner when present — no overlap at any width.
+
+---
+Task ID: 47
+Agent: Z.ai Code (main)
+Task: Guide user through Vercel deployment; make repo deploy-ready first.
+
+Work Log:
+- Audited repo for deploy blockers: prisma datasource was hardcoded to the sandbox absolute path (`file:/home/z/my-project/db/harbor.db`), no `prisma generate` hook, and the platform injects a global `DATABASE_URL=file:/home/z/my-project/db/custom.db` that would hijack any generic env-based URL.
+- schema.prisma now uses `env("HARBOR_DATABASE_URL")` (dedicated name sidesteps the platform's DATABASE_URL). `.env` updated (gitignored). Regenerated client; smoke-tested through the running server: POST /api/sync → `{"ok":true}`, GET returns the persisted snapshot; test row cleaned afterwards.
+- package.json: added `postinstall: prisma generate` for Vercel builds (committed in 87ecd7d alongside schema).
+- Added `.env.example` (now tracked) documenting HARBOR_DATABASE_URL (required) + TMDB/TRAKT/SIMKL/OMDB/MDBLIST/HARBOR_TOKEN_SECRET (optional, fail-soft).
+- Discovered the dev server dies when its parent shell session ends; `( bun run dev & )` double-fork survives across tool sessions — server restarted and verified (`GET / 200`).
+- Repo hygiene: removed 4 QA screenshots (.ab-*.png) that the platform auto-committer had committed; added `.ab-*.png` + `!.env.example` to .gitignore.
+- Deploy limits identified and communicated: torrent P2P mini-service can't run on Vercel (HTTP/HLS playback still works via Next API routes); SQLite on Vercel is ephemeral → cloud sync degrades gracefully to localStorage (cloud-sync client already fails soft).
+
+Stage Summary:
+- Repo is Vercel-ready: user imports hoseain756/Horse on vercel.com/new, leaves defaults, sets HARBOR_DATABASE_URL=file:/tmp/harbor.db (+ optional keys per .env.example) in Environment Variables, then Create Project.
+- Follow-up candidates: Turso/Neon for real cross-device sync; hosted torrent-service (Railway/Fly) for P2P playback.
