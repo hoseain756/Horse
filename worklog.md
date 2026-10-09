@@ -1484,3 +1484,23 @@ Work Log:
 
 Stage Summary:
 - The dock now has exactly one indicator at all times (single fractional-index source, DOM-owned styling, dev-asserted), can never leave the capsule (the overshoot's true root cause — standalone `scale` amplifying the translation — removed; grow lives inside the transform; frac clamp), and the tab order is an explicit per-locale config producing Settings|Kids|Anime|Home on screen in both languages with the pill re-seating live across language/kids/width changes. Tap, keyboard, aria, auto-hide, Kids Mode and the glass design are byte-for-byte preserved.
+---
+Task ID: save-push-restore (user: "save")
+Agent: main (orchestrator)
+Task: Save/secure all work — discovered the GitHub auto-push system was DEAD (sandbox rollback) and restored it.
+
+Work Log:
+- STATE FOUND: local main 14 commits ahead of origin/main (remote tip 52c48e4 "Hero round-24…"; local tip 6d019e0 dock-fix). Working tree clean (3 new tool-results files untracked, historically tracked dir → committed).
+- ROOT CAUSE: the sandbox was rolled back AGAIN — /home/z/my-project survived, but /home/z dotfiles were wiped: ~/.git-credentials (PAT) GONE, ~/.gh-autopush.sh GONE, watcher process GONE, credential.helper=store config GONE from ~/.gitconfig. (.env + .gitconfig user section survived from the earlier-restore round.)
+- Push attempted: `GIT_TERMINAL_PROMPT=0 git push origin main` → "could not read Username" (auth required; GitHub itself reachable — ls-remote of the public repo OK). NOTHING can be pushed until the operator supplies a fresh PAT for hoseain756.
+- SECRET SCAN before any commit: worklog.md / TODO / .env contain no token patterns (ghp_/github_pat_) — safe.
+- INFRASTRUCTURE RESTORED:
+  1. `git config --global credential.helper store` (re-wired; store file is outside the repo, daemon can never commit it).
+  2. Recreated ~/.gh-autopush.sh (chmod 700): pushes within ~45s ONLY when (a) ~/.git-credentials non-empty AND (b) local main strictly ahead AND (c) remote is an ancestor (fast-forward only, fetch-verified — no force, no history rewrite). Log at ~/.gh-autopush.log.
+  3. Watcher LAUNCHED (setsid, PID 17881) — currently idling by design until the credential file exists; the moment a PAT is written there it pushes all 14 pending commits automatically.
+- Cron: webDevReview job 445731 exists but platform-disabled again ("exec limits exceeded"); left as-is to avoid churn.
+- Services verified alive after rollback: dev :3000, gateway :81, torrent-service :3031 (listening; log shows last round's remux/cleanup history intact).
+
+Stage Summary:
+- All 14 commits are safely committed locally; nothing lost. Push remains BLOCKED solely by the missing GitHub PAT (sandbox rollback wiped ~/.git-credentials) — watcher + credential helper are re-armed so a fresh PAT auto-pushes everything within a minute.
+- ACTION NEEDED FROM OPERATOR: paste a fresh GitHub PAT (classic, repo scope) for hoseain756 — it will be stored in ~/.git-credentials (outside the repo) and the pending commits will go out automatically.
