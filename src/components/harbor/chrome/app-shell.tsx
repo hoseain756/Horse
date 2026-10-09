@@ -12,6 +12,7 @@ import { useCloudSync, installCloudSyncListeners } from "@/lib/harbor/cloud-sync
 import { usePwa } from "@/lib/harbor/pwa";
 import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { ResetPasswordDialog } from "./reset-password-dialog";
+import { openPairingReceiver } from "./device-pairing";
 import { GlassDock } from "./glass-dock";
 import { ArabicTextLayer } from "./ar-text-layer";
 import { FloatingSearch, focusFloatingSearch } from "./floating-search";
@@ -356,6 +357,27 @@ export function AppShell() {
       if (m) {
         const decoded = decodeListShare(decodeURIComponent(m[1]));
         if (decoded) setSharedList(decoded);
+        // Strip the hash so reloads don't re-trigger
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
+
+  // Device-pairing deep link: #pair=XXXXXX — a phone scanned the QR shown on
+  // a TV / laptop / iPad. Jump to Settings → Integrations and open the
+  // receiver with the code pre-filled (one tap sends the saved debrid key).
+  useEffect(() => {
+    const check = () => {
+      const m = window.location.hash.match(/^#pair=([A-Za-z0-9]{6})$/);
+      if (m) {
+        useNav.getState().push({ kind: "view", view: "settings" });
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("harbor:settings-section", { detail: "integrations" }));
+          openPairingReceiver(m[1].toUpperCase());
+        }, 60);
         // Strip the hash so reloads don't re-trigger
         history.replaceState(null, "", window.location.pathname + window.location.search);
       }

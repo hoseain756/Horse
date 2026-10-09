@@ -241,6 +241,20 @@ model AppSettings {
   updatedAt DateTime @updatedAt
 }
 
+// Device pairing relay — lets a phone (which already holds the Debrid API key
+// in its localStorage) hand it to a big screen (TV / laptop / iPad) through a
+// short XXX-XXX code or QR link. The server is a temporary postbox, never a
+// store: the payload is AES-256-GCM encrypted at rest (src/lib/harbor/vault.ts),
+// single-use, and the row is deleted the moment the waiting screen picks it up
+// (or opportunistically purged once expired — 10 minute TTL).
+model PairingCode {
+  code       String    @id // 6 chars, unambiguous alphabet (no 0/O/1/I)
+  payloadEnc String? // encrypted JSON {service, apiKey, username, premium, expiresAt, planName}
+  claimedAt  DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+}
+
 // Server-wide key/value config (survives .env resets in sandboxed deploys).
 // Used e.g. for TRAKT_CLIENT_ID fallback: env var wins, DB row is the backup.
 model ServerConfig {

@@ -1976,3 +1976,27 @@ Stage Summary:
 - Key API facts for future work: user/me for validation (checkapikey is dead); createtorrent = multipart ONLY; mylist ?id= returns an object not array; requestdl needs ?token=; controltorrent JSON {operation}; plan codes 0/1/2/3 = Free/Essential/Pro/Standard; trial accounts show plan=2 + premium_expires_at.
 - The player/picker needed ZERO changes — widening the DebridService union was enough (debrid.resolve path is service-agnostic).
 - Next candidates: optional "My TorBox torrents" management view (list/delete via controltorrent); Vercel redeploy verification for horse-1.vercel.app; Kids PIN gate; Google OAuth; tsc pre-existing errors cleanup.
+
+---
+Task ID: 60
+Agent: Z.ai Code (main)
+Task: Settings — TorBox key management (set/delete) + device pairing via XXX-XXX code / QR (phone → TV/laptop/iPad handoff)
+
+Work Log:
+- Added PairingCode model to prisma/schema.prisma (code PK, payloadEnc AES-GCM, claimedAt, expiresAt 10-min TTL) + migration 20260101120000_add_pairing_codes generated via `migrate diff --from-schema-datasource` and applied with `migrate deploy` (Supabase OK).
+- Refactor: moved realDebridUser/allDebridUser/torboxUser/torboxPlanName out of /api/debrid/user into debrid-server.ts as lookupDebridUser() — now shared by settings validation AND pairing claim validation (rewrote user/route.ts to import it; zero behavior change).
+- New src/lib/harbor/pairing-server.ts: genPairingCode (32-char alphabet, no 0/O/1/I), normalizePairingCode (accepts "K7Q-2XD"/"k7q2xd"), formatPairingCode, seal/open payload via vault encryptSecret/decryptSecret with AAD "pairing:<code>".
+- New routes: POST /api/pairing/create (purge expired + collision retries, rl 8/min/IP), GET /api/pairing/status?code= (waiting | linked→decrypt+DELETE row=single-use | missing, rl 120/min/IP), POST /api/pairing/claim (validates the key against the REAL service first, atomic updateMany payloadEnc=null→sealed so two phones can't both win, 409 already-used / 404 unknown-expired, rl 15/min/IP), POST /api/pairing/cancel (row delete, rl 30/min/IP). Keys never logged.
+- debrid.ts: new applyLinked(service, apiKey, profile) action (full write of pre-validated identity — used by the pairing handoff on both ends).
+- New src/components/harbor/chrome/device-pairing.tsx: DevicePairingCard (sender: big XXX-XXX copyable code, QRCode.toDataURL of origin/#pair=CODE on a white plate, mm:ss countdown, poll every 2.5s, waiting/linked/expired states, cancel deletes the row) + PairingReceiverDialog (phone: pre-filled code input with XXX-XXX auto-format, "Send my saved key" when this device has one, otherwise service segmented control + paste field — on success the key is ALSO saved locally; honest 404/409/error mapping). Mount-on-open pattern (no setState-in-effect; lint clean).
+- settings-view.tsx DebridCard: "Delete key from this device" now an AlertDialog with confirm (danger action, honest body "device forgets the key, account untouched") replacing the instant Disconnect; DevicePairingCard mounted in its own border-t section (visible connected or not).
+- app-shell.tsx: #pair=XXXXXX deep-link handler (matches existing #theme/#list pattern) → push settings + integrations section + openPairingReceiver(code) + strip hash.
+- i18n.ts: 27 new en/ar keys (debridDeleteKey*, debridKeyHintFind, pairCardTitle…pairSecurity).
+- E2E REAL (curl + agent-browser): API flow create 6FGVHM → claim(real TB key) → username/planName/expiresAt → status#1 linked w/ key → status#2 missing (single-use ✓); invalid key → honest 401; wrong code → 404; cancel → dead immediately. UI: sender shows code+QR+countdown → curl claim → within 4s flipped to "Screen linked! … (Pro)" + card "Connected as hoseain756@gmail.com"; reload → persisted. #pair=YGSSS2 → dialog pre-filled → "Send my saved key (@hoseain756@gmail.com)" → "Key sent" + screen poll returns key once. Manual dialog + wrong code → "Wrong or expired code". No-key path → note+segmented+paste → sent AND saved locally (verified localStorage after). Arabic RTL screenshots (sender + delete confirm) in download/pair-*.png. Cleanup: browser key removed, PairingCode table emptied, lint back to baseline 0 errors/160 warnings.
+- NOTE (pre-existing, out of scope): auth/ratelimit.ts uses SQLite-style ?1 placeholders via $queryRawUnsafe — always throws on Postgres → silently degrades to per-instance memory buckets. Pairing limits therefore per-instance in production; fine for this threat model, worth a follow-up fix.
+
+Stage Summary:
+- Device pairing is live: TV/laptop/iPad shows "اربط شاشة عبر الجوال" in Settings → Integrations → Debrid → one tap shows XXX-XXX + QR; the phone scans (or types the code via «أرسل المفتاح إلى شاشة») and sends its saved key in one tap. The relay is encrypted-at-rest, single-use, 10-min TTL, never logged. Key can now be set AND deleted from settings with an explicit confirm dialog.
+- Migration 20260101120000_add_pairing_codes must ship with the next Vercel deploy (build runs `prisma migrate deploy`).
+- Claim validates against the real provider first → a screen can never receive a dead key.
+- Next candidates: TorBox "my torrents" management view; fix auth/ratelimit.ts placeholder syntax for Postgres; Kids PIN gate; Vercel redeploy verification (pairing + TorBox on horse-1.vercel.app).

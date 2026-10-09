@@ -32,6 +32,7 @@ import { p2pHealth, p2pCleanup, formatSpeed, P2P_PORT, refreshP2pCapabilities } 
 import { getLocalEngine, setLocalEngine, clearLocalEngine, localEngineHealth, type LocalEngineConfig } from "@/lib/harbor/local-engine";
 import { TmdbCard, TmdbAttribution } from "../chrome/tmdb-card";
 import { LinkAccountFlow } from "../chrome/link-account-flow";
+import { DevicePairingCard } from "../chrome/device-pairing";
 import { RatingsSettingsCard } from "../chrome/ratings-row";
 import { useLinking } from "@/lib/harbor/linking";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +46,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -2460,6 +2462,7 @@ function DebridCard() {
   const [svcOverride, setSvcOverride] = useState<DebridService | null>(null);
   const [key, setKey] = useState("");
   const [checking, setChecking] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     load();
@@ -2571,17 +2574,38 @@ function DebridCard() {
               </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              disconnect();
-              setKey("");
-              toast({ title: `${serviceName} disconnected` });
-            }}
-            className="md-btn-text harbor-tv-focus !h-9 px-3 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
-          >
-            <Unplug className="w-3.5 h-3.5" /> Disconnect
-          </button>
+          <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                className="md-btn-text harbor-tv-focus !h-9 px-3 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> {tr("debridDeleteKey")}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{tr("debridDeleteKeyTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <RichBidi text={tr("debridDeleteKeyBody", { name: serviceName })} />
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11">{tr("cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+                  onClick={() => {
+                    disconnect();
+                    setKey("");
+                    toast({ title: tr("debridKeyDeleted") });
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {tr("debridDeleteKey")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       ) : (
         <div className="space-y-3">
@@ -2642,7 +2666,13 @@ function DebridCard() {
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-edge-soft space-y-2">
+      {/* Device pairing — the key usually lives on the phone; send it to this
+          screen with one tap (TV / laptop / iPad), or the reverse. */}
+      <div className="mt-4 pt-4 border-t border-edge-soft">
+        <DevicePairingCard />
+      </div>
+
+      <div className="mt-4 space-y-2">
         {svc === "torbox" && (
           <p className="flex items-start gap-2 text-[11px] text-ink-subtle">
             <Zap className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />

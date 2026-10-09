@@ -22,6 +22,13 @@ type StoredDebrid = {
   planName?: string | null;
 };
 
+export type DebridProfile = {
+  username: string | null;
+  premium: boolean;
+  expiresAt: number | null;
+  planName: string | null;
+};
+
 type DebridState = {
   service: DebridService;
   apiKey: string | null;
@@ -35,6 +42,8 @@ type DebridState = {
   load: () => void;
   save: (service: DebridService, apiKey: string) => void;
   disconnect: () => void;
+  /** Store a pre-validated key + account identity (device pairing handoff). */
+  applyLinked: (service: DebridService, apiKey: string, profile: DebridProfile) => void;
   validate: (service: DebridService, apiKey: string) => Promise<boolean>;
   resolve: (
     infoHash: string,
@@ -116,6 +125,21 @@ export const useDebrid = create<DebridState>((set, get) => ({
       expiresAt: null,
       planName: null,
       status: "idle",
+      error: null,
+    });
+  },
+
+  applyLinked: (service, apiKey, profile) => {
+    const next: StoredDebrid = { service, apiKey, ...profile };
+    writeStored(next);
+    set({
+      service,
+      apiKey,
+      username: profile.username,
+      premium: profile.premium,
+      expiresAt: profile.expiresAt,
+      planName: profile.planName,
+      status: "valid",
       error: null,
     });
   },
