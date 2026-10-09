@@ -1,13 +1,16 @@
-// Harbor Web — runtime SQLite bootstrap.
+// Harbor Web — runtime database bootstrap.
 // Vercel serverless instances start with an EMPTY /tmp: HORSE_DATABASE_URL
 // points at file:/tmp/horse.db, but nothing runs `prisma db push` at deploy
 // time for runtime files, so the very first request on a cold instance would
 // fail with "Unable to open the database file" / "no such table".
+// The same applies to a BRAND-NEW remote Turso database (libsql://...): it
+// exists but has zero tables.
 //
 // ensureDb() is awaited at the top of every DB-touching route. It:
-//   1. creates the sqlite file (a zero-byte file is a valid empty SQLite db),
-//   2. applies idempotent CREATE TABLE/INDEX IF NOT EXISTS DDL mirroring
-//      prisma/schema.prisma (SQLite dialect).
+//   1. file: URLs  → creates the sqlite file (zero-byte = valid empty db),
+//   2. always      → applies idempotent CREATE TABLE/INDEX IF NOT EXISTS DDL
+//      mirroring prisma/schema.prisma (works identically on local SQLite and
+//      remote Turso, so a fresh Turso db self-schemas on first request).
 // It is memoized per process and never throws — if bootstrap fails the route's
 // own error handling takes over and the next request retries.
 //
@@ -137,25 +140,29 @@ const DDL_STATEMENTS: readonly string[] = [
 
 async function bootstrap(): Promise<void> {
   const url = process.env.HORSE_DATABASE_URL?.trim();
-  // Only SQLite file URLs need runtime bootstrap (a future hosted DB like
-  // Turso already exists server-side and has its own schema management).
-  if (!url || !url.startsWith("file:")) return;
-  let filePath = url.slice("file:".length);
-  const q = filePath.indexOf("?");
-  if (q >= 0) filePath = filePath.slice(0, q);
-  if (!filePath) return;
-  // Env values in this project are absolute; resolve defensively anyway.
-  const abs = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
-  try {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    if (!fs.existsSync(abs)) {
-      // Zero-byte file = valid empty SQLite database for the query engine.
-      fs.writeFileSync(abs, "");
+  if (!url) return;
+  const isRemote = /^(libsql|https?):/i.test(url);
+  if (!isRemote) {
+    // Local/embedded SQLite: make sure the FILE exists before the engine opens it.
+    let filePath = url.startsWith("file:") ? url.slice("file:".length) : url;
+    const q = filePath.indexOf("?");
+    if (q >= 0) filePath = filePath.slice(0, q);
+    if (!filePath) return;
+    // Env values in this project are absolute; resolve defensively anyway.
+    const abs = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    try {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      if (!fs.existsSync(abs)) {
+        // Zero-byte file = valid empty SQLite database for the query engine.
+        fs.writeFileSync(abs, "");
+      }
+    } catch (e) {
+      console.error("[horse:db] could not prepare sqlite file", abs, e);
+      return;
     }
-  } catch (e) {
-    console.error("[horse:db] could not prepare sqlite file", abs, e);
-    return;
   }
+  // Remote (Turso) or fresh local file: apply idempotent schema. libSQL is
+  // SQLite-compatible so the same DDL runs on both backends.
   for (const stmt of DDL_STATEMENTS) {
     await db.$executeRawUnsafe(stmt);
   }

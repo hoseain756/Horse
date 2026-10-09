@@ -1740,3 +1740,23 @@ Work Log:
 
 Stage Summary:
 - Production registration should now work on cold starts (self-healing per-instance DB). HONEST LIMIT: /tmp is still ephemeral across cold starts — accounts added while an instance is warm vanish when Vercel recycles it. Durable cross-device sync on production still requires a hosted DB (Turso — libSQL-compatible, free tier; next candidate task).
+
+---
+Task ID: 51
+Agent: Z.ai Code (main)
+Task: Production account loss after addon push (user report) — migrate DB layer to libSQL driver adapter so Turso can be plugged in (durable shared DB)
+
+Work Log:
+- User symptom on production: registered fine, pushed addons, then could no longer sign in. Root cause is architectural: Vercel runs MULTIPLE concurrent serverless instances, each with its OWN /tmp/horse.db — register landed on instance A, the addon push (possibly) on instance B, later login on C → user row not found (401). SQLite-in-/tmp cannot work for accounts on serverless, period. Data is unrecoverable (ephemeral).
+- Migration (prep so operator only flips 2 env vars):
+  * bun add @prisma/adapter-libsql@6.19.3 (matched to prisma 6.19.2 — v7 adapter is incompatible) + @libsql/client@0.18.0.
+  * schema.prisma: provider stays "sqlite"; driverAdapters preview flag NOT needed (deprecated warning confirmed GA in 6.x). NOTE: "libsql" provider is rejected by prisma CLI 6.19 (P1012 Datasource provider not known) — driver adapter is the correct path.
+  * src/lib/db.ts rewritten: PrismaLibSQL factory adapter ({url, authToken}) — file: URLs (local SQLite) and libsql:// (Turso) through ONE code path; HORSE_DB_AUTH_TOKEN only attached for remote URLs; log level query(dev)/error(prod).
+  * ensure-db.ts: bootstrap now runs the idempotent DDL for REMOTE urls too (skip file-prep) — a brand-new Turso db self-schemas on first request; no manual migration for the operator.
+  * next.config.ts: serverExternalPackages = @prisma/client, @prisma/adapter-libsql, @libsql/client (native bindings must not be bundled).
+  * .env.example: Turso option documented (URL + HORSE_DB_AUTH_TOKEN + auto-schema note).
+- Verified: cold-instance sim via adapter (file:) → DDL+CRUD+raw-DDL ok, 2nd ensureDb memoized; dev server FULL restart (regenerated client) → register/login/push/2nd-device-pull E2E all OK; lint 0 errors. Local dev DB intact (db push "already in sync").
+- Committed + pushed → Vercel rebuild. Production stays file:/tmp until operator adds HORSE_DATABASE_URL(libsql://) + HORSE_DB_AUTH_TOKEN env vars and redeploys.
+
+Stage Summary:
+- Code is Turso-ready end-to-end. Operator TODO: turso.com signup → create db → copy URL + token → set 2 env vars on Vercel (keep HORSE_TOKEN_SECRET!) → redeploy → accounts/durиable sync live. Old lost accounts (incl. user's test1) are unrecoverable; re-register after the switch.
