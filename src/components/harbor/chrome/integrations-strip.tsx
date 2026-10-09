@@ -118,7 +118,7 @@ export function IntegrationsStrip() {
           <Plug className="w-4.5 h-4.5 text-accent" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="md-title-small text-ink">Complete your Harbor setup</h2>
+          <h2 className="md-title-small text-ink">Complete your Horse setup</h2>
           <p className="md-body-small text-ink-muted mt-0.5">
             {pending.length} integration{pending.length === 1 ? "" : "s"} not active yet —
             free keys take about a minute to add.

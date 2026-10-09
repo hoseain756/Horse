@@ -86,7 +86,7 @@ export function ShortcutsOverlay() {
           </span>
           <div className="min-w-0">
             <h2 className="font-display text-lg font-bold text-ink leading-tight">Keyboard shortcuts</h2>
-            <p className="text-xs text-ink-muted">Work anywhere in Harbor.</p>
+            <p className="text-xs text-ink-muted">Work anywhere in Horse.</p>
           </div>
           <button
             ref={closeRef}

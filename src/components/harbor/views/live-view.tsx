@@ -307,7 +307,7 @@ export function LiveView() {
         <div className="text-center py-20 text-ink-subtle">
           <Tv className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p className="text-sm">No playlists yet. Add an M3U playlist to watch live TV.</p>
-          <p className="text-xs mt-1">Harbor is a neutral client — bring your own playlists.</p>
+          <p className="text-xs mt-1">Horse is a neutral client — bring your own playlists.</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

@@ -1585,3 +1585,19 @@ Stage Summary:
 - Known sandbox limits: /api/tmdb returns 501 (no TMDB key) → per-episode ratings/stills/runtime fail-soft absent here; verified via code path + proxy design (works when key configured).
 - HMR caveat: Fast Refresh can leave stale measured heights (RO no refire) — full reload recovers; production unaffected.
 - All sizes/gaps/colors/blur exposed as --ep-* tokens in globals.css; container queries drive responsive (sidebar-proof).
+
+---
+Task ID: brand-horse-layout-1
+Agent: main (orchestrator)
+Task: Rename the Settings layout option "Harbor" → "Horse" (user request, ar: "غير اسم هذا التخطيط في الإعدادات إلى اسم Horse بدلان عن harbor")
+
+Work Log:
+- Audited all user-facing "Harbor" occurrences (grep src/) — separated app self-references from MIT attribution.
+- i18n.ts: optHarbor label "Harbor"→"Horse" (en+ar), homeModeDesc "Harbor layout…"→"Horse layout…" / "تخطيط Harbor"→"تخطيط Horse", playerChromeDesc "Harbor-style"→"Horse-style" / "أو Horse".
+- ar-dict.ts: updated DOM-translation keys+values for the changed literals (neutral-client ×2, Home mode desc, Player chrome desc, Complete your Horse setup, Work anywhere in Horse).
+- JSX literals: integrations-strip.tsx "Complete your Horse setup", shortcuts-overlay.tsx "Work anywhere in Horse.", live-view.tsx "Horse is a neutral client…".
+- KEPT untouched (MIT attribution must remain): settings-view About section + "Licensed MIT. Attribution: Harbor desktop (github.com/harborstremio/harbor)", footerCredit, layout.tsx port mention, all code comments. Internal settings enum value `homeMode: "harbor"` unchanged → stored user settings keep working (display-only rename).
+- Verified via agent-browser: EN Settings → Basics → Home mode shows [Horse | Classic] with "Horse layout with hero…" description; Arabic shows "تخطيط Horse…[Horse | كلاسيكي]". Lint 0 errors.
+
+Stage Summary:
+- Settings layout option now branded "Horse" in both languages; all leftover UI self-references rebranded consistently; attribution preserved; zero breaking changes (enum + stored settings untouched).
