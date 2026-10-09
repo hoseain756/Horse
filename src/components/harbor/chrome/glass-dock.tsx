@@ -43,8 +43,10 @@ import { cn } from "@/lib/utils";
 
 /** Map any view id to the dock tab that represents it. Every hub destination
  *  (discover/catalogs/movies/shows/live/calendar/library/addons/wrapped) maps
- *  to Settings so the tab stays highlighted while browsing those pages. */
-function tabIdForView(view: View): DockTabId {
+ *  to Settings so the tab stays highlighted while browsing those pages.
+ *  SHARED with the large-screen side rail (side-rail.tsx) — one active-tab
+ *  truth for both navigation faces. */
+export function tabIdForView(view: View): DockTabId {
   switch (view) {
     case "anime":
       return "anime";
@@ -58,7 +60,7 @@ function tabIdForView(view: View): DockTabId {
   }
 }
 
-function activeTabId(stack: Frame[]): DockTabId {
+export function activeTabId(stack: Frame[]): DockTabId {
   for (let i = stack.length - 1; i >= 0; i--) {
     const f = stack[i];
     if (f.kind === "view") return tabIdForView(f.view);

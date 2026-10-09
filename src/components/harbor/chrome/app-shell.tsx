@@ -14,6 +14,7 @@ import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 import { openPairingReceiver } from "./device-pairing";
 import { GlassDock } from "./glass-dock";
+import { SideRail } from "./side-rail";
 import { ArabicTextLayer } from "./ar-text-layer";
 import { FloatingSearch, focusFloatingSearch } from "./floating-search";
 import { CommandPalette, useCommandPalette } from "./command-palette";
@@ -221,6 +222,9 @@ export function AppShell() {
       kids: settings.kidsMode,
     });
     document.documentElement.dataset.kids = settings.kidsMode ? "on" : "off";
+    // Side rail density → a root attribute so the CONTENT inset tokens
+    // (--rail-inset) follow the same persisted toggle as the rail itself.
+    document.documentElement.dataset.rail = settings.railExpanded ? "expanded" : "compact";
   }, [settings, loaded]);
 
   // M3 adaptive + RTL: mirror the document for Arabic (logical CSS properties
@@ -399,6 +403,12 @@ export function AppShell() {
       {/* Arabic UI text layer (no-op in English) — mounts once, owns DOM translation */}
       <ArabicTextLayer />
       {showChrome && <GlassDock />}
+      {/* Large screens (≥1024px) swap the bottom dock for the floating side
+          rail. Both nodes mount; the window-class CSS shows exactly one
+          (display:none removes the other from the a11y tree + tab order).
+          Same showChrome rules: neither renders in the player / immersive
+          detail. */}
+      {showChrome && <SideRail />}
       {/* NOTE: immersive detail renders its OWN back button (DetailView) so it
           also exists when a title is deep-linked as the root frame. */}
       {showChrome && <BackButton />}
@@ -409,7 +419,7 @@ export function AppShell() {
           content, so every scrollable page keeps bottom clearance via
           --nav-clearance (dock height + offset + spacing + safe area). */}
       <main
-        className={`flex-1 w-full ${showChrome ? "pb-[var(--nav-clearance)]" : "pb-10"}`}
+        className={`flex-1 w-full rail-main ${showChrome ? "pb-[var(--nav-clearance)]" : "pb-10"}`}
         role="main"
       >
         {/* Immersive detail supplies its own bottom padding; the dock is hidden,

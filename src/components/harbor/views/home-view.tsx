@@ -142,7 +142,7 @@ export function HomeView() {
         <div className="h-6" />
       )}
 
-      <div className="space-y-7">
+      <div className="home-below space-y-7">
         <HomeCwSection />
 
         <div className="px-4 md:px-8">

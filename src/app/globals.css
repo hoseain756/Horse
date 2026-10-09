@@ -1263,12 +1263,12 @@ html[data-kids="on"][data-appearance="light"] {
 }
 
 /* Floating search results — ONE node, two faces (floating-search.tsx):
-   phones = full-screen sheet on the solid canvas; md+ = the shared glass
+   phones = full-screen sheet on the solid canvas; ≥600 = the shared glass
    dropdown card (same recipe as the dock / search bar). */
 .fs-results {
   background: var(--color-canvas-var);
 }
-@media (min-width: 768px) {
+@media (min-width: 600px) {
   .fs-results {
     background: var(--glass-fill);
     border: 1px solid var(--glass-border);
@@ -2637,4 +2637,616 @@ html[lang^="ar"] {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* ============================================================================ */
+/* ============ ROUND 25 — LARGE-SCREEN ADAPTIVE LAYOUT (≥600 classes) ======== */
+/* ============================================================================ */
+/* Size-class system (user spec): PHONE <600 (existing design, untouched) →
+   TABLET 600–1023 (large hero + large search; bottom dock stays) →
+   LAPTOP 1024–1599 (side rail compact; bottom dock removed) →
+   TV ≥1600 (side rail expanded, 10-foot scale).
+   The thresholds are documented here as tokens for reference; media queries
+   hardcode the same numbers (CSS cannot parameterize query values):
+   --bp-tablet: 600px; --bp-laptop: 1024px; --bp-tv: 1600px.               */
+:root {
+  /* Side rail occupancy. 0 below 1024 → nothing changes on phones/tablets. */
+  --rail-inset: 0px;
+  --rail-width: 0px;
+  /* Rail slot metrics (defaults; real values set per band below). */
+  --rail-tab-height: 52px;
+  --rail-icon-size: 26px;
+  /* Hero content column inset (inline-start edge, mirrors in RTL). */
+  --hero-col-inset: 0px;
+  /* Floating search anchor: centered inside [anchor-start, viewport end]. */
+  --fs-anchor-start: 0px;
+  /* Large search bar / popover max width per band. */
+  --fs-bar-max-w: 520px;
+  /* Large hero composition tokens. */
+  --hero-pad-lg: clamp(56px, 11svh, 120px);
+  --hero-syn-lines: 2;
+  --hero-syn-size: calc(15px * min(var(--home-scale), 1.35));
+  --hero-arrow-inset-start: 12px;
+  /* Up-next strip (≥1024 only). */
+  --hero-upnext-w: 148px;
+}
+
+/* ---------- TABLET band (600–1023): large hero + large search, dock stays --- */
+@media (min-width: 600px) {
+  :root {
+    --hero-col-inset: 48px;
+    --hero-syn-lines: 2;
+  }
+}
+
+/* ---------- LAPTOP band (1024–1599): compact side rail ---------------------- */
+@media (min-width: 1024px) {
+  :root {
+    --rail-width: calc(80px * var(--nav-zoom) * var(--nav-kids));
+    --rail-inset: calc(var(--rail-width) + 24px);
+    --rail-tab-height: calc(52px * var(--nav-zoom) * var(--nav-kids));
+    --rail-icon-size: calc(26px * var(--nav-zoom) * var(--nav-kids));
+    --hero-col-inset: calc(var(--rail-inset) + 40px);
+    --hero-syn-lines: 3;
+    --hero-arrow-inset-start: calc(var(--rail-inset) + 12px);
+    --fs-anchor-start: var(--rail-inset);
+    /* The bottom dock does not exist on this band — content needs no
+       dock clearance (the side rail is start-anchored, overlays the art). */
+    --nav-clearance: 32px;
+  }
+  /* User toggle (settings.railExpanded, persisted): expanded rail on laptop. */
+  html[data-rail="expanded"] {
+    --rail-width: calc(240px * var(--nav-zoom));
+    --rail-inset: calc(var(--rail-width) + 24px);
+    --hero-col-inset: calc(var(--rail-inset) + 40px);
+    --hero-arrow-inset-start: calc(var(--rail-inset) + 12px);
+    --fs-anchor-start: var(--rail-inset);
+  }
+  /* One navigation, one band: the bottom dock never shows at ≥1024. */
+  .glass-dock { display: none; }
+  .side-rail { display: block; }
+  /* Content respects the rail: a stable start inset for every page. The
+     Home route's full-bleed black canvas escapes the inset (below) so the
+     art and the OLED background run edge-to-edge UNDER the rail — no dead
+     side bars, no background seams. */
+  .rail-main { padding-inline-start: var(--rail-inset); }
+  /* Home's pure-black page canvas spans the FULL viewport (escapes main's
+     start inset); the content rows below the hero re-apply the inset
+     internally (.home-below). The hero needs no extra escape — it is
+     width:100% of the already full-bleed .home-void. */
+  .home-void {
+    margin-inline-start: calc(-1 * var(--rail-inset));
+    width: calc(100% + var(--rail-inset));
+  }
+  .home-below { margin-inline-start: var(--rail-inset); }
+}
+
+/* ---------- TV / 10-foot band (≥1600): expanded rail, larger scale ---------- */
+@media (min-width: 1600px) {
+  :root {
+    --rail-width: calc(240px * var(--nav-zoom));
+    --rail-inset: calc(var(--rail-width) + 28px);
+    --rail-tab-height: calc(56px * var(--nav-zoom));
+    --rail-icon-size: calc(28px * var(--nav-zoom));
+    --hero-col-inset: calc(var(--rail-inset) + 56px);
+    --hero-syn-lines: 4;
+    --hero-syn-size: calc(18px * min(var(--home-scale), 1.3));
+    --fs-bar-max-w: 720px;
+    --fs-anchor-start: var(--rail-inset);
+    --hero-arrow-inset-start: calc(var(--rail-inset) + 16px);
+  }
+  html[data-rail="expanded"] {
+    /* attribute is a no-op here: TV is always expanded */
+  }
+}
+
+/* ============ SIDE RAIL (≥1024) — the dock's vertical sibling ============== */
+/* Same glass recipe (--glass-*), same pill language, same easing. The capsule
+   floats at the inline-start edge, vertically centered, OVER the content;
+   pages keep a stable inset via --rail-inset (see band blocks above). */
+.side-rail {
+  display: none; /* revealed by the ≥1024 band block above */
+  position: fixed;
+  inset-inline-start: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--z-nav);
+}
+/* IMPORTANT: this reveal rule MUST come after the base rule above — same
+   specificity, source order wins. (The band block near the tokens section
+   precedes the base rule and was silently overridden by it.) */
+@media (min-width: 1024px) {
+  .side-rail { display: block; }
+}
+.rail-capsule {
+  width: var(--rail-width);
+  padding: calc(8px * var(--nav-zoom));
+  border-radius: 9999px; /* stadium — the dock's shape, rotated */
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  touch-action: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rail-capsule { background: var(--glass-fallback); }
+}
+/* Track = the tab stack only (the expand toggle lives outside it so the
+   pill's slot math stays exact: slotH = trackHeight / tabCount). */
+.rail-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* THE single vertical indicator — one element for the whole rail (a dev check
+   in side-rail.tsx asserts exactly one). Height = one slot (written by JS);
+   anchored inset-inline 0 + block-start 0, moved with translateY. A flex
+   column is top-to-bottom in LTR AND RTL, so the vertical axis needs no
+   direction sign — the per-locale order array IS the visual order. */
+.rail-pill {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  border-radius: 9999px;
+  background: var(--glass-active-fill);
+  opacity: 0; /* revealed by JS once measured (data-ready) — no first-paint flash */
+  transition:
+    transform 350ms var(--glass-ease),
+    height 350ms var(--glass-ease),
+    opacity 200ms var(--glass-ease);
+  will-change: transform, height;
+  pointer-events: none;
+}
+.rail-pill[data-ready="true"] { opacity: 1; }
+.rail-track[data-scrub="true"] .rail-pill { transition: none; }
+/* Scrub preview: exactly ONE indicator on screen — the real active tab keeps
+   aria-current (screen-reader truth) but its visuals yield to the lit slot. */
+.rail-track[data-scrub="true"] .rail-tab[aria-current="page"]:not([data-lit="true"]) {
+  color: var(--nav-icon-inactive);
+}
+.rail-track[data-scrub="true"] .rail-tab[aria-current="page"]:not([data-lit="true"]) .rail-icon-outline { opacity: 1; }
+.rail-track[data-scrub="true"] .rail-tab[aria-current="page"]:not([data-lit="true"]) .rail-icon-filled { opacity: 0; }
+
+/* Tab slot: compact = icon only (26dp), expanded = icon + label rows. */
+.rail-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: var(--rail-tab-height);
+  padding-inline: 0;
+  border-radius: 9999px;
+  color: var(--nav-icon-inactive);
+  transition: color 150ms ease, transform 150ms var(--glass-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.rail-tab::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+  border-radius: inherit;
+}
+.rail-tab:active { transform: scale(var(--glass-press-scale)); }
+.rail-tab[aria-current="page"] { color: var(--nav-icon-active); }
+.rail-tab[data-lit="true"] { color: var(--nav-icon-active); }
+.rail-icon-frame {
+  position: relative;
+  width: var(--rail-icon-size);
+  height: var(--rail-icon-size);
+  flex: 0 0 auto;
+}
+.rail-icon-frame svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 150ms ease;
+}
+.rail-icon-filled { opacity: 0; }
+.rail-tab[aria-current="page"] .rail-icon-outline { opacity: 0; }
+.rail-tab[aria-current="page"] .rail-icon-filled { opacity: 1; }
+.rail-tab[data-lit="true"] .rail-icon-outline { opacity: 0; }
+.rail-tab[data-lit="true"] .rail-icon-filled { opacity: 1; }
+.rail-label {
+  display: none; /* compact band: icon + native tooltip (title) */
+  font-size: calc(15px * var(--nav-zoom));
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Expanded states: laptop user toggle + the TV band (always). */
+.side-rail[data-expanded="true"] .rail-tab { justify-content: flex-start; padding-inline: 12px; }
+.side-rail[data-expanded="true"] .rail-label { display: inline; }
+@media (min-width: 1600px) {
+  .rail-tab { justify-content: flex-start; padding-inline: 16px; }
+  .rail-label { display: inline; }
+}
+/* Expand/collapse toggle (laptop band only; TV is always expanded). */
+.rail-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--rail-tab-height);
+  margin-top: 2px;
+  border-radius: 9999px;
+  color: var(--nav-icon-inactive);
+  transition: color 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.rail-toggle:hover { color: var(--nav-icon-active); }
+.rail-toggle-icon { width: calc(20px * var(--nav-zoom)); height: calc(20px * var(--nav-zoom)); }
+.rail-toggle-icon-alt { display: none; }
+.rail-toggle[aria-pressed="true"] .rail-toggle-icon { display: none; }
+.rail-toggle[aria-pressed="true"] .rail-toggle-icon-alt { display: block; }
+.side-rail[data-expanded="true"] .rail-toggle { justify-content: flex-start; padding-inline: 12px; }
+@media (min-width: 1600px) {
+  .side-rail .rail-toggle { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-rail, .rail-pill, .rail-tab, .rail-icon-frame svg, .rail-toggle { transition: none; }
+}
+
+/* ============ LARGE-SCREEN HERO (≥600) — cinematic start-anchored column === */
+/* Height ladder (svh-clamped; phone keeps its own clamp untouched). */
+@media (min-width: 600px) {
+  :root { --hero-height: clamp(480px, 72svh, 800px); }
+}
+@media (min-width: 1024px) {
+  :root { --hero-height: clamp(520px, 76svh, 880px); }
+}
+@media (min-width: 1600px) {
+  :root { --hero-height: clamp(620px, 82svh, 1040px); }
+}
+/* Directional readability scrim: darkest at the content edge, fading toward
+   the art — the guaranteed-contrast layer under the start-anchored column.
+   Physical gradients flip with the document direction. */
+.home-hero-scrim-side {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.52) 30%, rgba(0, 0, 0, 0) 62%);
+}
+[dir="rtl"] .home-hero-scrim-side {
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.52) 30%, rgba(0, 0, 0, 0) 62%);
+}
+@media (min-width: 600px) {
+  .home-hero-scrim-side { display: block; }
+}
+/* Content column: start-anchored (inline-start edge), lower-middle band,
+   start-aligned text. Phones keep the centered bottom column untouched. */
+@media (min-width: 600px) {
+  .home-hero-content {
+    align-items: flex-start;
+    text-align: start;
+    max-width: none;
+    margin-inline: 0;
+    padding-inline-start: var(--hero-col-inset);
+    padding-inline-end: clamp(16px, 4vw, 64px);
+    padding-bottom: var(--hero-pad-lg);
+    z-index: 2;
+  }
+  .home-hero-logo-row { justify-content: flex-start; }
+  .home-hero-logo { max-width: min(var(--hero-logo-max-w), 34vw); }
+  .home-hero-title { max-width: 100%; }
+  .home-hero-meta { justify-content: flex-start; max-width: 100%; }
+}
+/* Synopsis (large screens only — the phone hero has none): TMDB overview
+   fetched by the EXISTING enrichment call, clamped per band via
+   --hero-syn-lines (2 tablet / 3 laptop / 4 TV), max 60ch. */
+.home-hero-synopsis {
+  display: none;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: var(--hero-syn-size);
+  font-weight: 500;
+  line-height: 1.55;
+  max-width: 60ch;
+  margin: 0 0 var(--hero-gap-btn);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+@media (min-width: 600px) {
+  .home-hero-synopsis {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--hero-syn-lines);
+    overflow: hidden;
+  }
+}
+/* Primary action on large screens: the shared GLASS pill (accent tint of the
+   same recipe). Phones keep the solid white pill untouched. */
+.home-hero-btn-lg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(46px * min(var(--home-scale), 1.25));
+  padding-inline: calc(30px * min(var(--home-scale), 1.25));
+  border-radius: 9999px;
+  background: var(--glass-accent-fill);
+  border: 1px solid var(--glass-accent-border);
+  color: var(--md-sys-color-on-primary);
+  font-size: calc(15px * min(var(--home-scale), 1.35));
+  font-weight: 700;
+  line-height: 1;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  transition: transform 150ms var(--hero-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.home-hero-btn-lg:active { transform: scale(0.97); }
+@media (min-width: 600px) {
+  .home-hero-btn-lg { display: inline-flex; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-hero-btn-lg { background: var(--md-sys-color-primary); }
+}
+/* Segmented progress indicator (≥600): one segment per slide, autoplay
+   progress fills the ACTIVE segment (transform-only, JS-driven). */
+.home-hero-segs {
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+@media (min-width: 600px) {
+  .home-hero-segs { display: flex; }
+}
+.home-hero-seg-btn {
+  position: relative;
+  height: 6px;
+  width: clamp(28px, 4vw, 44px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 9999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-hero-seg-btn::before {
+  content: "";
+  position: absolute;
+  inset: -14px 0; /* ≥44px hit target around a 6dp bar */
+  border-radius: 9999px;
+}
+.home-hero-seg-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 4px;
+  border-radius: 9999px;
+}
+.home-hero-seg-bar {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.32);
+  overflow: hidden;
+  pointer-events: none;
+  transition: background 200ms ease;
+}
+.home-hero-seg-btn:hover .home-hero-seg-bar { background: rgba(255, 255, 255, 0.5); }
+.home-hero-seg-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+}
+[dir="rtl"] .home-hero-seg-fill { transform-origin: right center; }
+/* Prev/next glass arrows (pointer-capable devices only; keyboard-focusable).
+   Hidden entirely where hover/fine pointers do not exist (touch tablets swipe;
+   the segmented indicator + keyboard arrows remain). */
+.home-hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  color: #fff;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--hero-ease), transform 150ms var(--hero-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-hero-arrow { background: var(--glass-fallback); }
+}
+.home-hero-arrow.is-start { inset-inline-start: var(--hero-arrow-inset-start); }
+.home-hero-arrow.is-end { inset-inline-end: 12px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 600px) {
+  .home-hero-arrow { display: inline-flex; }
+  .home-hero:hover .home-hero-arrow,
+  .home-hero:focus-within .home-hero-arrow,
+  .home-hero-arrow:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .home-hero .home-hero-arrow:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+.home-hero-arrow:active { transform: translateY(-50%) scale(0.94); }
+/* Up-next preview strip (≥1024 pointer bands): next 2–4 titles as small glass
+   cards near the content column's inline-end. */
+.home-hero-upnext {
+  position: absolute;
+  inset-inline-end: clamp(16px, 3vw, 48px);
+  bottom: clamp(20px, 5svh, 48px);
+  z-index: 2;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 1024px) {
+  .home-hero-upnext { display: flex; }
+}
+.home-hero-upnext-label {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  padding-inline-start: 6px;
+}
+.upnext-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: var(--hero-upnext-w);
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  text-align: start;
+  cursor: pointer;
+  transition: transform 180ms var(--hero-ease), border-color 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .upnext-card { background: var(--glass-fallback); }
+}
+.upnext-card:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.55); }
+.upnext-card[data-primary="true"] { border-color: var(--glass-accent-border); }
+.upnext-thumb {
+  width: 52px;
+  height: 74px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+.upnext-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.upnext-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-width: 0;
+}
+/* Skeleton mirrors the large composition (no layout shift on load). */
+.hero-skel-syn {
+  height: 14px;
+  border-radius: 9999px;
+  margin-bottom: 10px;
+}
+.hero-skel-segs { display: none; gap: 10px; align-items: center; }
+@media (min-width: 600px) {
+  .hero-skel-segs { display: flex; }
+  .hero-skel-dots { display: none; }
+}
+
+/* ============ LARGE-SCREEN SEARCH (≥600) + TV fullscreen (≥1600) ============ =*/
+/* The ONE search surface re-anchored per band: centered inside the rail inset
+   at ≥1024 (never overlaps the rail), max width per band, same glass recipe.
+   Width is owned by the WRAPPER utility classes (idle 240 / expanded
+   min(--fs-bar-max-w, …)); .fs-shell only fills it. */
+@media (min-width: 1600px) {
+  .fs-shell { height: 64px; }
+  .fs-shell .fs-input { font-size: 18px; }
+}
+/* TV fullscreen search view (opened from the big ≥1600 glass pill). */
+.fs-tv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-search-bar);
+  background: color-mix(in srgb, var(--color-canvas-var) 88%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(6svh, 48px) max(5vw, 48px) 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fs-tv-overlay { background: var(--color-canvas-var); }
+}
+.fs-tv-bar {
+  width: min(var(--fs-bar-max-w), 100%);
+  border-radius: 9999px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-inline: 24px;
+  height: 72px;
+  box-shadow: var(--md-sys-elevation-3);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fs-tv-bar { background: var(--glass-fallback); }
+}
+.fs-tv-bar input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  outline: none;
+  color: var(--color-ink-var);
+  font-size: 24px;
+  font-weight: 600;
+}
+.fs-tv-grid {
+  width: min(var(--fs-bar-max-w), 100%);
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.fs-tv-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  color: var(--color-ink-var);
+  text-align: start;
+  cursor: pointer;
+  transition: transform 160ms var(--hero-ease);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fs-tv-card { background: var(--glass-fallback); }
+}
+.fs-tv-card:hover { transform: translateY(-3px); }
+.fs-tv-card .fs-tv-poster { position: relative; aspect-ratio: 2 / 3; width: 100%; background: rgba(255, 255, 255, 0.05); }
+.fs-tv-card .fs-tv-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.fs-tv-card .fs-tv-name {
+  padding: 10px 12px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }

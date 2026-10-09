@@ -34,10 +34,12 @@
 // and never interrupts a drag. Cleanup covers every timer/observer/animation.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import type { Meta } from "@/lib/harbor/types";
 import { tmdbDetails, tmdbHeroArt, tmdbIdFromImdb, tmdbLogoPath, tmdbOriginal } from "@/lib/harbor/tmdb";
 import { goToSlideLabel, homeT, isArabic, metaTypeLabel, slideOf } from "@/lib/harbor/i18n";
+import { PosterImage } from "../common/poster";
 
 export type HeroSlide = { meta: Meta };
 
@@ -94,7 +96,7 @@ const WARMED_ART = new Set<string>(); // artworks already decoded this session
 /** Enrichment survives hero remounts (round-trips between Home visits). */
 const ENRICH_CACHE = new Map<string, SlideInfo>();
 
-type SlideInfo = { logo?: string; genre?: string; posterPath?: string; backdropPath?: string };
+type SlideInfo = { logo?: string; genre?: string; posterPath?: string; backdropPath?: string; overview?: string };
 
 // ---------- image proxy helpers ----------
 type ProxyOpts = { alpha?: boolean; lqip?: boolean; q?: number; h?: number; pos?: string };
@@ -372,9 +374,10 @@ function useHeroEnrichment(slides: HeroSlide[], lang: string): Record<string, Sl
           const value: SlideInfo = {
             logo: logoPath ? imgProxy(tmdbOriginal(logoPath), 720, { alpha: true, q: 82 }) : undefined,
             genre: details.genres?.[0]?.name,
+            overview: typeof details.overview === "string" && details.overview.trim() ? details.overview.trim() : undefined,
             ...tmdbHeroArt(details),
           };
-          if (value.logo || value.genre || value.posterPath || value.backdropPath) {
+          if (value.logo || value.genre || value.posterPath || value.backdropPath || value.overview) {
             ENRICH_CACHE.set(meta.id, value);
             setInfo((prev) => ({ ...prev, [meta.id]: value }));
           }
@@ -409,6 +412,12 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const [reduced, setReduced] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [moving, setMoving] = useState(false); // will-change window
+  // Large-screen presentation gates (round 25). PHONES NEVER SET THESE — the
+  // phone code path renders exactly the pre-round-25 tree (same DOM, same
+  // classes, same inline styles); every large-screen element is conditional
+  // on these flags and additionally gated by the ≥600/≥1024 CSS bands.
+  const [large, setLarge] = useState(false); // ≥600: start-anchored column, segments, arrows
+  const [wide, setWide] = useState(false); // ≥1024: up-next strip
 
   const trackRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -428,6 +437,11 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const jumpAnimRef = useRef<Animation[]>([]);
   const jumpElsRef = useRef<{ from: HTMLDivElement | null; to: HTMLDivElement | null }>({ from: null, to: null });
   const dotBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Round 25 (large screens): segmented indicator — the ACTIVE segment's fill
+  // is driven per-frame from the autoplay clock below (transform-only).
+  const segFillRef = useRef<HTMLSpanElement | null>(null);
+  const segBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const lastTickRef = useRef(0); // autoplay interval's last fire time
   /** Resolved indicator slot sizes (px) — measured once per gesture so the
    *  drag-synced width morph respects the --ind-scale ladder. */
   const indSizesRef = useRef<{ dot: number; active: number } | null>(null);
@@ -448,6 +462,23 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Size-class gates (round 25): one listener pair, applied together.
+  useEffect(() => {
+    const lg = window.matchMedia("(min-width: 600px)");
+    const wd = window.matchMedia("(min-width: 1024px)");
+    const apply = () => {
+      setLarge(lg.matches);
+      setWide(wd.matches);
+    };
+    apply();
+    lg.addEventListener("change", apply);
+    wd.addEventListener("change", apply);
+    return () => {
+      lg.removeEventListener("change", apply);
+      wd.removeEventListener("change", apply);
+    };
   }, []);
 
   // Off-screen gate (also prevents programmatic motion from yanking the page)
@@ -680,12 +711,37 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   // ---------- autoplay ----------
   useEffect(() => {
     if (!canAutoplay || total <= 1 || document.hidden) return;
+    lastTickRef.current = performance.now(); // segment fill starts from 0 on (re)creation
     const t = setInterval(() => {
       if (document.hidden || phaseRef.current !== "idle") return; // never interrupts a drag/jump
+      lastTickRef.current = performance.now(); // fill completes exactly as the tick fires
       slideStepFrom(1, xRef.current);
     }, AUTOPLAY_MS);
     return () => clearInterval(t);
   }, [canAutoplay, total, slideStepFrom]);
+
+  // ---------- segmented autoplay progress (large screens, transform-only) ----------
+  useEffect(() => {
+    if (!large || total <= 1) return;
+    let raf = 0;
+    let frozen = 0; // last displayed progress (resumed pauses freeze here)
+    const tick = () => {
+      const el = segFillRef.current;
+      if (el) {
+        let p: number;
+        if (canAutoplay) {
+          p = Math.min(1, Math.max(0, (performance.now() - lastTickRef.current) / AUTOPLAY_MS));
+          frozen = p;
+        } else {
+          p = frozen; // paused (hover/focus/touch/off-screen/reduced): freeze
+        }
+        el.style.transform = `scaleX(${p.toFixed(4)})`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [large, total, canAutoplay]);
 
   // ---------- keyboard ----------
   const goTo = useCallback(
@@ -982,7 +1038,7 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
     };
   }, []);
 
-  if (loading) return <HeroSkeleton lang={lang} />;
+  if (loading) return <HeroSkeleton lang={lang} large={large} />;
   if (total === 0) return null;
 
   const slide = slides[Math.min(idx, total - 1)];
@@ -992,6 +1048,20 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
   const genre = meta.genres?.[0] ?? enriched.genre;
   const year = meta.releaseInfo?.split("–")[0];
   const typeLabel = metaTypeLabel(meta.type, meta.genres ?? (genre ? [genre] : undefined), lang);
+  // Round 25 (large screens): synopsis from the SAME enrichment data.
+  const synopsis = enriched.overview;
+  // "Up next" preview list (≥1024): the next min(4, total-1) slides after the
+  // current one, circular. Plain derivation (≤8 slides — no memo needed), and
+  // intentionally AFTER the early returns (no hooks here).
+  const upNext: { meta: Meta; i: number }[] = [];
+  if (total > 1) {
+    const count = Math.min(4, total - 1);
+    for (let k = 1; k <= count; k++) {
+      const i = (idx + k) % total;
+      const s = slides[i];
+      if (s) upNext.push({ meta: s.meta, i });
+    }
+  }
 
   // Preload the FIRST slide's art (React 19 hoists <link> to <head>);
   // media-split so each platform preloads exactly the layer it will show.
@@ -1103,7 +1173,59 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
       </div>
 
       <div className="home-hero-scrim-top" aria-hidden />
+      {/* Round 25 (≥600): directional readability scrim — darkest at the
+          content column's inline-start edge, physical gradient flips in RTL. */}
+      <div className="home-hero-scrim-side" aria-hidden />
       <div className="home-hero-scrim-fade" aria-hidden />
+
+      {/* Round 25 (≥600, pointer devices): prev/next glass arrows. Hidden where
+          hover+fine-pointer do not both exist (touch tablets swipe); the
+          buttons stay keyboard-reachable via focus-within on pointer bands. */}
+      {total > 1 && (
+        <>
+          <button
+            type="button"
+            className="home-hero-arrow is-start md-state harbor-tv-focus"
+            aria-label={rtl ? homeT("nextSlide", lang) : homeT("prevSlide", lang)}
+            onClick={() => goTo((idxRef.current - 1 + total) % total)}
+            tabIndex={large ? 0 : -1}
+          >
+            <ChevronLeft className="h-6 w-6 rtl:rotate-180" aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="home-hero-arrow is-end md-state harbor-tv-focus"
+            aria-label={rtl ? homeT("prevSlide", lang) : homeT("nextSlide", lang)}
+            onClick={() => goTo((idxRef.current + 1) % total)}
+            tabIndex={large ? 0 : -1}
+          >
+            <ChevronRight className="h-6 w-6 rtl:rotate-180" aria-hidden />
+          </button>
+        </>
+      )}
+
+      {/* Round 25 (≥1024): "Up next" preview strip — next 2–4 titles as small
+          glass cards; the nearest one is highlighted. Shares the SAME data
+          slides (no new source) and the SAME goTo engine. */}
+      {wide && total > 1 && (
+        <div className="home-hero-upnext">
+          <p className="home-hero-upnext-label">{homeT("upNext", lang)}</p>
+          {upNext.map(({ meta: um, i }, k) => (
+            <button
+              key={`${um.type}:${um.id}`}
+              type="button"
+              className="upnext-card md-state harbor-tv-focus"
+              data-primary={k === 0 ? "true" : undefined}
+              onClick={() => goTo(i)}
+            >
+              <span className="upnext-thumb" aria-hidden>
+                {um.poster ? <PosterImage src={um.poster} alt="" className="absolute inset-0" /> : null}
+              </span>
+              <span className="upnext-name">{um.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Shared content stack — NEVER remounts: data crossfades in place. */}
       <div ref={contentRef} className="home-hero-content">
@@ -1123,16 +1245,30 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
           <span className="shrink-0">{typeLabel}</span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => push({ kind: "detail", type: meta.type, id: meta.id })}
-          className="home-hero-btn md-state harbor-tv-focus"
-          style={{ marginBottom: "var(--hero-gap-btn)" }}
-        >
-          {homeT("viewDetails", lang)}
-        </button>
+        {/* Round 25 (≥600 only — the phone hero has no synopsis): TMDB overview
+            from the SAME enrichment call, clamped per band by --hero-syn-lines. */}
+        {large && synopsis && <p className="home-hero-synopsis">{synopsis}</p>}
 
-        {total > 1 && (
+        {large ? (
+          <button
+            type="button"
+            onClick={() => push({ kind: "detail", type: meta.type, id: meta.id })}
+            className="home-hero-btn-lg md-state harbor-tv-focus"
+          >
+            {homeT("viewDetails", lang)}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => push({ kind: "detail", type: meta.type, id: meta.id })}
+            className="home-hero-btn md-state harbor-tv-focus"
+            style={{ marginBottom: "var(--hero-gap-btn)" }}
+          >
+            {homeT("viewDetails", lang)}
+          </button>
+        )}
+
+        {total > 1 && !large && (
           <div className="home-hero-dots flex items-center justify-center" style={{ gap: "var(--hero-ind-gap)" }}>
             {slides.map((s, i) => (
               <button
@@ -1161,6 +1297,49 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
             </button>
           </div>
         )}
+
+        {/* Round 25 (≥600): segmented progress indicator — the active segment
+            fills with the autoplay clock (JS-driven, transform-only); taps/
+            keyboard jump via the SAME goTo engine. The WCAG pause control is
+            repeated here as the visually-hidden last segment-row child. */}
+        {total > 1 && large && (
+          <div className="home-hero-segs" role="group" aria-label={homeT("featured", lang)}>
+            {slides.map((s, i) => {
+              const current = i === currentTarget;
+              return (
+                <button
+                  key={s.meta.id}
+                  type="button"
+                  ref={(el) => {
+                    segBtnRefs.current[i] = el;
+                  }}
+                  aria-label={goToSlideLabel(i + 1, lang)}
+                  aria-current={current}
+                  onClick={() => goTo(i)}
+                  className="home-hero-seg-btn harbor-tv-focus"
+                >
+                  <span className="home-hero-seg-bar" aria-hidden>
+                    {current && (
+                      <span
+                        ref={segFillRef}
+                        className="home-hero-seg-fill"
+                        style={canAutoplay ? undefined : { transform: "scaleX(0)" }}
+                      />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              aria-label={userPaused ? homeT("resumeAutoplay", lang) : homeT("pauseAutoplay", lang)}
+              onClick={() => setUserPaused((p) => !p)}
+              className="home-hero-pause-a11y harbor-tv-focus"
+            >
+              {userPaused ? homeT("resumeAutoplay", lang) : homeT("pauseAutoplay", lang)}
+            </button>
+          </div>
+        )}
         {/* Live region: announces slide changes only while autoplay is off */}
         <p aria-live={userPaused ? "polite" : "off"} className="sr-only">
           {slideOf(idx + 1, total, lang)}
@@ -1171,8 +1350,9 @@ export function HomeHero({ slides, loading }: { slides: HeroSlide[]; loading: bo
 }
 
 // ---------- Skeleton (reserved height, no layout shift; token-driven so it
-// mirrors the scaled real layout at every breakpoint) ----------
-function HeroSkeleton({ lang }: { lang: string }) {
+// mirrors the scaled real layout at every breakpoint; the large variant adds
+// the synopsis slot + segmented row so composition matches at ≥600) ----------
+function HeroSkeleton({ lang, large }: { lang: string; large: boolean }) {
   return (
     <div className="home-hero" role="status" aria-label={homeT("loadingFeatured", lang)}>
       <div className="home-hero-content">
@@ -1187,16 +1367,35 @@ function HeroSkeleton({ lang }: { lang: string }) {
           <div className="harbor-skeleton rounded-full" style={{ height: "var(--hero-meta-size)", width: 70 }} />
           <div className="harbor-skeleton rounded-full" style={{ height: "var(--hero-meta-size)", width: 52 }} />
         </div>
-        <div
-          className="harbor-skeleton rounded-full"
-          style={{ width: "var(--hero-btn-min-w)", height: "var(--hero-btn-height)", marginBottom: "var(--hero-gap-btn)" }}
-        />
-        <div className="flex items-center justify-center" style={{ gap: "var(--hero-ind-gap)" }}>
-          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-active-w)", height: "var(--hero-ind-dot)" }} />
-          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
-          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
-          <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
-        </div>
+        {large && (
+          <>
+            <div className="home-hero-synopsis" aria-hidden>
+              <div className="harbor-skeleton hero-skel-syn" style={{ width: "min(60ch, 100%)" }} />
+              <div className="harbor-skeleton hero-skel-syn" style={{ width: "min(48ch, 82%)", marginBottom: "var(--hero-gap-btn)" }} />
+            </div>
+            <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-btn-min-w)", height: "var(--hero-btn-height)", marginBottom: "var(--hero-gap-btn)" }} />
+            <div className="hero-skel-segs" aria-hidden>
+              <div className="harbor-skeleton rounded-full" style={{ width: 44, height: 6 }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: 44, height: 6 }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: 44, height: 6 }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: 44, height: 6 }} />
+            </div>
+          </>
+        )}
+        {!large && (
+          <>
+            <div
+              className="harbor-skeleton rounded-full"
+              style={{ width: "var(--hero-btn-min-w)", height: "var(--hero-btn-height)", marginBottom: "var(--hero-gap-btn)" }}
+            />
+            <div className="hero-skel-dots flex items-center justify-center" style={{ gap: "var(--hero-ind-gap)" }}>
+              <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-active-w)", height: "var(--hero-ind-dot)" }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+              <div className="harbor-skeleton rounded-full" style={{ width: "var(--hero-ind-dot)", height: "var(--hero-ind-dot)" }} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

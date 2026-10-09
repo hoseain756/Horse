@@ -104,6 +104,8 @@ export function FloatingSearch() {
   }, [stack]);
 
   const [expanded, setExpanded] = useState(false);
+  const [tvOpen, setTvOpen] = useState(false); // TV band (≥1600) fullscreen face
+  const [tvBand, setTvBand] = useState(false); // ≥1600 window class
   const [hidden, setHidden] = useState(false); // scroll-direction visibility
   const [query, setQuery] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -162,6 +164,29 @@ export function FloatingSearch() {
       document.removeEventListener("mousedown", onPointer);
     };
   }, [expandAndFocus]);
+
+  // Size bands (round 25): the desktop face moved 768→600 so the whole
+  // tablet band gets the large search; the TV band (≥1600) gets the
+  // fullscreen face (the idle bar becomes a focusable glass button).
+  useEffect(() => {
+    const tv = window.matchMedia("(min-width: 1600px)");
+    const apply = () => {
+      setTvBand(tv.matches);
+      if (!tv.matches) setTvOpen(false); // leaving the TV band closes the overlay
+    };
+    apply();
+    tv.addEventListener("change", apply);
+    return () => tv.removeEventListener("change", apply);
+  }, []);
+
+  // TV fullscreen face: lock body scroll while open (modal surface).
+  useEffect(() => {
+    if (!tvOpen) return;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [tvOpen]);
 
   // Mobile full-screen face: lock body scroll while the sheet is open (narrow
   // viewports only — the desktop dropdown never modally covers the page).
@@ -281,6 +306,18 @@ export function FloatingSearch() {
     setActiveIdx(-1);
   }, []);
 
+  const closeTv = useCallback(() => {
+    setTvOpen(false);
+    setActiveIdx(-1);
+  }, []);
+
+  const openTv = useCallback(() => {
+    setExpanded(false);
+    setTvOpen(true);
+    setHidden(false);
+    setTimeout(() => setRecents(readRecents()), 0);
+  }, []);
+
   const openMeta = useCallback(
     (m: Meta) => {
       writeRecent(query || m.name);
@@ -309,6 +346,20 @@ export function FloatingSearch() {
   }, [query, movies, series, addonHits, people, recents, trending, uiLanguage]);
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && tvOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (query) setQuery("");
+      else closeTv();
+      return;
+    }
+    if (e.key === "ArrowDown" && tvOpen && rows.length > 0) {
+      // D-pad: from the TV input straight into the results grid.
+      e.preventDefault();
+      const first = listRef.current?.querySelector<HTMLElement>("[role='option'], .fs-tv-card");
+      first?.focus();
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       e.stopPropagation();
@@ -357,31 +408,33 @@ export function FloatingSearch() {
 
   const hasResults = movies.length + series.length + addonHits.length + people.length > 0;
   const searching = phase === "searching";
-  const showDropdown = expanded;
+  const showDropdown = expanded && !tvBand;
 
   // All hooks above; only the idle presentation is suppressed on immersive
   // surfaces (an open search sheet/bar always renders).
-  if (suppressed && !expanded) return null;
+  if (suppressed && !expanded && !tvOpen) return null;
 
   return (
     <div
       ref={wrapRef}
       className={cn(
-        // Fixed top. PHONES: 48×48 glass trigger at the top inline-END corner
-        // (over the hero, safe-area offset) that expands THIS bar into the
-        // full-screen glass search sheet; md+: docked centered bar. z:
-        // --z-search-bar map.
-        "fixed z-[var(--z-search-bar)] top-[max(0.75rem,env(safe-area-inset-top))]",
-        "end-3 md:end-auto md:left-1/2 md:-translate-x-1/2",
-        "w-12 md:w-60",
+        // Fixed top. PHONES (<600): 48×48 glass trigger at the top inline-END
+        // corner (over the hero, safe-area offset) that expands THIS bar into
+        // the full-screen glass search sheet. ≥600: floating glass pill
+        // centered INSIDE the content area — the anchor box starts at
+        // --fs-anchor-start (the side-rail inset at ≥1024) so the bar and its
+        // popover can never overlap the side nav. z: --z-search-bar map.
+        "fixed z-[var(--z-search-bar)] top-[max(0.75rem,env(safe-area-inset-top))] end-3",
+        "min-[600px]:end-3 min-[600px]:start-[var(--fs-anchor-start)] min-[600px]:mx-auto",
+        "w-12 min-[600px]:w-60",
         // Expand on focus + hide/reveal on scroll direction (smooth; motion-reduce users get instant snap)
         "transition-[width,transform,opacity] duration-300 ease-[var(--md-sys-motion-easing-emphasized)] motion-reduce:transition-none",
-        expanded && "md:w-[42rem]",
-        // Scrolled-down: slide the bar fully off-screen (keeps md centering).
-        // invisible: aria-hidden subtrees must not keep focusable controls.
-        hidden && "-translate-y-[160%] opacity-0 invisible pointer-events-none",
+        expanded && "min-[600px]:w-[min(var(--fs-bar-max-w),calc(100vw-var(--fs-anchor-start)-24px))]",
+        // Scrolled-down: slide the bar fully off-screen. invisible: aria-hidden
+        // subtrees must not keep focusable controls.
+        hidden && !tvOpen && "-translate-y-[160%] opacity-0 invisible pointer-events-none",
       )}
-      aria-hidden={hidden || undefined}
+      aria-hidden={(hidden && !tvOpen) || undefined}
     >
       {/* PHONE TRIGGER — 48dp glass icon (shared glass recipe). Expands this
           bar into the full-screen glass sheet synchronously inside the tap
@@ -389,7 +442,7 @@ export function FloatingSearch() {
       <button
         type="button"
         onClick={expandAndFocus}
-        className="md:hidden md-state harbor-tv-focus flex h-12 w-12 items-center justify-center rounded-full glass-surface shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]"
+        className="min-[600px]:hidden md-state harbor-tv-focus flex h-12 w-12 items-center justify-center rounded-full glass-surface shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]"
         aria-label="Search"
         aria-expanded={expanded}
         aria-haspopup="listbox"
@@ -398,48 +451,58 @@ export function FloatingSearch() {
         <Search className="h-5 w-5 text-ink" aria-hidden />
       </button>
 
-      {/* md+ docked bar — shared glass recipe, same values as the bottom nav */}
+      {/* ≥600 docked bar — shared glass recipe, same values as the navs. On
+          the TV band (≥1600) the field is a focusable glass BUTTON: selecting
+          it opens the fullscreen search view (D-pad friendly); on laptop/
+          tablet it focuses the inline combobox as before. */}
       <div
         className={cn(
-          // M3 search bar shape: corner-full. Shared glass tokens (nav parity).
-          "glass-surface hidden md:flex items-center gap-2 rounded-full",
+          "fs-shell glass-surface hidden min-[600px]:flex items-center gap-2 rounded-full w-full",
           "shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]",
           "transition-shadow duration-300",
-          expanded && "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.75)]",
+          expanded && !tvBand && "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.75)]",
         )}
+        onClick={tvBand ? openTv : undefined}
+        data-tv-trigger={tvBand ? "true" : undefined}
       >
         <div
-          className="flex items-center gap-2 px-2.5 md:px-4 h-11 md:h-14 w-full"
-          role="combobox"
-          aria-expanded={showDropdown && rows.length >= 0}
-          aria-controls="harbor-float-search-list"
-          aria-haspopup="listbox"
+          className="flex items-center gap-2 px-2.5 min-[600px]:px-4 h-11 min-[600px]:h-14 w-full"
+          role={tvBand ? undefined : "combobox"}
+          aria-expanded={tvBand ? undefined : showDropdown && rows.length >= 0}
+          aria-controls={tvBand ? undefined : "harbor-float-search-list"}
+          aria-haspopup={tvBand ? undefined : "listbox"}
         >
-          <Search className="w-4 h-4 md:w-5 md:h-5 text-ink-muted shrink-0" aria-hidden />
+          <Search className="w-4 h-4 min-[600px]:w-5 min-[600px]:h-5 text-ink-muted shrink-0" aria-hidden />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => {
+              if (tvBand) {
+                openTv(); // TV: the field is a glass button — selecting it opens fullscreen
+                return;
+              }
               setExpanded(true);
               setHidden(false);
               setTimeout(() => setRecents(readRecents()), 0);
             }}
             onKeyDown={onInputKeyDown}
+            readOnly={tvBand}
             placeholder="Search…"
             aria-label="Search movies, series, people and addons"
-            aria-autocomplete="list"
+            aria-autocomplete={tvBand ? undefined : "list"}
             className={cn(
-              "min-w-0 flex-1 self-stretch bg-transparent text-sm md:text-base text-ink placeholder:text-ink-muted outline-none",
-              !expanded && "md:opacity-100 opacity-0 md:pointer-events-auto pointer-events-none w-0 md:w-auto",
+              "fs-input min-w-0 flex-1 self-stretch bg-transparent text-sm min-[600px]:text-base text-ink placeholder:text-ink-muted outline-none",
+              !expanded && "min-[600px]:opacity-100 opacity-0 min-[600px]:pointer-events-auto pointer-events-none w-0 min-[600px]:w-auto",
+              tvBand && "cursor-pointer",
             )}
-            tabIndex={expanded ? 0 : -1}
+            tabIndex={tvBand || expanded ? 0 : -1}
           />
           {searching && <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" aria-hidden />}
           <kbd
             className={cn(
-              "harbor-kbd shrink-0 hidden md:inline-flex",
-              (expanded || query) && "hidden",
+              "harbor-kbd shrink-0 hidden min-[600px]:inline-flex",
+              (expanded || query || tvBand) && "hidden",
             )}
             aria-hidden
           >
@@ -461,9 +524,10 @@ export function FloatingSearch() {
         </div>
       </div>
 
-      {/* Results — ONE node, two faces (no second search UI): md+ = anchored
+      {/* Results — ONE node, two faces (no second search UI): ≥600 = anchored
           glass dropdown card (M3 results view); phones = full-screen glass
-          sheet with its own header. Shared rows/keyboard nav/ARIA below. */}
+          sheet with its own header; the TV band uses the fullscreen view
+          below instead. Shared rows/keyboard nav/ARIA below. */}
       {showDropdown && (
         <div
           id="harbor-float-search-list"
@@ -474,12 +538,12 @@ export function FloatingSearch() {
             "harbor-pop-in flex flex-col overflow-hidden fs-results",
             // Mobile: full-screen sheet over the page.
             "fixed inset-0 z-[var(--z-search-bar)]",
-            // md+: anchored dropdown under the bar (glass card).
-            "md:absolute md:inset-auto md:top-[calc(100%+8px)] md:inset-x-0 md:z-auto md:block md:rounded-[var(--md-sys-shape-corner-extra-large)] md:shadow-[var(--md-sys-elevation-3)]",
+            // ≥600: anchored dropdown under the bar (glass card).
+            "min-[600px]:absolute min-[600px]:inset-auto min-[600px]:top-[calc(100%+8px)] min-[600px]:inset-x-0 min-[600px]:z-auto min-[600px]:block min-[600px]:rounded-[var(--md-sys-shape-corner-extra-large)] min-[600px]:shadow-[var(--md-sys-elevation-3)]",
           )}
         >
-          {/* Mobile sheet header: glass pill with input + close (md-hidden) */}
-          <div className="md:hidden shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+          {/* Mobile sheet header: glass pill with input + close (≥600 hidden) */}
+          <div className="min-[600px]:hidden shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
             <div className="glass-surface flex items-center gap-2 rounded-full h-12 px-3 shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]">
               <Search className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
               <input
@@ -507,7 +571,7 @@ export function FloatingSearch() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto harbor-scroll overscroll-contain md:max-h-[min(58vh,26rem)] md:flex-none p-1.5">
+          <div className="min-h-0 flex-1 overflow-y-auto harbor-scroll overscroll-contain min-[600px]:max-h-[min(58vh,26rem)] min-[600px]:flex-none p-1.5">
             {phase === "error" && query.trim().length >= 2 && (
               <p className="px-3 py-3 text-xs text-danger">
                 Search failed — check your connection and try again.
@@ -642,6 +706,99 @@ export function FloatingSearch() {
                   </p>
                 )}
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TV fullscreen search view (≥1600 band, opened from the glass pill):
+          large type, large results grid, D-pad friendly (arrow keys rove via
+          the shared TV navigation; Enter selects; Esc goes back / clears).
+          Same ONE search state/engine — presentation only. */}
+      {tvOpen && (
+        <div className="fs-tv-overlay harbor-pop-in" role="dialog" aria-modal="true" aria-label="Search">
+          <div className="fs-tv-bar">
+            <Search className="h-6 w-6 text-ink-muted shrink-0" aria-hidden />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={onInputKeyDown}
+              placeholder="Search movies, series, people…"
+              aria-label="Search movies, series, people and addons"
+              aria-autocomplete="list"
+              autoFocus
+            />
+            {searching && <Loader2 className="h-5 w-5 text-accent animate-spin shrink-0" aria-hidden />}
+            <button
+              type="button"
+              onClick={closeTv}
+              className="md-state md-icon-btn shrink-0"
+              aria-label="Close search"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {query.trim().length < 2 && recents.length > 0 && (
+            <div className="fs-tv-grid mt-6" role="group" aria-label="Recent searches">
+              {recents.slice(0, 6).map((r) => (
+                <button
+                  key={`tv-recent-${r}`}
+                  type="button"
+                  className="fs-tv-card harbor-tv-focus flex items-center gap-2 px-4 py-3"
+                  onClick={() => {
+                    setQuery(r);
+                    setTimeout(() => setRecents(readRecents()), 0);
+                  }}
+                >
+                  <Clock className="h-4 w-4 text-ink-muted shrink-0" aria-hidden />
+                  <span className="truncate text-sm font-semibold">{r}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div ref={listRef} className="fs-tv-grid" role="listbox" aria-label={query.trim().length < 2 ? "Trending now" : "Search results"}>
+            {(query.trim().length < 2
+              ? trending
+              : [...movies, ...series, ...addonHits]
+            )
+              .slice(0, 24)
+              .map((m) => (
+                <button
+                  key={`tv-${m.type}-${m.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  tabIndex={0}
+                  className="fs-tv-card harbor-tv-focus"
+                  onClick={() => {
+                    writeRecent(query || m.name);
+                    setRecents(readRecents());
+                    closeTv();
+                    push({ kind: "detail", type: m.type, id: m.id });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      closeTv();
+                    }
+                  }}
+                >
+                  <span className="fs-tv-poster" aria-hidden>
+                    {m.poster ? <PosterImage src={m.poster} alt="" className="absolute inset-0" /> : null}
+                  </span>
+                  <span className="fs-tv-name">{m.name}</span>
+                </button>
+              ))}
+            {query.trim().length >= 2 && !hasResults && !searching && (
+              <p className="col-span-full py-10 text-center text-base text-ink-subtle">
+                No results — try a different query.
+              </p>
+            )}
+            {query.trim().length >= 2 && !hasResults && searching && (
+              <p className="col-span-full py-10 text-center text-base text-ink-subtle">Searching…</p>
             )}
           </div>
         </div>

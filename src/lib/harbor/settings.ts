@@ -122,6 +122,9 @@ export type Settings = {
   hubHidden: string[];
   /** Auto-hide the glass dock when scrolling down, reveal on scroll up. */
   dockAutoHide: boolean;
+  /** Side rail (≥1024px): expanded (icon+label) instead of compact on the
+   *  laptop band. Always-expanded on the TV band (≥1600px) regardless. */
+  railExpanded: boolean;
 
   // IPTV
   iptvPlaylists: { id: string; name: string; url: string }[];
@@ -227,6 +230,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hubOrder: [],
   hubHidden: [],
   dockAutoHide: true,
+  railExpanded: false,
 
   iptvPlaylists: [],
 
@@ -270,6 +274,7 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   if (!Array.isArray(out.hubOrder)) out.hubOrder = [];
   if (!Array.isArray(out.hubHidden)) out.hubHidden = [];
   out.dockAutoHide = out.dockAutoHide !== false;
+  out.railExpanded = out.railExpanded === true;
   out.posterScale = clampNum(out.posterScale, 0.6, 1.6, 1);
   out.posterRadius = clampNum(out.posterRadius, 0, 28, 12);
   if (out.episodesView !== "list" && out.episodesView !== "grid") out.episodesView = "auto";
