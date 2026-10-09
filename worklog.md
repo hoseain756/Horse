@@ -1617,3 +1617,21 @@ Work Log:
 
 Stage Summary:
 - Detail page is now a full-bleed cinematic title page on tablets/desktop (Apple-TV+-style start column overlapping the artwork, zero dead side areas, one shared container edge for every section) and both popovers are layout-proof at every width/RTL. No data sources, business logic, or player changes. Known HMR quirk: Fast Refresh can reset the nav store mid-session (full reload recovers) — pre-existing sandbox behavior, not a code path.
+
+---
+Task ID: 46
+Agent: Z.ai Code (main)
+Task: Detail page — remove empty strip above hero; hero to top edge (y=0); Back button overlaid on artwork.
+
+Work Log:
+- Located the strip: `max-[599px]:pt-[72px]` on the hero section (+ mirrored `max-[599px]:mt-[72px]` on the loading skeleton) in `src/components/harbor/views/detail-view.tsx`; `<main>` has no top padding, `viewportFit: "cover"` already set in layout.tsx.
+- Removed the strip; mobile hero card height now `calc((100vw - 2rem) * 11/16 + 72px)` = old 16/11 art height + removed 72px, so the card's bottom edge (and all content below) stays at the exact same y (measured: 318px at 390w, content col top 318px — zero shift).
+- Square top corners (`rounded-b-[28px]`), bottom radius/border/shadow/bottom fades unchanged; ≥600px full-bleed variant untouched.
+- DetailBackButton: overlaid glass pill, `h-12` (48dp), `top-[calc(1rem+env(safe-area-inset-top))]`, `start-[calc(1rem+env(safe-area-inset-left))]` + `rtl:` override for inset-right; kept fixed z-40 (above hero < search-bar 85 < picker 150 < player 180 < palette 300); behavior (pop/resetTo) unchanged.
+- Added 120px top scrim (from-black/35 → transparent) inside the hero, all widths, for button readability on bright images.
+- Verified agent-browser: 320/360/390/412/600/768/1024/1440 LTR+RTL — heroTop=0 everywhere, exact expected heights (270/298/318/333), no horizontal overflow, RTL mirrors button to top-right, Back click returns home, bright-image readability OK, ≥600px unchanged. `bun run lint`: 0 errors (165 pre-existing warnings).
+
+Stage Summary:
+- Only file changed: `src/components/harbor/views/detail-view.tsx` (22+/10-). Cause of gap: the hero section's mobile-only 72px top padding that reserved a row for the old back button.
+- Committed; auto-push watcher will sync to origin/main.
+- Floating search note: suppressed on detail pages by design (floating-search.tsx `suppressed`), opposite corner when present — no overlap at any width.
