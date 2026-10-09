@@ -7,7 +7,7 @@
 // Only relevant when ENGINE_URL + ENGINE_API_KEY are configured; returns
 // { available: false } otherwise (the client then skips tokens entirely —
 // tokenless engines must be protected at the network level instead).
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
 import { enginePublicUrl, engineMediaToken } from "@/lib/harbor/engine-config";
 

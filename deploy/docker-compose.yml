@@ -1,0 +1,35 @@
+# Harbor Web / Horse — self-hosted torrent engine (one command)
+#
+#   cd deploy
+#   echo "ENGINE_API_KEY=$(openssl rand -hex 24)" > .env   # then reuse the SAME
+#                                                          # value in Vercel
+#   docker compose up -d
+#
+# Torrent pieces are cached in a named volume; nothing is kept after
+# "docker compose down -v".
+services:
+  horse-engine:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: horse-engine:latest
+    container_name: horse-engine
+    ports:
+      - "3031:3031"
+    environment:
+      # Bind all interfaces inside the container.
+      ENGINE_HOST: 0.0.0.0
+      ENGINE_PORT: 3031
+      # REQUIRED in production: shared secret with the app (Vercel env
+      # ENGINE_API_KEY must hold the SAME value). Generate: openssl rand -hex 24
+      ENGINE_API_KEY: ${ENGINE_API_KEY:?set ENGINE_API_KEY in deploy/.env}
+      # CPU-heavy HEVC -> H.264 transcode; leave off unless you need it.
+      TRANSCODE_ENABLED: ${TRANSCODE_ENABLED:-false}
+    volumes:
+      - engine-cache:/tmp/harbor-web-torrent-cache
+    restart: unless-stopped
+    # The engine only makes outbound BitTorrent/HTTP connections; no inbound
+    # network access is required beyond clients reaching :3031.
+
+volumes:
+  engine-cache:

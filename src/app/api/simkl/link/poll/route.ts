@@ -50,9 +50,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   try {
     if (pending.flow === "oauth2") {
-      return await pollOauth2(pollId, pending, clientId);
+      return await pollOauth2(req, pollId, pending, clientId);
     }
-    return await pollLegacyPin(pollId, pending, clientId);
+    return await pollLegacyPin(req, pollId, pending, clientId);
   } catch (e) {
     const msg = e instanceof Error && e.message.includes("abort") ? "upstream timeout" : "simkl unreachable";
     return NextResponse.json({ error: msg }, { status: 502 });
@@ -103,7 +103,7 @@ async function finishAuthorized(req: NextRequest, accessToken: string, clientId:
 
 /** RFC-8628 device grant (current "OAuth 2.0" Simkl apps). While waiting the
  * upstream answers 400 with error=authorization_pending / slow_down. */
-async function pollOauth2(pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
+async function pollOauth2(req: NextRequest, pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
   const clientSecret = envSimklClientSecret();
   const body: Record<string, string> = {
     grant_type: "urn:ietf:params:oauth:grant-type:device_code",
@@ -165,7 +165,7 @@ async function pollOauth2(pollId: string, pending: PendingLink, clientId: string
 
 /** Legacy PIN poll: a 401 with an (unknown) error body means "still pending";
  * only definitive text (bad_verification_code/expired) terminates the flow. */
-async function pollLegacyPin(pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
+async function pollLegacyPin(req: NextRequest, pollId: string, pending: PendingLink, clientId: string): Promise<NextResponse> {
   const clientSecret = envSimklClientSecret();
   let url = `${SIMKL_API}/oauth/pin/${encodeURIComponent(pending.deviceCode)}`;
   if (clientSecret) {

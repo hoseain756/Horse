@@ -1,0 +1,27 @@
+# Render.com Blueprint — one-click torrent engine for Horse/Harbor Web.
+# Repo → Render: "New +" → Blueprint → pick this repo → Apply.
+# After deploy: copy the onrender.com URL into the app's ENGINE_URL and
+# ENGINE_PUBLIC_URL (Vercel env vars) and the generated ENGINE_API_KEY into
+# ENGINE_API_KEY, then redeploy the app.
+#
+# NOTE: free Render web services sleep after 15 idle minutes, which breaks
+# mid-playback streaming. Use a paid always-on plan (or a VPS) for real use.
+services:
+  - type: web
+    name: horse-engine
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    plan: starter # always-on; change to your preferred plan
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: ENGINE_HOST
+        value: 0.0.0.0
+      - key: ENGINE_API_KEY
+        generateValue: true # same value goes into the app's ENGINE_API_KEY
+      - key: TRANSCODE_ENABLED
+        value: "false"
+    disk:
+      name: engine-cache
+      mountPath: /tmp/harbor-web-torrent-cache
+      sizeGB: 5

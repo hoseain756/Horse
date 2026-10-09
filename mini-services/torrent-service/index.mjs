@@ -22,8 +22,10 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import WebTorrent from "webtorrent";
 
-const PORT = 3031;
-const HOST = "127.0.0.1";
+// ENGINE_PORT / ENGINE_HOST allow self-hosted deployments (Docker/PaaS bind
+// 0.0.0.0) while the sandbox default stays loopback-only behind the gateway.
+const PORT = Number.parseInt(process.env.ENGINE_PORT ?? process.env.PORT ?? "3031", 10) || 3031;
+const HOST = (process.env.ENGINE_HOST ?? "127.0.0.1").trim() || "127.0.0.1";
 const CACHE_DIR = path.join(os.tmpdir(), "harbor-web-torrent-cache");
 const METADATA_TIMEOUT_MS = 35_000;
 const IDLE_TTL_MS = 45 * 60 * 1000; // destroy torrents nobody touched for 45 min

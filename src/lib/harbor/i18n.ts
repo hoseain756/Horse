@@ -294,6 +294,28 @@ export const APP_STRINGS = {
   torrentsStopped: { en: "Torrents stopped", ar: "تم إيقاف التورنتات" },
   torrentsStoppedBody: { en: "Active swarms were closed; cache kept for resume.", ar: "أُغلقت الأسراب النشطة؛ واحتُفظ بالذاكرة للاستئناف." },
   cleanupFailed: { en: "Cleanup failed", ar: "فشل التنظيف" },
+  engineChipNone: { en: "Not available on this host", ar: "غير متاح على هذا المضيف" },
+  engineChipExternal: { en: "External engine", ar: "محرك خارجي" },
+  engineServerlessTitle: { en: "Torrent playback on serverless hosting", ar: "تشغيل التورنتات على استضافة serverless" },
+  engineServerlessBody: {
+    en: "This deployment (e.g. Vercel) cannot run the BitTorrent engine, so torrent-only results are refused here. Two ways to enable them:",
+    ar: "هذا النشر (مثل Vercel) لا يستطيع تشغيل محرك BitTorrent، لذلك تُرفض النتائج المعتمدة على التورنت فقط. هناك طريقتان لتفعيلها:",
+  },
+  engineDebridOption: {
+    en: "Debrid (easiest) — add your API key in the Debrid card above; cached torrents unlock instantly as direct HTTPS streams.",
+    ar: "Debrid (الأسهل) — أضف مفتاح API في بطاقة Debrid أعلاه؛ تُفتح التورنتات المخزنة مؤقتاً فوراً كروابط HTTPS مباشرة.",
+  },
+  engineSelfhostOption: {
+    en: "Self-hosted engine (full P2P) — run the engine on any always-on server, then set these variables in your Vercel project and redeploy:",
+    ar: "محرك ذاتي الاستضافة (P2P كامل) — شغّل المحرك على أي خادم دائم التشغيل، ثم عيّن هذه المتغيرات في مشروع Vercel وأعد النشر:",
+  },
+  engineSetupGuide: { en: "Deployment guide", ar: "دليل النشر" },
+  engineTest: { en: "Test engine", ar: "اختبار المحرك" },
+  engineTestOk: { en: "Engine reachable — torrent streams will play through it.", ar: "المحرك يستجيب — ستُشغَّل تدفقات التورنت عبره." },
+  engineTestUnset: { en: "ENGINE_URL is not set on this deployment yet — add it in Vercel and redeploy.", ar: "المتغير ENGINE_URL غير معيّن على هذا النشر بعد — أضفه في Vercel وأعد النشر." },
+  engineTestUnreachable: { en: "Engine unreachable — check ENGINE_URL and that the engine process is running.", ar: "المحرك لا يستجيب — تحقق من ENGINE_URL ومن أن عملية المحرك تعمل." },
+  engineTestUnauthorized: { en: "Key mismatch — ENGINE_API_KEY differs between the app and the engine.", ar: "عدم تطابق المفتاح — ENGINE_API_KEY مختلف بين التطبيق والمحرك." },
+  engineHostLabel: { en: "Engine host", ar: "مضيف المحرك" },
   p2pChecking: { en: "Checking the torrent engine…", ar: "جارٍ فحص محرك التورنت…" },
   p2pUnavailable: {
     en: "P2P playback is not available on this deployment — the torrent engine can't run here (serverless hosting). Torrents unlock instantly with a debrid key (Settings → Integrations), or pick a direct (HTTP) stream from the picker.",

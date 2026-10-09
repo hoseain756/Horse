@@ -4,7 +4,7 @@
 
 // Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot } from "lucide-react";
+import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot, ExternalLink, Server } from "lucide-react";
 import { useNav, useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
 import { RichBidi } from "../common/bidi";
@@ -23,7 +23,7 @@ import {
   type UserTheme,
 } from "@/lib/harbor/themes";
 import { getWatchlist, getWatchlistLength } from "@/lib/harbor/cw";
-import { serverCapabilities } from "@/lib/harbor/playback";
+import { serverCapabilities, type TorrentMode } from "@/lib/harbor/playback";
 import { useTrakt, installTraktPushSync } from "@/lib/harbor/trakt";
 import { useSimkl } from "@/lib/harbor/simkl";
 import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
@@ -2647,6 +2647,11 @@ type P2pHealthState = {
   torrents: { key: string; name: string | null; ready: boolean; progress: number; peers: number; downloadSpeed: number }[];
 };
 
+// Operator docs for self-hosting the torrent engine (also rendered in deploy/README.md).
+const DEPLOY_GUIDE_URL = "https://github.com/hoseain756/Horse/blob/main/deploy/README.md";
+const ENGINE_ENV_VARS = ["ENGINE_URL", "ENGINE_PUBLIC_URL", "ENGINE_API_KEY"] as const;
+type EngineTestState = "idle" | "testing" | "ok" | "unset" | "unreachable" | "unauthorized";
+
 function P2pCard() {
   const { toast } = useToast();
   const tr = useT();
@@ -2655,6 +2660,11 @@ function P2pCard() {
   const [health, setHealth] = useState<P2pHealthState | null>(null);
   const [checking, setChecking] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Deployment truth from /api/media/capabilities: "builtin" (engine beside the
+  // app), "external" (ENGINE_URL self-hosted), "none" (serverless, no engine).
+  const [mode, setMode] = useState<TorrentMode | null>(null);
+  const [engineHost, setEngineHost] = useState<string | null>(null);
+  const [testState, setTestState] = useState<EngineTestState>("idle");
 
   const check = async () => {
     setChecking(true);
@@ -2680,8 +2690,36 @@ function P2pCard() {
   };
 
   useEffect(() => {
-    void check();
+    void serverCapabilities().then((c) => {
+      setMode(c.torrent);
+      if (c.torrent === "none") setHealth(null); // serverless: engine can never exist, skip the probe
+      if (c.enginePublicUrl) {
+        try {
+          setEngineHost(new URL(c.enginePublicUrl).host);
+        } catch {
+          setEngineHost(c.enginePublicUrl);
+        }
+      }
+      // Probe the engine only where one can actually exist (builtin/external);
+      // in external mode the JSON health call relays server-side with the key.
+      if (c.torrent !== "none") void check();
+    });
   }, []);
+
+  // Direct relay test — works for external engines and for diagnosing a
+  // serverless deployment where ENGINE_URL is (not yet) configured.
+  const testEngine = async () => {
+    setTestState("testing");
+    try {
+      const res = await fetch("/api/engine/health", { signal: AbortSignal.timeout(15_000), cache: "no-store" });
+      if (res.ok) setTestState("ok");
+      else if (res.status === 404) setTestState("unset");
+      else if (res.status === 401 || res.status === 403) setTestState("unauthorized");
+      else setTestState("unreachable");
+    } catch {
+      setTestState("unreachable");
+    }
+  };
 
   const doCleanup = async (purge: boolean) => {
     setClearing(true);
@@ -2699,8 +2737,61 @@ function P2pCard() {
     }
   };
 
+  const serverless = mode === "none";
   const activeCount = health?.torrents.length ?? 0;
   const totalSpeed = health?.torrents.reduce((a, t) => a + (t.downloadSpeed ?? 0), 0) ?? 0;
+
+  const testFeedback =
+    testState === "ok" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-accent-soft px-3.5 py-2.5 text-xs font-semibold text-accent"
+        role="status"
+      >
+        <Check className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr("engineTestOk")} />
+      </p>
+    ) : testState === "unset" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-highest)] px-3.5 py-2.5 text-xs text-ink-muted"
+        role="status"
+      >
+        <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr("engineTestUnset")} />
+      </p>
+    ) : testState === "unreachable" || testState === "unauthorized" ? (
+      <p
+        className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] px-3.5 py-2.5 text-[var(--md-sys-color-on-error-container)] md-body-small"
+        role="alert"
+      >
+        <CircleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <RichBidi text={tr(testState === "unreachable" ? "engineTestUnreachable" : "engineTestUnauthorized")} />
+      </p>
+    ) : null;
+
+  const testControls = (
+    <>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant="outline" onClick={() => void testEngine()} disabled={testState === "testing"}>
+          {testState === "testing" ? (
+            <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
+          ) : (
+            <Zap className="w-3.5 h-3.5 me-1.5" />
+          )}
+          {tr("engineTest")}
+        </Button>
+        <a
+          href={DEPLOY_GUIDE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="md-state harbor-tv-focus inline-flex h-10 items-center gap-1.5 rounded-full border border-edge px-4 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+        >
+          <ExternalLink className="w-3.5 h-3.5" aria-hidden />
+          {tr("engineSetupGuide")}
+        </a>
+      </div>
+      {testFeedback}
+    </>
+  );
 
   return (
     <div className="harbor-cq md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
@@ -2714,15 +2805,15 @@ function P2pCard() {
             <p className="text-xs text-ink-subtle"><RichBidi text={tr("p2pSubtitle")} /></p>
           </div>
         </div>
-        {/* Status chip — M3 semantic tokens (error-container for down state) */}
+        {/* Status chip — M3 semantic tokens (error-container for unavailable state) */}
         <span
           className={cn(
             "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold",
-            health === null
+            mode === null || (health === null && !serverless)
               ? "bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"
-              : health.ok
-                ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
-                : "bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]",
+              : serverless || health?.ok === false
+                ? "bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]"
+                : "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]",
           )}
           role="status"
         >
@@ -2730,30 +2821,86 @@ function P2pCard() {
             aria-hidden
             className={cn(
               "w-1.5 h-1.5 rounded-full",
-              health === null ? "bg-[var(--md-sys-color-outline)]" : health.ok ? "bg-[var(--md-sys-color-primary)]" : "bg-[var(--md-sys-color-error)]",
+              mode === null || (health === null && !serverless)
+                ? "bg-[var(--md-sys-color-outline)]"
+                : serverless || health?.ok === false
+                  ? "bg-[var(--md-sys-color-error)]"
+                  : "bg-[var(--md-sys-color-primary)]",
             )}
           />
-          {health === null
-            ? tr("checking")
-            : health.ok
-              ? tr("online", { n: P2P_PORT })
-              : tr("offline")}
+          {serverless
+            ? tr("engineChipNone")
+            : mode === "external"
+              ? tr("engineChipExternal")
+              : health === null
+                ? tr("checking")
+                : health.ok
+                  ? tr("online", { n: P2P_PORT })
+                  : tr("offline")}
         </span>
       </div>
 
-      <div className="harbor-setting-row rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-high)] px-3.5 py-3">
-        <div className="harbor-setting-row-label">
-          <p className="md-label-large text-ink">{tr("p2pToggle")}</p>
-          <p className="md-body-small text-ink-muted"><RichBidi text={tr("p2pToggleDesc")} /></p>
+      {/* Engine host (external mode) */}
+      {mode === "external" && engineHost && (
+        <p className="mb-3 flex items-center gap-1.5 text-[11px] text-ink-subtle">
+          <Server className="w-3.5 h-3.5 shrink-0" aria-hidden />
+          {tr("engineHostLabel")}:{" "}
+          <code className="rounded-md bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 font-mono text-[10px] text-ink" dir="ltr">
+            {engineHost}
+          </code>
+        </p>
+      )}
+
+      {!serverless && (
+        <div className="harbor-setting-row rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-high)] px-3.5 py-3">
+          <div className="harbor-setting-row-label">
+            <p className="md-label-large text-ink">{tr("p2pToggle")}</p>
+            <p className="md-body-small text-ink-muted"><RichBidi text={tr("p2pToggleDesc")} /></p>
+          </div>
+          <div className="harbor-setting-row-control">
+            <Switch
+              checked={p2pEnabled}
+              onCheckedChange={(v) => update({ p2pEnabled: v })}
+              aria-label={tr("p2pAria")}
+            />
+          </div>
         </div>
-        <div className="harbor-setting-row-control">
-          <Switch
-            checked={p2pEnabled}
-            onCheckedChange={(v) => update({ p2pEnabled: v })}
-            aria-label={tr("p2pAria")}
-          />
+      )}
+
+      {/* Serverless deployment: honest setup panel instead of a dead-end error */}
+      {serverless && (
+        <div
+          className="mt-4 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-high)] px-3.5 py-3.5 space-y-3"
+          role="note"
+        >
+          <p className="text-xs font-bold text-ink">{tr("engineServerlessTitle")}</p>
+          <p className="md-body-small text-ink-muted"><RichBidi text={tr("engineServerlessBody")} /></p>
+          <ul className="space-y-2.5">
+            <li className="flex gap-2 text-xs text-ink-muted">
+              <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" aria-hidden />
+              <span className="flex-1"><RichBidi text={tr("engineDebridOption")} /></span>
+            </li>
+            <li className="flex gap-2 text-xs text-ink-muted">
+              <Server className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" aria-hidden />
+              <span className="flex-1">
+                <RichBidi text={tr("engineSelfhostOption")} />
+                <span className="mt-1.5 flex flex-wrap gap-1.5">
+                  {ENGINE_ENV_VARS.map((v) => (
+                    <code
+                      key={v}
+                      className="rounded-md bg-[var(--md-sys-color-surface-container-highest)] px-1.5 py-0.5 font-mono text-[10px] text-ink"
+                      dir="ltr"
+                    >
+                      {v}
+                    </code>
+                  ))}
+                </span>
+              </span>
+            </li>
+          </ul>
+          {testControls}
         </div>
-      </div>
+      )}
 
       {health?.ok && (
         <div className="mt-4 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container-high)] px-3.5 py-3 space-y-2">
@@ -2783,14 +2930,17 @@ function P2pCard() {
         </div>
       )}
 
-      {health && !health.ok && (
-        <p
-          className="mt-4 flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] px-3.5 py-2.5 md-body-small"
-          role="alert"
-        >
-          <CircleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
-          <RichBidi text={tr("p2pError")} />
-        </p>
+      {health && !health.ok && !serverless && (
+        <div className="mt-4 space-y-2">
+          <p
+            className="flex items-start gap-2 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] px-3.5 py-2.5 md-body-small"
+            role="alert"
+          >
+            <CircleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+            <RichBidi text={tr("p2pError")} />
+          </p>
+          {mode === "external" && testControls}
+        </div>
       )}
 
       <div className="mt-4 pt-4 border-t border-edge-soft space-y-3">
@@ -2798,7 +2948,7 @@ function P2pCard() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
-            disabled={clearing || activeCount === 0}
+            disabled={clearing || serverless || activeCount === 0}
             onClick={() => void doCleanup(false)}
           >
             {clearing ? <Loader2 className="w-4 h-4 me-1.5 animate-spin" /> : <Square className="w-3.5 h-3.5 me-1.5" />}
@@ -2806,7 +2956,7 @@ function P2pCard() {
           </Button>
           <Button
             variant="destructive"
-            disabled={clearing}
+            disabled={clearing || serverless}
             onClick={() => void doCleanup(true)}
           >
             {clearing ? <Loader2 className="w-4 h-4 me-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 me-1.5" />}
