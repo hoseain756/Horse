@@ -8,7 +8,17 @@
 import type { Stream } from "./types";
 
 // ---------- server capabilities (probed once per session) ----------
-export type Capabilities = { proxy: boolean; transcode: boolean };
+/** Where torrent streams can play: "external" (self-hosted engine via
+ *  ENGINE_URL), "builtin" (sandbox gateway, torrent-service on :3031), or
+ *  "none" (serverless — a BitTorrent engine cannot run there). */
+export type TorrentMode = "external" | "builtin" | "none";
+
+export type Capabilities = {
+  proxy: boolean;
+  transcode: boolean;
+  torrent: TorrentMode;
+  enginePublicUrl: string | null;
+};
 
 let capsCache: Capabilities | null = null;
 let capsPromise: Promise<Capabilities> | null = null;
@@ -17,18 +27,34 @@ export function serverCapabilities(): Promise<Capabilities> {
   if (capsCache) return Promise.resolve(capsCache);
   if (!capsPromise) {
     capsPromise = fetch("/api/media/capabilities")
-      .then((r) => r.json() as Promise<{ proxy?: boolean; transcode?: boolean }>)
+      .then((r) => r.json() as Promise<{ proxy?: boolean; transcode?: boolean; torrent?: string; enginePublicUrl?: string }>)
       .then((j) => {
-        capsCache = { proxy: j.proxy !== false, transcode: j.transcode === true };
+        const torrent: TorrentMode = j.torrent === "external" || j.torrent === "none" ? j.torrent : "builtin";
+        capsCache = {
+          proxy: j.proxy !== false,
+          transcode: j.transcode === true,
+          torrent,
+          enginePublicUrl: torrent === "external" && typeof j.enginePublicUrl === "string" && j.enginePublicUrl ? j.enginePublicUrl : null,
+        };
         return capsCache;
       })
-      .catch(() => ({ proxy: true, transcode: false }));
+      .catch(() => {
+        capsCache = { proxy: true, transcode: false, torrent: "builtin", enginePublicUrl: null };
+        return capsCache;
+      });
   }
   return capsPromise;
 }
 
 export function cachedTranscodeSupported(): boolean {
   return capsCache?.transcode === true;
+}
+
+/** Last-known torrent engine mode: "external" / "builtin" / "none" / null
+ *  (capabilities not fetched yet — callers treat null as "maybe builtin" and
+ *  must not hard-block on it; the live engine probe still gates playback). */
+export function cachedTorrentMode(): TorrentMode | null {
+  return capsCache?.torrent ?? null;
 }
 
 // ---------- browser capability ----------
@@ -122,19 +148,28 @@ export function classifyStream(stream: Stream): StreamClass {
     verdict = "external";
     badge = "external";
   } else if (isTorrent || isMagnet) {
-    const support = cachedTranscodeSupported();
-    if (videoBad && !support) {
+    // Environment truth first: on a serverless host without an external
+    // engine, torrent streams simply cannot play — say so up-front instead of
+    // teasing a P2P badge and failing after the user presses play.
+    if (cachedTorrentMode() === "none") {
       verdict = "unplayable";
       badge = "not-playable";
-      reasons.push("HEVC/DoVi video needs conversion, which is disabled on this server");
-    } else if (videoBad) {
-      verdict = "convert";
-      badge = "plays-convert";
-      reasons.push("HEVC/DoVi video will be converted to H.264");
+      reasons.push("P2P/torrent streams cannot play on this serverless host — a debrid key unlocks them");
     } else {
-      // container/audio handled by the P2P engine's remux
-      verdict = "proxy";
-      badge = "plays-proxy";
+      const support = cachedTranscodeSupported();
+      if (videoBad && !support) {
+        verdict = "unplayable";
+        badge = "not-playable";
+        reasons.push("HEVC/DoVi video needs conversion, which is disabled on this server");
+      } else if (videoBad) {
+        verdict = "convert";
+        badge = "plays-convert";
+        reasons.push("HEVC/DoVi video will be converted to H.264");
+      } else {
+        // container/audio handled by the P2P engine's remux
+        verdict = "proxy";
+        badge = "plays-proxy";
+      }
     }
   } else if (!url) {
     verdict = "unplayable";

@@ -299,6 +299,16 @@ export const APP_STRINGS = {
     en: "P2P playback is not available on this deployment — the torrent engine can't run here (serverless hosting). Torrents unlock instantly with a debrid key (Settings → Integrations), or pick a direct (HTTP) stream from the picker.",
     ar: "تشغيل P2P غير متاح في هذه البيئة — لا يمكن تشغيل محرك التورنت هنا (استضافة serverless). تُفتح التورنتات فوراً بمفتاح debrid (الإعدادات ← التكاملات)، أو اختر بثاً مباشراً (HTTP) من المنتقي.",
   },
+  errTryDirect: { en: "Try a direct stream", ar: "جرّب بثاً مباشراً" },
+  errSetupDebrid: { en: "Set up debrid", ar: "إعداد debrid" },
+  p2pBannerBuiltin: {
+    en: "Torrent streams play through the built-in P2P engine — no account needed. Connect debrid for instant cached links.",
+    ar: "تعمل تدفقات التورنت عبر محرك P2P المدمج — لا حاجة إلى حساب. اربط debrid للحصول على روابط مخزنة مؤقتًا بشكل فوري.",
+  },
+  p2pBannerServerless: {
+    en: "Torrents can't play on this serverless host — a debrid key unlocks them instantly (cached torrents skip the download entirely).",
+    ar: "لا يمكن تشغيل التورنتات على هذا المضيف serverless — يفتحها مفتاح debrid فوراً (التورنتات المخزنة مؤقتاً تتخطى التنزيل بالكامل).",
+  },
   debridUnlocking: { en: "Unlocking with debrid…", ar: "جارٍ الفتح عبر debrid…" },
   debridUnlockFailed: { en: "Debrid unlock failed", ar: "فشل الفتح عبر debrid" },
   noPlayableStream: {

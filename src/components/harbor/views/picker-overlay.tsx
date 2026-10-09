@@ -17,6 +17,7 @@ import {
   serverCapabilities,
   verdictRank,
   cachedTranscodeSupported,
+  cachedTorrentMode,
   type StreamClass,
 } from "@/lib/harbor/playback";
 import {
@@ -327,13 +328,15 @@ export function PickerOverlay({
           </div>
         </div>
 
-        {/* No-debrid hint: torrents play via the built-in P2P engine, debrid adds instant cached links */}
+        {/* No-debrid hint: honest per-environment — torrents need an engine or debrid */}
         {!loading && !debridConfigured && filteredTiers.length > 0 && (
           <div className="mx-4 mt-3 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink-muted shrink-0 sm:mx-5">
             <Network className="w-4 h-4 text-accent shrink-0" aria-hidden />
             <p className="min-w-0 flex-1">
-              Torrent streams play through the <span className="font-semibold text-ink">built-in P2P engine</span> —
-              no account needed. Connect debrid for instant cached links.
+              {t(
+                cachedTorrentMode() === "none" ? "p2pBannerServerless" : "p2pBannerBuiltin",
+                useSettings.getState().settings.uiLanguage,
+              )}
             </p>
             <button
               type="button"

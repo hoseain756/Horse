@@ -285,6 +285,35 @@ function probeFile(torrent, fileIdx) {
 }
 
 // ---------- HTTP server ----------
+// Optional shared-secret auth for self-hosted deployments (ENGINE_API_KEY):
+//   • JSON calls relayed by the Horse app arrive with Authorization: Bearer <key>.
+//   • Browser-direct media (/stream, /remux) arrives with ?k=<exp>.<sig> —
+//     a short-lived HMAC-SHA256 token minted by /api/engine/token with the
+//     SAME secret. This keeps the API key itself out of the browser.
+// Unauthenticated /health stays reachable for probes but hides torrent names
+// and internals. When ENGINE_API_KEY is unset, everything is open — protect
+// the engine at the network level instead.
+const ENGINE_API_KEY = (process.env.ENGINE_API_KEY ?? "").trim();
+const MEDIA_TOKEN_RE = /^(\d{13,16})\.([0-9a-f]{64})$/;
+
+function tokenOk(token) {
+  const m = MEDIA_TOKEN_RE.exec(token ?? "");
+  if (!m) return false;
+  const exp = Number(m[1]);
+  if (!Number.isFinite(exp) || exp < Date.now()) return false;
+  const expected = crypto.createHmac("sha256", ENGINE_API_KEY).update(String(exp)).digest("hex");
+  const a = Buffer.from(m[2], "hex");
+  const b = Buffer.from(expected, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function authorized(req, url) {
+  if (!ENGINE_API_KEY) return true;
+  const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (bearer && bearer.length === ENGINE_API_KEY.length && crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(ENGINE_API_KEY))) return true;
+  return tokenOk(url.searchParams.get("k"));
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
   const p = url.pathname;
@@ -299,15 +328,25 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    // ---------- auth gate (no-op when ENGINE_API_KEY is unset) ----------
+    if (p !== "/health" && !authorized(req, url)) {
+      return send(res, 401, { error: "unauthorized — missing or expired engine token" });
+    }
+
     // ---------- health ----------
     if (p === "/health") {
+      const open = authorized(req, url);
       return send(res, 200, {
         ok: true,
         version: "1.2.0",
         paused,
-        torrents: client.torrents.map(torrentSnapshot),
-        cacheDir: CACHE_DIR,
-        remuxActive: remuxActive.size,
+        // Private internals only for authenticated callers (health probes
+        // from load balancers / the app's availability check stay public).
+        ...(open ? {
+          torrents: client.torrents.map(torrentSnapshot),
+          cacheDir: CACHE_DIR,
+          remuxActive: remuxActive.size,
+        } : {}),
         transcodeEnabled: TRANSCODE_ENABLED,
       });
     }

@@ -1,12 +1,66 @@
 // Harbor Web — P2P torrent engine client
-// Talks to mini-services/torrent-service (port 3031, behind the Caddy gateway via
-// the XTransformPort query param). All playback URLs are relative so the gateway
-// proxies range requests straight to the torrent engine.
+// Talks to the torrent engine in whichever mode the deployment supports
+// (from /api/media/capabilities):
+//   "builtin"  — mini-services/torrent-service (port 3031, behind the Caddy
+//                gateway via the XTransformPort query param); media paths are
+//                root-level relative so the gateway proxies Range requests.
+//   "external" — operator self-hosted engine (ENGINE_URL): short JSON calls
+//                relay through /api/engine/* (API key stays server-side),
+//                media paths go DIRECTLY to the engine's public host with a
+//                short-lived HMAC token (?k=exp.sig) minted by /api/engine/token.
+//   "none"     — serverless without an engine: p2pEngineAvailable() answers
+//                false instantly; no network request is ever made.
+// All playback URLs are relative or point at the operator's engine — never at
+// a hardcoded host. No content sources are bundled (neutral client).
 "use client";
 
 import type { Stream } from "./types";
+import { cachedTorrentMode } from "./playback";
 
 export const P2P_PORT = 3031;
+
+// ---- engine media base + auth token (external mode) ----
+// Token TTL is long (12 h) because seek-restarts rebuild media URLs at
+// arbitrary times from synchronous code; builders refresh in the background
+// once <30 min remain, so a build practically never uses a stale token.
+const ENGINE_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const ENGINE_TOKEN_REFRESH_AHEAD_MS = 30 * 60 * 1000;
+let engineMedia: { base: string; token: string | null; exp: number; refresh: Promise<void> | null } = {
+  base: "",
+  token: null,
+  exp: 0,
+  refresh: null,
+};
+
+/** Load the external-engine media base + token from /api/engine/token.
+ *  No-op in builtin mode; resolves cache on concurrent calls. */
+export function primeEngineMedia(): Promise<void> {
+  if (cachedTorrentMode() !== "external") return Promise.resolve();
+  if (engineMedia.refresh) return engineMedia.refresh;
+  engineMedia.refresh = fetch("/api/engine/token")
+    .then((r) => r.json() as Promise<{ available?: boolean; engineUrl?: string; token?: string; exp?: number }>)
+    .then((j) => {
+      engineMedia.base = j.available && j.engineUrl ? j.engineUrl.replace(/\/+$/, "") : "";
+      engineMedia.token = j.available && j.token ? j.token : null;
+      engineMedia.exp = j.available && j.exp ? j.exp : 0;
+    })
+    .catch(() => {
+      /* engine relay unreachable — URLs fall back to gateway-relative (builtin) */
+    })
+    .finally(() => {
+      engineMedia.refresh = null;
+    });
+  return engineMedia.refresh;
+}
+
+function engineMediaQuery(): string {
+  if (cachedTorrentMode() === "external" && engineMedia.token) {
+    if (engineMedia.exp - Date.now() < ENGINE_TOKEN_REFRESH_AHEAD_MS) void primeEngineMedia();
+    return `k=${engineMedia.token}`;
+  }
+  return "";
+}
+
 const Q = `?XTransformPort=${P2P_PORT}`;
 const BASE = ""; // paths are root-level; the gateway routes by query port
 
@@ -86,7 +140,13 @@ export type P2pHealth = {
 };
 
 async function jfetch<T>(path: string, init?: RequestInit, timeoutMs = 65_000): Promise<T> {
-  const res = await fetch(`${BASE}${path}${path.includes("?") ? "&" : "?"}XTransformPort=${P2P_PORT}`, {
+  // External engine: JSON endpoints relay server-side (key never reaches the
+  // browser, path is allowlisted in the relay route). Builtin: gateway by port.
+  const external = cachedTorrentMode() === "external";
+  const url = external
+    ? `/api/engine/${path}`
+    : `${BASE}${path}${path.includes("?") ? "&" : "?"}XTransformPort=${P2P_PORT}`;
+  const res = await fetch(url, {
     ...init,
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -137,8 +197,20 @@ let engineProbePromise: Promise<boolean> | null = null;
  * deployments that can never run the engine fail fast instead of stalling the
  * player through 100 s of peer polling against a 404). Concurrent callers
  * share one probe.
+ *
+ * Deployment truth first: when /api/media/capabilities says torrent:"none"
+ * (Vercel without ENGINE_URL) this returns false WITHOUT touching the
+ * network — the engine fundamentally cannot exist there. In external mode the
+ * media base/token are primed opportunistically so later synchronous URL
+ * builders already have them.
  */
 export function p2pEngineAvailable(force = false): Promise<boolean> {
+  const mode = cachedTorrentMode();
+  if (mode === "none") {
+    engineProbe = { ok: false, at: Date.now() };
+    return Promise.resolve(false);
+  }
+  if (mode === "external") void primeEngineMedia();
   const now = Date.now();
   if (!force && engineProbe && now - engineProbe.at < (engineProbe.ok ? 300_000 : 60_000)) {
     return Promise.resolve(engineProbe.ok);
@@ -177,8 +249,14 @@ export function p2pCleanup(purge: boolean): Promise<void> {
   }, 30_000).then(() => undefined);
 }
 
-/** Native range-capable URL for a browser-playable container (mp4/webm/mov). */
+/** Native range-capable URL for a browser-playable container (mp4/webm/mov).
+ *  Builtin mode: gateway-relative (Range passes straight through). External
+ *  mode: direct to the engine's public host with the HMAC media token. */
 export function p2pStreamUrl(key: string, fileIdx: number): string {
+  if (cachedTorrentMode() === "external" && engineMedia.base) {
+    const k = engineMediaQuery();
+    return `${engineMedia.base}/stream/${key}/${fileIdx}${k ? `?${k}` : ""}`;
+  }
   return `/stream/${key}/${fileIdx}${Q}`;
 }
 
@@ -194,9 +272,13 @@ export function p2pRemuxUrl(
   ssS?: number,
   audioRel?: number | null,
 ): string {
-  const ss = ssS != null && ssS > 0 ? `&ss=${Math.round(ssS)}` : "";
-  const au = audioRel != null && audioRel > 0 ? `&audio=${audioRel}` : "";
-  return `/remux/${key}/${fileIdx}${Q}${vtrans ? "&vtrans=h264" : ""}${ss}${au}`;
+  const ss = ssS != null && ssS > 0 ? `ss=${Math.round(ssS)}` : "";
+  const au = audioRel != null && audioRel > 0 ? `audio=${audioRel}` : "";
+  if (cachedTorrentMode() === "external" && engineMedia.base) {
+    const parts = [engineMediaQuery(), vtrans ? "vtrans=h264" : "", ss, au].filter(Boolean);
+    return `${engineMedia.base}/remux/${key}/${fileIdx}${parts.length ? `?${parts.join("&")}` : ""}`;
+  }
+  return `/remux/${key}/${fileIdx}${Q}${vtrans ? "&vtrans=h264" : ""}${ss ? `&${ss}` : ""}${au ? `&${au}` : ""}`;
 }
 
 /** Engine-level conversion support (cached; read from /health). */
@@ -309,6 +391,9 @@ export async function p2pPlan(
   fileIdx: number,
   filename?: string,
 ): Promise<P2pPlaybackPlan> {
+  // Media URLs can be built before the opportunistic priming resolved — wait
+  // for it (cheap no-op in builtin mode) so external tokens are present.
+  await primeEngineMedia();
   const ext = (filename ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
   const native = ["mp4", "m4v", "webm", "mov"].includes(ext);
   const remuxable = ["mkv", "avi", "ts", "wmv", "flv", "mpg", "mpeg"].includes(ext);

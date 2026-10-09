@@ -195,7 +195,10 @@ export const DEFAULT_SETTINGS: Settings = {
 
   proxyMode: "auto",
   transcodeMode: "ask",
-  playableOnly: false,
+  // Playable-only default ON: the picker hides streams this browser+server
+  // cannot play (counted, with a "Show all" toggle) instead of teasing
+  // torrents that would fail after pressing play on serverless hosts.
+  playableOnly: true,
   preferH264: true,
 
   kidsCardSize: "medium",
@@ -276,7 +279,7 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   out.p2pEnabled = out.p2pEnabled !== false;
   if (out.proxyMode !== "auto" && out.proxyMode !== "always" && out.proxyMode !== "never") out.proxyMode = "auto";
   if (out.transcodeMode !== "auto" && out.transcodeMode !== "ask" && out.transcodeMode !== "never") out.transcodeMode = "ask";
-  out.playableOnly = out.playableOnly === true;
+  out.playableOnly = out.playableOnly !== false;
   out.preferH264 = out.preferH264 !== false;
   if (out.kidsCardSize !== "large" && out.kidsCardSize !== "medium" && out.kidsCardSize !== "small") out.kidsCardSize = "medium";
   // Legacy migration: older builds stored sizes under a removed generic key —

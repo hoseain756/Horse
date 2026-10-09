@@ -58,10 +58,14 @@ export type PlaybackError = {
   code: number | string | null;
   host: string | null;
   canConvert: boolean; // conversion still available for this stream
+  // Environment-aware actions for the error panel (all optional):
+  canTryDirect?: boolean; // ranked candidates still hold a playable URL stream
+  offerDebrid?: boolean;  // torrents exist but no debrid key is configured
 };
 
 export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
   const pop = useNav((s) => s.pop);
+  const push = useNav((s) => s.push);
   const replace = useNav((s) => s.replace);
   const settings = useSettings((s) => s.settings);
   const { toast } = useToast();
@@ -87,10 +91,15 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
 
   // Auto-fallback: when a chosen stream fails after the proxy/convert ladder,
   // try the next best playable candidate (max 3 automatic attempts).
-  const tryFallback = useCallback(async (): Promise<boolean> => {
-    if (fallbackAttemptsRef.current >= 3) return false;
+  // Returns "fell" (switched to another stream), "exhausted" (the attempt cap
+  // was reached but ranked candidates still hold playable URL streams) or
+  // "empty" (nothing left that could play).
+  const tryFallback = useCallback(async (): Promise<"fell" | "exhausted" | "empty"> => {
+    if (fallbackAttemptsRef.current >= 3) {
+      return candidatesRef.current.some((s) => !!s.url) ? "exhausted" : "empty";
+    }
     const cur = currentRef.current;
-    if (!/^tt\d+$|^kitsu|^demo/.test(cur.metaId) && !cur.stream) return false;
+    if (!/^tt\d+$|^kitsu|^demo/.test(cur.metaId) && !cur.stream) return "empty";
     fallbackAttemptsRef.current += 1;
     const lang = useSettings.getState().settings.uiLanguage;
     toast({ title: homeT("tryingAnother", lang) });
@@ -116,7 +125,7 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         )
         .sort((a, b) => verdictRank(a.c.verdict) - verdictRank(b.c.verdict) || a.i - b.i);
       const next = pool[0];
-      if (!next) return false;
+      if (!next) return "empty";
       candidatesRef.current = candidates.filter((s) => `${s.infoHash ?? ""}|${s.url ?? ""}` !== `${next.s.infoHash ?? ""}|${next.s.url ?? ""}`);
       setCurrent((c) => ({
         ...c,
@@ -128,18 +137,18 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
       }));
       setPhase("loading");
       setError(null);
-      return true;
+      return "fell";
     } catch {
-      return false;
+      return "empty";
     }
   }, [toast]);
 
   const handleError = useCallback(
     (err: PlaybackError) => {
-      void tryFallback().then((fell) => {
-        if (fell) return;
+      void tryFallback().then((outcome) => {
+        if (outcome === "fell") return;
         setPhase("error");
-        setError(err);
+        setError({ ...err, canTryDirect: outcome === "exhausted" });
       });
     },
     [tryFallback],
@@ -180,16 +189,19 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         }
         const results = await fetchStreams(addons.getState().addons, current.type, targetId);
         if (!alive) return;
-        await serverCapabilities();
+        const caps = await serverCapabilities();
         const ranked = runPipeline(results);
         candidatesRef.current = ranked;
         // Prefer browser-playable candidates: verdict-ranked URL streams first
         // (direct > proxy > convert; VideoStage escalates automatically), then
         // torrents whose parsed video codec isn't HEVC — unless conversion is
-        // available server-side, which rescues HEVC releases too.
+        // available server-side, which rescues HEVC releases too. Torrents are
+        // NEVER auto-selected when this environment cannot run/see an engine
+        // (caps.torrent === "none" on serverless without ENGINE_URL).
         const transcodeAvail = cachedTranscodeSupported();
+        const torrentsPossible = caps.torrent !== "none";
         const p2pCandidate = (s: Stream) =>
-          !!s.infoHash && !s.url && (transcodeAvail || s.parsed?.codec !== "HEVC");
+          torrentsPossible && !!s.infoHash && !s.url && (transcodeAvail || s.parsed?.codec !== "HEVC");
         const urlBest = ranked
           .map((s, i) => ({ s, i, c: classifyStream(s) }))
           .filter(({ s, c }) => s.url && c.verdict !== "unplayable" && c.verdict !== "external")
@@ -231,6 +243,7 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         const { useDebrid } = await import("@/lib/harbor/debrid");
         useDebrid.getState().load(); // idempotent hydration when the picker never mounted
         const debrid = useDebrid.getState();
+        const debridCta = !debrid.apiKey && ranked.length > 0; // torrents exist — debrid would unlock them
         let debridError: string | null = null;
         if (debrid.apiKey) {
           setResolveStatus(t("debridUnlocking", lang));
@@ -262,15 +275,20 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         }
         if (!useSettings.getState().settings.p2pEnabled) {
           setPhase("error");
-          setErrorMsg(
-            debridError
+          setError({
+            message: debridError
               ? `${t("debridUnlockFailed", lang)} — ${debridError}`
               : t("noPlayableStream", lang),
-            "torrent",
-          );
+            cls: "torrent",
+            code: null,
+            host: null,
+            canConvert: false,
+            offerDebrid: debridCta,
+          });
           return;
         }
-        // Engine probe — serverless deployments cannot run the torrent-service;
+        // Engine probe — serverless deployments cannot run the torrent-service
+        // (caps.torrent === "none" answers false instantly, no network);
         // fail fast with guidance instead of 100 s of hopeless peer polling.
         setResolveStatus(t("p2pChecking", lang));
         const engineOk = await p2pEngineAvailable();
@@ -283,6 +301,7 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
             code: "P2P_UNAVAILABLE",
             host: "P2P swarm",
             canConvert: false,
+            offerDebrid: debridCta,
           });
           return;
         }
@@ -450,6 +469,30 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
           error={error}
           lang={settings.uiLanguage}
           onConvert={error.canConvert ? () => void convertAndPlay() : undefined}
+          onTryDirect={
+            error.canTryDirect
+              ? () => {
+                  void tryFallback().then((outcome) => {
+                    if (outcome === "fell") return;
+                    toast({ title: t("noPlayableStream", settings.uiLanguage) });
+                  });
+                }
+              : undefined
+          }
+          onDebridSetup={
+            error.offerDebrid
+              ? () => {
+                  // Deep link: close the player, land on Settings → Integrations
+                  // (push keeps the title's detail view reachable via Back).
+                  pop();
+                  push({ kind: "view", view: "settings" });
+                  window.setTimeout(
+                    () => window.dispatchEvent(new CustomEvent("harbor:settings-section", { detail: "integrations" })),
+                    120,
+                  );
+                }
+              : undefined
+          }
           onRetry={() => {
             setError(null);
             setPhase(currentRef.current.url ? "loading" : "resolving");
@@ -525,6 +568,8 @@ function PlaybackErrorPanel({
   error,
   lang,
   onConvert,
+  onTryDirect,
+  onDebridSetup,
   onRetry,
   onPicker,
   onBack,
@@ -532,6 +577,12 @@ function PlaybackErrorPanel({
   error: PlaybackError;
   lang: string;
   onConvert?: () => void;
+  /** Auto-pick the next best playable (URL) stream — shown when ranked
+   *  candidates still hold one after the automatic fallback cap. */
+  onTryDirect?: () => void;
+  /** Deep link to Settings → Integrations — shown when torrent streams exist
+   *  that a debrid key would unlock but none is configured. */
+  onDebridSetup?: () => void;
   onRetry: () => void;
   onPicker: () => void;
   onBack: () => void;
@@ -559,16 +610,26 @@ function PlaybackErrorPanel({
       <p className="md-title-medium text-ink">{homeT("playbackErrorTitle", lang)}</p>
       <p className="text-sm text-ink-muted max-w-md" role="alert">{error.message}</p>
       <div className="flex gap-3 flex-wrap justify-center">
+        {onTryDirect && (
+          <button type="button" onClick={onTryDirect} className="md-btn md-btn-filled md-state">
+            {t("errTryDirect", lang)}
+          </button>
+        )}
+        {onDebridSetup && (
+          <button type="button" onClick={onDebridSetup} className="md-btn md-btn-filled md-state">
+            {t("errSetupDebrid", lang)}
+          </button>
+        )}
         {onConvert && (
           <button type="button" onClick={onConvert} className="md-btn md-btn-filled md-state">
             {homeT("convertAndPlay", lang)}
           </button>
         )}
-        <button type="button" onClick={onRetry} className="md-btn md-btn-tonal md-state">
-          {homeT("retry", lang)}
-        </button>
         <button type="button" onClick={onPicker} className="md-btn md-btn-tonal md-state">
           {homeT("pickAnother", lang)}
+        </button>
+        <button type="button" onClick={onRetry} className="md-btn md-btn-tonal md-state">
+          {homeT("retry", lang)}
         </button>
         <button type="button" onClick={onBack} className="md-btn md-btn-text md-state">
           Back
