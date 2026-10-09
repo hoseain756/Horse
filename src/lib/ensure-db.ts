@@ -8,9 +8,10 @@
 //
 // ensureDb() is awaited at the top of every DB-touching route. It:
 //   1. file: URLs  → creates the sqlite file (zero-byte = valid empty db),
-//   2. always      → applies idempotent CREATE TABLE/INDEX IF NOT EXISTS DDL
-//      mirroring prisma/schema.prisma (works identically on local SQLite and
-//      remote Turso, so a fresh Turso db self-schemas on first request).
+//   2. always      → applies defensive table migrations + idempotent
+//      CREATE TABLE/INDEX IF NOT EXISTS DDL mirroring prisma/schema.prisma
+//      (works identically on local SQLite and remote Turso, so a fresh Turso
+//      db self-schemas on first request).
 // It is memoized per process and never throws — if bootstrap fails the route's
 // own error handling takes over and the next request retries.
 //
@@ -20,14 +21,73 @@ import path from "path";
 import { db } from "@/lib/db";
 
 const DDL_STATEMENTS: readonly string[] = [
+  // ---- accounts ----
   `CREATE TABLE IF NOT EXISTS "HorseUser" (
     "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL,
     "username" TEXT NOT NULL,
+    "displayName" TEXT,
     "passwordHash" TEXT NOT NULL,
+    "emailVerifiedAt" DATETIME,
+    "lastLoginAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "HorseUser_email_key" ON "HorseUser"("email")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "HorseUser_username_key" ON "HorseUser"("username")`,
+  `CREATE TABLE IF NOT EXISTS "Session" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "uid" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "uaSummary" TEXT,
+    "uaRaw" TEXT,
+    "ipHash" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" DATETIME NOT NULL,
+    "absoluteExpiresAt" DATETIME NOT NULL,
+    "remember" BOOLEAN NOT NULL DEFAULT true
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Session_tokenHash_key" ON "Session"("tokenHash")`,
+  `CREATE INDEX IF NOT EXISTS "Session_uid_idx" ON "Session"("uid")`,
+  `CREATE TABLE IF NOT EXISTS "EmailToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "uid" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "expiresAt" DATETIME NOT NULL,
+    "usedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "EmailToken_tokenHash_key" ON "EmailToken"("tokenHash")`,
+  `CREATE INDEX IF NOT EXISTS "EmailToken_uid_kind_idx" ON "EmailToken"("uid", "kind")`,
+  `CREATE TABLE IF NOT EXISTS "OAuthAccount" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "uid" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerAccountId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "OAuthAccount_provider_providerAccountId_key" ON "OAuthAccount"("provider", "providerAccountId")`,
+  `CREATE INDEX IF NOT EXISTS "OAuthAccount_uid_idx" ON "OAuthAccount"("uid")`,
+  // ---- shared rate limiting + audit ----
+  `CREATE TABLE IF NOT EXISTS "RateLimit" (
+    "key" TEXT NOT NULL PRIMARY KEY,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "windowStart" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "windowEnd" DATETIME NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "AuditLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "uid" TEXT,
+    "event" TEXT NOT NULL,
+    "ipHash" TEXT,
+    "detail" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "AuditLog_uid_createdAt_idx" ON "AuditLog"("uid", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "AuditLog_event_createdAt_idx" ON "AuditLog"("event", "createdAt")`,
+  // ---- profiles / content mirrors ----
   `CREATE TABLE IF NOT EXISTS "Profile" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
@@ -42,7 +102,8 @@ const DDL_STATEMENTS: readonly string[] = [
   )`,
   `CREATE TABLE IF NOT EXISTS "Addon" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "transportUrl" TEXT NOT NULL,
+    "urlHash" TEXT NOT NULL,
+    "urlEnc" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "version" TEXT,
     "logo" TEXT,
@@ -67,7 +128,7 @@ const DDL_STATEMENTS: readonly string[] = [
     "probedAt" DATETIME,
     "updatedAt" DATETIME NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "Addon_profileId_transportUrl_key" ON "Addon"("profileId", "transportUrl")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Addon_profileId_urlHash_key" ON "Addon"("profileId", "urlHash")`,
   `CREATE INDEX IF NOT EXISTS "Addon_profileId_idx" ON "Addon"("profileId")`,
   `CREATE TABLE IF NOT EXISTS "LibraryItem" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -114,18 +175,22 @@ const DDL_STATEMENTS: readonly string[] = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
+  // ---- integrations (per-user) + config + canonical blob ----
   `CREATE TABLE IF NOT EXISTS "LinkedAccount" (
     "id" TEXT NOT NULL PRIMARY KEY,
+    "ownerUid" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "accessTokenEnc" TEXT NOT NULL,
     "refreshTokenEnc" TEXT,
     "expiresAt" DATETIME,
     "username" TEXT,
     "avatar" TEXT,
+    "scopes" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "LinkedAccount_provider_key" ON "LinkedAccount"("provider")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "LinkedAccount_provider_ownerUid_key" ON "LinkedAccount"("provider", "ownerUid")`,
+  `CREATE INDEX IF NOT EXISTS "LinkedAccount_ownerUid_idx" ON "LinkedAccount"("ownerUid")`,
   `CREATE TABLE IF NOT EXISTS "AppSettings" (
     "profileId" TEXT NOT NULL PRIMARY KEY,
     "data" TEXT NOT NULL,
@@ -137,6 +202,53 @@ const DDL_STATEMENTS: readonly string[] = [
     "updatedAt" DATETIME NOT NULL
   )`,
 ];
+
+// Defensive pre-DDL migrations: pre-v2 databases may hold tables whose shape
+// no longer matches (e.g. Addon with a plaintext transportUrl column,
+// LinkedAccount globally keyed by provider). All affected tables hold DERIVED
+// data (rebuilt by the next sync push) or pre-email accounts (production data
+// was ephemeral and lost anyway), so dropping is safe and simpler than
+// column-by-column backfills. Runs before the idempotent DDL.
+async function legacyTableShims(): Promise<void> {
+  const tableColumns = new Map<string, Set<string>>();
+  const tables = [
+    "HorseUser",
+    "Addon",
+    "LinkedAccount",
+    "Session",
+    "RateLimit",
+    "AuditLog",
+    "EmailToken",
+    "OAuthAccount",
+  ];
+  for (const t of tables) {
+    try {
+      const rows = (await db.$queryRawUnsafe<{ name: string }[]>(
+        `SELECT name FROM pragma_table_info('${t}')`,
+      )) as { name: string }[];
+      tableColumns.set(t, new Set(rows.map((r) => r.name)));
+    } catch {
+      tableColumns.set(t, new Set()); // table missing → DDL will create it
+    }
+  }
+  const drops: string[] = [];
+  const dropIf = (t: string, needed: string[]): void => {
+    const cols = tableColumns.get(t);
+    if (!cols || cols.size === 0) return; // table absent — fine
+    const missing = needed.filter((c) => !cols.has(c));
+    if (missing.length > 0) {
+      console.warn(`[horse:db] legacy "${t}" missing column(s) ${missing.join(", ")} — dropping for rebuild`);
+      drops.push(t);
+    }
+  };
+  dropIf("HorseUser", ["email", "passwordHash"]);
+  dropIf("Addon", ["urlHash", "urlEnc"]);
+  dropIf("LinkedAccount", ["ownerUid"]);
+  // Await drops so the idempotent DDL below always sees the final state.
+  for (const t of drops) {
+    await db.$executeRawUnsafe(`DROP TABLE IF EXISTS "${t}"`);
+  }
+}
 
 async function bootstrap(): Promise<void> {
   const url = process.env.HORSE_DATABASE_URL?.trim();
@@ -161,6 +273,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
   }
+  await legacyTableShims();
   // Remote (Turso) or fresh local file: apply idempotent schema. libSQL is
   // SQLite-compatible so the same DDL runs on both backends.
   for (const stmt of DDL_STATEMENTS) {

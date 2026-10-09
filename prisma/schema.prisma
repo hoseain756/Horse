@@ -17,16 +17,90 @@ datasource db {
   url = env("HORSE_DATABASE_URL")
 }
 
-// HORSE platform account — native username/password login. When signed in,
-// /api/sync stores the user's cloud bucket under acct:<id> (server-enforced
-// via the httpOnly session cookie), so addons/settings/library follow the
-// account across devices. Passwords are scrypt-hashed (account-auth.ts).
+// HORSE platform account — email + password. `username` is kept for legacy
+// logins (pre-email accounts) and as a friendly handle; `displayName` is the
+// optional, user-chosen display name. Passwords are scrypt-hashed
+// (src/lib/harbor/auth/password.ts). Sessions are opaque tokens stored
+// HASHED in the Session table (src/lib/harbor/auth/session.ts).
 model HorseUser {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String // scrypt$<salt>$<hash> (base64url parts)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique // lowercased
+  username        String    @unique // legacy handle (also the fallback login id)
+  displayName     String?
+  passwordHash    String // scrypt$N$r$p$<salt>$<hash> (base64url parts)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Opaque session tokens (256-bit random), stored HASHED (sha256 hex).
+// One row per device; sliding expiry + absolute cap; device list UI reads
+// these rows. The cookie itself carries the raw token only.
+model Session {
+  id                String   @id @default(cuid())
+  uid               String
+  tokenHash         String   @unique
+  uaSummary         String? // "Chrome 130 · Android" (parsed UA summary)
+  uaRaw             String? // truncated user agent (180 chars)
+  ipHash            String? // sha256(ip + secret) — first 16 hex chars
+  createdAt         DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  expiresAt         DateTime // sliding (renewed at most once per 24h)
+  absoluteExpiresAt DateTime // hard cap — no renewal past this
+  remember          Boolean  @default(true)
+
+  @@index([uid])
+}
+
+// Single-use email tokens (verification / password reset) — stored HASHED.
+model EmailToken {
+  id        String    @id @default(cuid())
+  uid       String
+  kind      String // "verify" | "reset"
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([uid, kind])
+}
+
+// OAuth identity links (Google sign-in, optional — active only when
+// GOOGLE_CLIENT_ID/SECRET are configured).
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  uid               String
+  provider          String // "google"
+  providerAccountId String
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([uid])
+}
+
+// Shared rate-limit counters (atomic SQL upsert) — works across ALL
+// serverless instances, unlike in-memory maps. Fallback: in-memory when the
+// DB is briefly unavailable.
+model RateLimit {
+  key         String   @id // e.g. "login:ip:1.2.3.4" / "login:acct:<uid>"
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+  windowEnd   DateTime
+}
+
+// Security audit trail (login/logout/password changes/token revokes/...).
+// Never stores credentials, tokens, or full IPs — only ipHash.
+model AuditLog {
+  id        String   @id @default(cuid())
+  uid       String?
+  event     String // signup | login | login_failed | logout | logout_all | ...
+  ipHash    String?
+  detail    String? // redacted JSON
+  createdAt DateTime @default(now())
+
+  @@index([uid, createdAt])
+  @@index([event, createdAt])
 }
 
 // Multi-profile support (mirrors Harbor's profiles system)
@@ -37,32 +111,36 @@ model Profile {
   avatar    String?
   isKid     Boolean  @default(false)
   kidAge    Int?
-  pinHash   String? // SHA-256 of parental PIN
+  pinHash   String? // PBKDF2 hash of parental PIN
   curfewMin Int? // daily minutes budget for kids
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 
-// Installed Stremio addons per profile
+// Installed Stremio addons per profile (server-side mirror of the account
+// snapshot — the canonical copy is the encrypted AppSettings blob).
+// transportUrl can contain private tokens (debrid keys), so it is stored
+// ENCRYPTED (urlEnc) with a sha256 identity hash (urlHash) for uniqueness.
 model Addon {
-  id           String   @id // manifest id
-  transportUrl String
-  name         String
-  version      String?
-  logo         String?
-  description  String?
-  background   String?
-  contactEmail String?
-  types        String // JSON array of types
-  catalogs     String // JSON array of CatalogDef
-  resources    String // JSON array of resources
-  idPrefixes   String? // JSON array
+  id            String   @id // <profileId>:<manifest id>
+  urlHash       String // sha256(transportUrl) hex
+  urlEnc        String // AES-256-GCM envelope of transportUrl
+  name          String
+  version       String?
+  logo          String?
+  description   String?
+  background    String?
+  contactEmail  String?
+  types         String // JSON array of types
+  catalogs      String // JSON array of CatalogDef
+  resources     String // JSON array of resources
+  idPrefixes    String? // JSON array
   behaviorHints String? // JSON {adult, p2p, configurable, configurationRequired}
-  flags        String? // JSON {official, protected}
-  enabled      Boolean  @default(true)
-  installedAt  DateTime @default(now())
-  profileId    String
-  order        Int      @default(0)
+  flags         String? // JSON {official, protected}
+  enabled       Boolean  @default(true)
+  installedAt   DateTime @default(now())
+  profileId     String
+  order         Int      @default(0)
   // Last health-probe result (mirrors the client-side AddonRecord.probe)
   probeOk       Boolean?
   probeResource String?
@@ -70,9 +148,9 @@ model Addon {
   probeMs       Int?
   probeError    String?
   probedAt      DateTime?
-  updatedAt    DateTime @updatedAt
+  updatedAt     DateTime @updatedAt
 
-  @@unique([profileId, transportUrl])
+  @@unique([profileId, urlHash])
   @@index([profileId])
 }
 
@@ -129,26 +207,34 @@ model CustomList {
   updatedAt DateTime @updatedAt
 }
 
-// OAuth account links (Trakt / Simkl) — tokens encrypted at rest (AES-256-GCM,
-// see src/lib/harbor/vault.ts). The browser only ever receives `id` (opaque).
+// OAuth service links (Trakt / Simkl) — PER-USER (ownerUid), tokens encrypted
+// at rest (AES-256-GCM versioned envelope, see src/lib/harbor/vault.ts).
+// The browser only ever receives `id` (opaque) + username/avatar.
 model LinkedAccount {
   id              String    @id @default(cuid())
+  ownerUid        String // owning HORSE user
   provider        String // trakt | simkl
   accessTokenEnc  String
   refreshTokenEnc String?
   expiresAt       DateTime?
   username        String?
   avatar          String?
+  scopes          String? // JSON array of granted scopes
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@unique([provider])
+  @@unique([provider, ownerUid])
+  @@index([ownerUid])
 }
 
-// App settings per profile (JSON blob, mirrors Harbor settings)
+// Canonical account snapshot per bucket (acct:<uid> or webdevice:<deviceId>).
+// `data` is the JSON snapshot — stored ENCRYPTED at rest (AES-256-GCM) since
+// it embeds addon manifest URLs (which can carry debrid keys) and the user's
+// TMDB key. Older plaintext rows are read transparently and re-encrypted on
+// the next write.
 model AppSettings {
   profileId String @id
-  data      String // JSON settings blob
+  data      String // encrypted JSON snapshot blob
   updatedAt DateTime @updatedAt
 }
 
@@ -159,6 +245,3 @@ model ServerConfig {
   value     String
   updatedAt DateTime @updatedAt
 }
-
-// Cached catalogs/metas for performance
-// (skipped in v1; in-memory LRU used instead)
