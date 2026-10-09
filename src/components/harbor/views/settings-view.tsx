@@ -351,6 +351,9 @@ function BasicsPanel() {
       <SettingRow title={tr("hideWatched")} description={tr("hideWatchedDesc")}>
         <Switch checked={settings.hideWatchedInCatalogs} onCheckedChange={(v) => update({ hideWatchedInCatalogs: v })} />
       </SettingRow>
+      <SettingRow title={tr("blurEpisodeThumbs")} description={tr("blurEpisodeThumbsDesc")}>
+        <Switch checked={settings.blurEpisodeThumbnails} onCheckedChange={(v) => update({ blurEpisodeThumbnails: v })} />
+      </SettingRow>
       <SettingRow title={tr("autoHideNav")} description={tr("autoHideNavDesc")}>
         <Switch checked={settings.dockAutoHide} onCheckedChange={(v) => update({ dockAutoHide: v })} />
       </SettingRow>

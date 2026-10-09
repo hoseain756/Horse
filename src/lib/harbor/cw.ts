@@ -245,6 +245,28 @@ export function episodeWatchedSet(): Set<string> {
 }
 
 /**
+ * Per-episode playback progress (0..1) keyed by videoId — newest history
+ * entry wins. Read-only derivation used by the episodes section for the red
+ * progress bars and the in-progress state; never mutates data.
+ * The title's continue-watching entry is merged in so an in-progress episode
+ * always has its bar even when history hasn't recorded a stop point yet.
+ */
+export function episodeProgressMap(): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const h of getHistory()) {
+    if (!h.videoId || h.durationMs <= 0) continue;
+    map.set(h.videoId, Math.min(1, Math.max(0, h.positionMs / h.durationMs)));
+  }
+  const cw = readMap<LocalCwEntry>(CW_KEY);
+  for (const e of Object.values(cw)) {
+    if (e.videoId && e.durationMs > 0) {
+      map.set(e.videoId, Math.min(1, Math.max(0, e.positionMs / e.durationMs)));
+    }
+  }
+  return map;
+}
+
+/**
  * Merge external playback-history entries (e.g. Trakt history import).
  * Idempotent: an entry is skipped when an exact (id + videoId + t) record
  * already exists. Entries with positionMs === durationMs === 0 are stored as

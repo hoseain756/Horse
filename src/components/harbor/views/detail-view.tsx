@@ -23,7 +23,7 @@ import type { Meta, MetaVideo } from "@/lib/harbor/types";
 import { fetchMeta, fetchAddonMeta, fetchCinemetaCatalog } from "@/lib/harbor/api";
 import { parseRuntimeToSeconds } from "@/lib/harbor/playback-timeline";
 import { useAddons, useNav, useSettings } from "@/lib/harbor/store";
-import { isInWatchlist, toggleWatchlist, resumeMsFor, getCwEntry, episodeWatchedSet } from "@/lib/harbor/cw";
+import { isInWatchlist, toggleWatchlist, resumeMsFor, getCwEntry } from "@/lib/harbor/cw";
 import { PosterImage } from "../common/poster";
 import { MetaCard } from "../common/meta-card";
 import { AddToListButton } from "../chrome/add-to-list";
@@ -31,7 +31,7 @@ import { useTmdbEnrichment } from "../chrome/tmdb-enrich";
 import { RatingsRow } from "../chrome/ratings-row";
 import { useT } from "@/hooks/use-t";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { EpisodesSection } from "../episodes/episodes-section";
 
 /* ---------- small presentational atoms ---------- */
 
@@ -310,8 +310,6 @@ export function DetailView({ type, id }: { type: string; id: string }) {
     );
   }
 
-  const watched = episodeWatchedSet();
-
   /* ---- single-line metadata row data (requirement 2) ---- */
   const imdbScore =
     meta.imdbRating && parseFloat(meta.imdbRating) > 0 ? meta.imdbRating : null;
@@ -581,7 +579,14 @@ export function DetailView({ type, id }: { type: string; id: string }) {
       )}
 
       {/* Episodes */}
-      {meta.type === "series" && <EpisodeList meta={meta} watched={watched} onPlay={onPlay} />}
+      {meta.type === "series" && (
+        <EpisodesSection
+          meta={meta}
+          tmdbId={tmdb.tmdbId}
+          backdropUrl={tmdb.backdrop ?? meta.background}
+          onPlay={onPlay}
+        />
+      )}
 
       {/* TMDB recommendations (fail-soft — hidden when TMDB is off) */}
       {tmdb.recommendations.length > 0 && <TmdbRecsRail items={tmdb.recommendations} />}
@@ -609,139 +614,6 @@ function RichVia({ name, template }: { name: string; template: string }) {
       <bdi>{name}</bdi>
       {parts[1]}
     </>
-  );
-}
-
-// ---------- Episode list ----------
-function EpisodeList({
-  meta,
-  watched,
-  onPlay,
-}: {
-  meta: Meta;
-  watched: Set<string>;
-  onPlay: (video: MetaVideo) => void;
-}) {
-  const tr = useT();
-  const videos = useMemo(() => {
-    const vids = [...(meta.videos ?? [])];
-    // group by season
-    return vids;
-  }, [meta.videos]);
-
-  const seasons = useMemo(() => {
-    const set = new Set<number>();
-    for (const v of videos) {
-      if (typeof v.season === "number") set.add(v.season);
-    }
-    return Array.from(set).sort((a, b) => a - b);
-  }, [videos]);
-
-  const [season, setSeason] = useState<number | null>(null);
-  const [sortDesc, setSortDesc] = useState(false);
-
-  // Default to latest season when none selected (render-time derivation, no effect)
-  const effectiveSeason = season ?? (seasons.length > 0 ? seasons[seasons.length - 1] : null);
-
-  const seasonVideos = useMemo(() => {
-    const list = videos.filter((v) => v.season === effectiveSeason);
-    return sortDesc ? [...list].reverse() : list;
-  }, [videos, effectiveSeason, sortDesc]);
-
-  if (videos.length === 0) {
-    return (
-      <div className="mx-auto mt-10 max-w-3xl px-4 text-sm text-ink-subtle md:px-8">
-        {tr("noEpisodes")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto mt-12 max-w-3xl px-4 md:px-8">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="md-title-medium text-ink">{tr("episodesTitle")}</h2>
-        <button
-          type="button"
-          onClick={() => setSortDesc((v) => !v)}
-          className="md-chip md-state harbor-tv-focus"
-        >
-          {sortDesc ? tr("newestFirst") : tr("oldestFirst")}
-        </button>
-      </div>
-
-      {/* Season selector chips (horizontally scrollable for long-running shows) */}
-      {seasons.length > 1 && (
-        <div
-          className="no-scrollbar mb-3 flex gap-1.5 overflow-x-auto pb-2"
-          role="group"
-          aria-label={tr("selectSeason")}
-        >
-          {seasons.map((s) => {
-            const active = s === effectiveSeason;
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSeason(s)}
-                aria-pressed={active}
-                className={cn(
-                  "md-chip md-state harbor-tv-focus shrink-0",
-                  active && "md-chip-selected",
-                )}
-              >
-                {tr("seasonN", { n: s })}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="harbor-scroll max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
-        {seasonVideos.map((v) => {
-          const isWatched = watched.has(v.id) || watched.has(`${meta.id}:${v.season}:${v.episode}`);
-          return (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => onPlay(v)}
-              className={cn(
-                "md-state group/ep harbor-tv-focus relative flex w-full items-center gap-4 rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft p-3 text-left",
-                isWatched ? "bg-elevated/40 opacity-60" : "bg-elevated",
-              )}
-            >
-              {/* Accent start bar on hover */}
-              <span
-                aria-hidden
-                className="absolute start-0 top-3 bottom-3 w-[3px] rounded-full bg-accent opacity-0 transition-opacity group-hover/ep:opacity-100"
-              />
-              <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-xl bg-raised md:h-20 md:w-36">
-                <PosterImage src={v.thumb} alt={v.name ?? v.title ?? ""} className="absolute inset-0" landscape />
-                {isWatched && (
-                  <span className="absolute top-1 end-1 flex h-5 w-5 items-center justify-center rounded-full border border-accent/50 bg-accent-soft backdrop-blur-sm">
-                    <Check className="h-3 w-3 text-accent" />
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                {/* dir=auto: latin titles render "E1 Title"; Arabic titles render
-                    RTL with the latin E-prefix bidi-isolated (bdi) */}
-                <p dir="auto" className="harbor-clamp-1 md-title-small text-ink">
-                  <bdi className="me-2 text-ink-subtle">E{v.episode}</bdi>
-                  {v.name ?? v.title ?? tr("episodeN", { n: v.episode ?? 0 })}
-                </p>
-                {v.released && <p className="md-body-small mt-0.5 text-ink-subtle">{new Date(v.released).toLocaleDateString()}</p>}
-                {(v.overview ?? v.description) && (
-                  <p className="md-body-small harbor-clamp-2 mt-1 leading-relaxed text-ink-muted">
-                    {v.overview ?? v.description}
-                  </p>
-                )}
-              </div>
-              <Play className="h-4 w-4 shrink-0 text-accent transition-transform group-hover/ep:scale-110" aria-hidden />
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

@@ -2557,3 +2557,70 @@ html[lang^="ar"] {
   font-size: clamp(1.75rem, 5vw, 2rem); /* 28–32dp */
   line-height: 1.1;
 }
+
+/* ==========================================================================
+   EPISODES SECTION (detail page) — grid/list rebuild
+   All sizes/radii/gaps/colors/blur strength live in --ep-* tokens here.
+   The section root (.episodes-scope) is an inline-size CONTAINER: column
+   counts, thumbnail widths and gaps react to the SECTION width (not the
+   viewport), so side panels / sheets change the layout live.
+   ========================================================================== */
+.episodes-scope {
+  container-type: inline-size;
+  /* phones (<600dp container) */
+  --ep-gap: 12px;
+  --ep-radius: 14px;
+  --ep-title-size: 15px;
+  --ep-title-lh: 1.35;
+  --ep-meta-size: 12px;
+  --ep-story-size: 13px;
+  --ep-num-size: 12px;
+  --ep-progress-h: 3px;
+  --ep-blur: 20px; /* spoiler blur strength (18–24px) */
+  --ep-list-thumb-w: clamp(120px, 40cqi, 168px); /* 38–42% of the row */
+  --ep-list-max: 960px;
+  --ep-grid-max: 1400px;
+  --ep-scroller-max: 68svh;
+  --ep-overlay-bg: rgba(8, 8, 10, 0.72); /* ≥4.5:1 text on any art */
+  --ep-overlay-fg: #ffffff;
+  --ep-watched: #22c55e;
+  --ep-progress: #dc2626;
+  --ep-imdb: #f5c518;
+}
+@container (min-width: 600px) {
+  .episodes-body {
+    --ep-gap: 16px;
+    --ep-list-thumb-w: 220px;
+    --ep-meta-size: 13px;
+  }
+}
+@container (min-width: 1024px) {
+  .episodes-body {
+    --ep-gap: 18px;
+    --ep-list-thumb-w: 250px;
+    --ep-title-size: 16px;
+    --ep-story-size: 14px;
+  }
+}
+@container (min-width: 1440px) {
+  .episodes-body {
+    --ep-gap: 20px;
+  }
+}
+
+/* Spoiler blur: the filter lives on the WRAPPER and is applied from the first
+   paint (before the img loads) — the sharp image can never flash. scale()
+   hides the blur edge-bleed; the rounded wrapper clips it. Overlays are
+   siblings, so pills/labels stay sharp. */
+.ep-thumb-blur img,
+.ep-thumb-blur .ep-thumb-art {
+  filter: blur(var(--ep-blur)) saturate(1.1) scale(1.14);
+}
+@media (prefers-reduced-motion: reduce) {
+  .episodes-scope *,
+  .episodes-scope *::before,
+  .episodes-scope *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

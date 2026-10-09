@@ -1558,3 +1558,30 @@ Work Log:
 
 Stage Summary:
 - Multi-audio torrents now surface ALL dubs: the engine probes every track, the player auto-picks the user's preferred language for the first attach, a dedicated player button lists the dubs (Arabic UI included) and switches instantly at the current position through the proven seek-restart contract. Works for auto-resolve, picker and escalation paths alike. HEVC-stall ladder gap remains a known separate backlog item.
+
+---
+Task ID: episodes-rebuild-1
+Agent: main (orchestrator)
+Task: Rebuild the detail-page Episodes section (season dropdown + grid/list views + spoiler blur + virtualization + RTL fixes)
+
+Work Log:
+- Read worklog + current code: old EpisodeList (detail-view.tsx) = season chips + flat list, only v.thumb art, no per-episode ratings, no virtualization, no spoiler protection.
+- Data sources mapped: meta.videos (Cinemeta→addons), watched/progress from localStorage history (cw.ts), TMDB via /api/tmdb proxy (fail-soft), image proxy /api/img (AVIF/WebP, w16..2560), i18n typed STRINGS (en/ar), settings zustand store.
+- NEW src/components/harbor/episodes/ (8 files):
+  - episodes-section.tsx — owner: default season (CW in-progress → first unwatched in natural order regular-seasons-then-specials → first), session memory per title, sort, view resolution (settings.episodesView auto|list|grid; auto = List <600px container, Grid ≥600), per-item enrichment (art/rating/runtime/upcoming/watched/progress), keyboard roving nav (arrows = ±1/±cols dir-aware, Home/End), view-toggle keeps current row anchored, data-changed listener.
+  - use-windowed-rows.ts — measured virtualization (state-held heights, NaN→estimate, binary-search window, rAF-coalesced, ResizeObserver re-measure, one-shot refine after programmatic anchor, render-phase reset on resetKey).
+  - season-dropdown.tsx — glass M3 menu (aria-haspopup/expanded, menuitemradio+aria-checked, roving focus on open, Esc/Tab/outside close, scrollable max-h, per-season count + watched "12/22", Specials label for season 0).
+  - episodes-toolbar.tsx — [Season dropdown | single-season count] [sort chip] [List/Grid segmented glass toggle, aria-pressed, 48dp].
+  - episode-thumbnail.tsx — art chain addon thumb → TMDB still (w185/w300/w780 srcset + sizes) → series backdrop via /api/img (w560) → gradient placeholder w/ episode number; overlays: number pill top inline-end, IMDb chip bottom inline-end, watched pill bottom inline-start, 3px red progress bar bottom edge, upcoming dim; blur = smallest size (TMDB w92 / proxy w112&q45), CSS filter on wrapper from first paint (no flash), overlays stay sharp.
+  - episode-card.tsx / episode-row.tsx — memoized presenters; title/story dir="auto" + unicode-bidi:plaintext + text-align:start + <bdi> (fixes ".a grasshopper"/"!Block Kingdom" punctuation jumps); meta line "E{n} · {n} min · Intl date" (bdi-isolated E-num, latn digits everywhere).
+  - use-episode-art.ts — TMDB season fetch (still_path/vote_average/runtime), fail-soft, 30-min cache.
+  - types.ts — EpisodeItem.
+- MODIFIED: detail-view.tsx (old EpisodeList deleted ~140 lines → <EpisodesSection>), settings.ts (+episodesView, +blurEpisodeThumbnails + sanitize), settings-view.tsx (blur switch in Basics), i18n.ts (+13 keys en/ar), cw.ts (+episodeProgressMap read-only helper), globals.css (--ep-* token block + container queries @600/1024/1440 + .ep-thumb-blur wrapper filter + reduced-motion).
+- Fixes during verification: React-compiler lint (no refs during render → heights in state; no setState-in-effect → render-phase reset), aria-disabled on listitem (state via accessible name), invalid onEscapeKeyDown prop, default season Specials→Season 1 ordering, blur skips in-progress episodes (spec: in-progress shows clearly).
+- Verified via agent-browser (fresh sessions): grid 5/4/3/2 cols by container width (1440→5, 1280→4, 820→3, 360→2), list default on phone + 960 cap on desktop, list↔grid toggle keeps current row (idx 28→24 row-start), season switch resets to top, dropdown counts/check/Esc/roving focus, Specials 63-ep season: DOM bounded (43 rows deep-scrolled), keyboard End→last item + ArrowDown=+cols, RTL: grid mirrors, pills at inline-end, titles dir=auto, meta bidi-isolated, Arabic labels; seeded history: red bars 50%, watched pills 90%, blur only on untouched, blurred imgs request w=112; Settings blur toggle persists; sort instant; console clean; lint 0 errors.
+
+Stage Summary:
+- Episodes section fully rebuilt per spec (target screenshots matched at 1440 grid/list); no business logic changed (picker/player untouched; picker header has no episode thumbnail so blur N/A there).
+- Known sandbox limits: /api/tmdb returns 501 (no TMDB key) → per-episode ratings/stills/runtime fail-soft absent here; verified via code path + proxy design (works when key configured).
+- HMR caveat: Fast Refresh can leave stale measured heights (RO no refire) — full reload recovers; production unaffected.
+- All sizes/gaps/colors/blur exposed as --ep-* tokens in globals.css; container queries drive responsive (sidebar-proof).

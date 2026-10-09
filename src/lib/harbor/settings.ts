@@ -42,6 +42,12 @@ export type Settings = {
   hidePosterTitles: boolean;
   posterEffect: "blur" | "fade" | "off";
 
+  // Episodes section (detail page)
+  /** Episode list layout: auto = list on phones, grid on wider containers. */
+  episodesView: "auto" | "list" | "grid";
+  /** Spoiler protection: blur thumbnails of unwatched episodes. */
+  blurEpisodeThumbnails: boolean;
+
   // Player
   instantPlay: boolean;
   autoPlayNextEpisode: boolean;
@@ -160,6 +166,9 @@ export const DEFAULT_SETTINGS: Settings = {
   hidePosterTitles: false,
   posterEffect: "off",
 
+  episodesView: "auto",
+  blurEpisodeThumbnails: false,
+
   instantPlay: true,
   autoPlayNextEpisode: true,
   resumePlayback: true,
@@ -253,6 +262,8 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   out.dockAutoHide = out.dockAutoHide !== false;
   out.posterScale = clampNum(out.posterScale, 0.6, 1.6, 1);
   out.posterRadius = clampNum(out.posterRadius, 0, 28, 12);
+  if (out.episodesView !== "list" && out.episodesView !== "grid") out.episodesView = "auto";
+  out.blurEpisodeThumbnails = out.blurEpisodeThumbnails === true;
   out.subFontSize = clampNum(out.subFontSize, 12, 64, 28);
   out.subBorderSize = clampNum(out.subBorderSize, 0, 10, 0);
   out.subBackgroundOpacity = clampNum(out.subBackgroundOpacity, 0, 1, 0.35);

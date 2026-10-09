@@ -1,0 +1,461 @@
+     1→// Harbor Web — minimal EN/AR string map for the Home rebuild (hero + continue
+     2→// watching). Extends the established labelEn/labelAr pattern from
+     3→// chrome/nav-items.tsx: no framework, just a typed dictionary keyed off
+     4→// settings.uiLanguage. Add new screens' strings here as they need them.
+     5→"use client";
+     6→
+     7→export function isArabic(lang: string | undefined | null): boolean {
+     8→  return /^ar(-|_|$)/i.test(lang ?? "");
+     9→}
+    10→
+    11→type Entry = { en: string; ar: string };
+    12→
+    13→const STRINGS = {
+    14→  continueWatching: { en: "Continue Watching", ar: "متابعة المشاهدة" },
+    15→  // ---- playback pipeline ----
+    16→  tryingProxy: { en: "Retrying through the secure proxy…", ar: "إعادة المحاولة عبر الوسيط الآمن…" },
+    17→  tryingConvert: { en: "Converting this stream for your browser…", ar: "جارٍ تحويل هذا البث لمتصفحك…" },
+    18→  convertingNeeds: { en: "This format needs conversion", ar: "هذه الصيغة تحتاج إلى تحويل" },
+    19→  convertAndPlay: { en: "Convert and play", ar: "حوّل وشغّل" },
+    20→  pickAnother: { en: "Pick another stream", ar: "اختر بثاً آخر" },
+    21→  linkExpired: { en: "The link expired or is unavailable", ar: "انتهت صلاحية الرابط أو أنه غير متاح" },
+    22→  sourceBlocks: { en: "The source blocks playback.", ar: "المصدر يمنع التشغيل." },
+    23→  networkRetry: { en: "Network hiccup — retrying…", ar: "انقطاع في الشبكة — إعادة المحاولة…" },
+    24→  tryingAnother: { en: "Trying another source…", ar: "جرب مصدراً آخر…" },
+    25→  torrentNotPlayable: {
+    26→    en: "Torrents can't play natively in browsers. This one needs the built-in P2P engine or a debrid unlock.",
+    27→    ar: "لا يمكن للمتصفحات تشغيل التورنت مباشرة. يحتاج هذا البث إلى محرك P2P المدمج أو فتح عبر Debrid.",
+    28→  },
+    29→  showTechnical: { en: "Show technical details", ar: "إظهار التفاصيل التقنية" },
+    30→  copyDiagnostics: { en: "Copy diagnostics", ar: "نسخ التشخيص" },
+    31→  diagnosticsCopied: { en: "Diagnostics copied", ar: "تم نسخ التشخيص" },
+    32→  retry: { en: "Retry", ar: "إعادة المحاولة" },
+    33→  playbackErrorTitle: { en: "Playback problem", ar: "مشكلة في التشغيل" },
+    34→  errClass: { en: "Failure class", ar: "نوع الخطأ" },
+    35→  errCode: { en: "Error code", ar: "رمز الخطأ" },
+    36→  sourceHost: { en: "Source host", ar: "مصدر البث" },
+    37→  // ---- audio / dub switcher (player) ----
+    38→  audioPanelTitle: { en: "Audio / Dub", ar: "الصوت / الدبلجة" },
+    39→  audioSwitching: { en: "Switching audio…", ar: "جارٍ تبديل الصوت…" },
+    40→  audioTrackFallback: { en: "Track", ar: "مسار" },
+    41→  audioOriginal: { en: "Original", ar: "الأصلي" },
+    42→  // ---- kids ----
+    43→  kidsTitle: { en: "Kids Corner", ar: "زاوية الأطفال" },
+    44→  kidsSubtitle: { en: "Fun and safe picks for the little ones.", ar: "اختيارات ممتعة وآمنة للصغار." },
+    45→  cardSize: { en: "Card size", ar: "حجم البطاقة" },
+    46→  sizeLarge: { en: "Large", ar: "كبير" },
+    47→  sizeMedium: { en: "Medium", ar: "متوسط" },
+    48→  sizeSmall: { en: "Small", ar: "صغير" },
+    49→  cardSizeHint: { en: "Poster size in Kids Corner — bigger cards are easier to tap.", ar: "حجم الملصقات في زاوية الأطفال — البطاقات الأكبر أسهل للمس." },
+    50→  // ---- home (existing) ----
+    51→  viewDetails: { en: "View details", ar: "عرض التفاصيل" },
+    52→  featured: { en: "Featured", ar: "مميز" },
+    53→  loadingFeatured: { en: "Loading featured titles", ar: "جارٍ تحميل المميزة" },
+    54→  pauseAutoplay: { en: "Pause autoplay", ar: "إيقاف العرض التلقائي مؤقتاً" },
+    55→  resumeAutoplay: { en: "Resume autoplay", ar: "استئناف العرض التلقائي" },
+    56→  resumeAria: { en: "Resume", ar: "متابعة" },
+    57→  markWatched: { en: "Mark as watched", ar: "تحديد كمشاهد" },
+    58→  removeFromCw: { en: "Remove from Continue Watching", ar: "إزالة من متابعة المشاهدة" },
+    59→  watchedToast: { en: "Marked as watched", ar: "تم التحديد كمشاهد" },
+    60→  episode: { en: "Episode", ar: "الحلقة" },
+    61→  left: { en: "left", ar: "تبقى" },
+    62→  hUnit: { en: "h", ar: "س" },
+    63→  mUnit: { en: "m", ar: "د" },
+    64→  airToday: { en: "Airs today", ar: "يُعرض اليوم" },
+    65→  airTomorrow: { en: "Airs tomorrow", ar: "يُعرض غداً" },
+    66→  airIn: { en: "In {n} {unit}", ar: "يُعرض بعد {n} {unit}" },
+    67→  newEpisode: { en: "New episode", ar: "حلقة جديدة" },
+    68→  loadingMore: { en: "Loading", ar: "جارٍ التحميل" },
+    69→  // ---- player transport (episode navigation) ----
+    70→  prevEpisode: { en: "Previous episode", ar: "الحلقة السابقة" },
+    71→  nextEpisode: { en: "Next episode", ar: "الحلقة التالية" },
+    72→} as const satisfies Record<string, Entry>;
+    73→
+    74→export type HomeStringKey = keyof typeof STRINGS;
+    75→
+    76→export function homeT(key: HomeStringKey, lang: string): string {
+    77→  return isArabic(lang) ? STRINGS[key].ar : STRINGS[key].en;
+    78→}
+    79→
+    80→/** "{Series|Movie|Anime}" for the hero meta line. Animation-genre series are
+    81→ *  labelled Anime (matches the app's Anime section semantics). */
+    82→export function metaTypeLabel(type: string, genres: string[] | undefined, lang: string): string {
+    83→  const ar = isArabic(lang);
+    84→  const list = (genres ?? []).map((g) => g.toLowerCase());
+    85→  if (type !== "movie" && (list.includes("anime") || list.includes("animation"))) {
+    86→    return ar ? "أنمي" : "Anime";
+    87→  }
+    88→  if (type === "movie") return ar ? "فيلم" : "Movie";
+    89→  return ar ? "مسلسل" : "Series";
+    90→}
+    91→
+    92→/** Localized "S1 E2"-style tag stays Latin (rendered dir="ltr" by callers). */
+    93→export function seasonEpisodeTag(season: number | undefined, episode: number | undefined): string | null {
+    94→  if (!season || !episode) return null;
+    95→  return `S${season} E${episode}`;
+    96→}
+    97→
+    98→/** Episode subtitle fallback: "الحلقة {n}" / "Episode {n}". */
+    99→export function episodeFallback(n: number | undefined, lang: string): string | null {
+   100→  if (!n) return null;
+   101→  return isArabic(lang) ? `الحلقة ${n}` : `Episode ${n}`;
+   102→}
+   103→
+   104→/** "1h 20m left" / "تبقى ١س ٢٠د"-style remaining time (movies). */
+   105→export function remainingLabel(ms: number, lang: string): string | null {
+   106→  if (!Number.isFinite(ms) || ms <= 60_000) return null;
+   107→  const totalMin = Math.round(ms / 60_000);
+   108→  const h = Math.floor(totalMin / 60);
+   109→  const m = totalMin % 60;
+   110→  const ar = isArabic(lang);
+   111→  const parts: string[] = [];
+   112→  if (h > 0) parts.push(`${h}${ar ? "س" : "h"}`);
+   113→  if (m > 0 || h === 0) parts.push(`${m}${ar ? "د" : "m"}`);
+   114→  return ar ? `تبقى ${parts.join(" ")}` : `${parts.join(" ")} left`;
+   115→}
+   116→
+   117→function daysUntil(releasedMs: number, now: number): number {
+   118→  return Math.max(0, Math.ceil((releasedMs - now) / 86_400_000));
+   119→}
+   120→
+   121→/**
+   122→ * "Upcoming" badge text with correct plurals via Intl.PluralRules.
+   123→ * Arabic: اليوم (0) / غداً (1) / يومان (2) / أيام (3-10) / يوم (11+).
+   124→ * English: today / tomorrow / "In {n} day(s)".
+   125→ */
+   126→export function upcomingLabel(releasedMs: number, lang: string): string | null {
+   127→  if (!Number.isFinite(releasedMs)) return null;
+   128→  const now = Date.now();
+   129→  if (releasedMs <= now) return null;
+   130→  const days = daysUntil(releasedMs, now);
+   131→  const ar = isArabic(lang);
+   132→  if (days === 0) return homeT("airToday", lang);
+   133→  if (days === 1) return homeT("airTomorrow", lang);
+   134→  if (ar) {
+   135→    const cat = new Intl.PluralRules("ar").select(days);
+   136→    const unit = cat === "two" ? "يومين" : cat === "few" ? "أيام" : "يوم";
+   137→    return homeT("airIn", lang).replace("{n}", String(days)).replace("{unit}", unit);
+   138→  }
+   139→  const unit = new Intl.PluralRules("en").select(days) === "one" ? "day" : "days";
+   140→  return homeT("airIn", lang).replace("{n}", String(days)).replace("{unit}", unit);
+   141→}
+   142→
+   143→export { daysUntil };
+   144→
+   145→/** Localized "{n} of {total}" slide announcer / labels. */
+   146→export function slideOf(i: number, total: number, lang: string): string {
+   147→  return isArabic(lang) ? `الشريحة ${i} من ${total}` : `Slide ${i} of ${total}`;
+   148→}
+   149→
+   150→export function goToSlideLabel(n: number, lang: string): string {
+   151→  return isArabic(lang) ? `الانتقال إلى الشريحة ${n}` : `Go to slide ${n}`;
+   152→}
+   153→
+   154→// ---------------------------------------------------------------------------
+   155→// App-wide string dictionary (complete ar/en). Every user-visible string of
+   156→// the shared components lives here; ICU-style plurals come via Intl.PluralRules
+   157→// helpers below, numbers via Intl.NumberFormat (latin digits everywhere so the
+   158→// digit style stays consistent across the app), relative times via
+   159→// Intl.RelativeTimeFormat.
+   160→// ---------------------------------------------------------------------------
+   161→
+   162→/** Interpolation values: `{name}` → values.name. */
+   163→type Vars = Record<string, string | number>;
+   164→
+   165→/**
+   166→ * English → Arabic. Keys are stable identifiers (camelCase), NOT English text,
+   167→ * so a dev-time check can fail loudly on missing keys.
+   168→ */
+   169→export const APP_STRINGS = {
+   170→  // ---- shared actions / states ----
+   171→  cancel: { en: "Cancel", ar: "إلغاء" },
+   172→  save: { en: "Save", ar: "حفظ" },
+   173→  delete: { en: "Delete", ar: "حذف" },
+   174→  remove: { en: "Remove", ar: "إزالة" },
+   175→  refresh: { en: "Refresh", ar: "تحديث" },
+   176→  back: { en: "Back", ar: "رجوع" },
+   177→  install: { en: "Install", ar: "تثبيت" },
+   178→  installing: { en: "Installing…", ar: "جارٍ التثبيت…" },
+   179→  installed: { en: "Installed", ar: "مثبتة" },
+   180→  enable: { en: "Enable", ar: "تمكين" },
+   181→  disable: { en: "Disable", ar: "تعطيل" },
+   182→  configure: { en: "Configure", ar: "تهيئة" },
+   183→  uninstall: { en: "Uninstall", ar: "إلغاء التثبيت" },
+   184→  disconnect: { en: "Disconnect", ar: "قطع الاتصال" },
+   185→  unlink: { en: "Unlink", ar: "إلغاء الربط" },
+   186→  syncNow: { en: "Sync now", ar: "مزامنة الآن" },
+   187→  open: { en: "Open", ar: "افتح" },
+   188→  offline: { en: "Offline", ar: "غير متصل" },
+   189→  online: { en: "Online · port {n}", ar: "متصل · المنفذ {n}" },
+   190→  checking: { en: "Checking…", ar: "جارٍ التحقق…" },
+   191→  copyFailed: { en: "Copy failed", ar: "فشل النسخ" },
+   192→  copyFailedBody: { en: "Select the code and copy it manually.", ar: "حدد الرمز وانسخه يدوياً." },
+   193→  syncedTitle: { en: "Synced {name}", ar: "تمت مزامنة {name}" },
+   194→  syncFailed: { en: "Sync failed", ar: "فشلت المزامنة" },
+   195→  syncFailedBody: { en: "Check your connection and try again.", ar: "تحقق من اتصالك وحاول مجدداً." },
+   196→  connectedAs: { en: "Connected as @{name}", ar: "متصل باسم @{name}" },
+   197→  connectedTitle: { en: "{name} connected", ar: "تم ربط {name}" },
+   198→  linkedAs: { en: "Linked as @{name}", ar: "تم الربط باسم @{name}" },
+   199→  lastSync: { en: "Last sync: {d}", ar: "آخر مزامنة: {d}" },
+   200→  tokensSecure: { en: "Tokens are stored securely on your server.", ar: "تُخزَّن الرموز بأمان على خادمك." },
+   201→
+   202→  // ---- settings shell ----
+   203→  settingsTitle: { en: "Settings", ar: "الإعدادات" },
+   204→  tabBasics: { en: "Basics", ar: "الأساسيات" },
+   205→  tabPlayer: { en: "Player", ar: "المشغل" },
+   206→  tabTheme: { en: "Theme", ar: "المظهر" },
+   207→  tabLanguage: { en: "Language", ar: "اللغة" },
+   208→  tabIntegrations: { en: "Integrations", ar: "التكاملات" },
+   209→  tabData: { en: "Data", ar: "البيانات" },
+   210→  tabAbout: { en: "About", ar: "حول" },
+   211→  settingsSections: { en: "Settings sections", ar: "أقسام الإعدادات" },
+   212→
+   213→  // ---- segmented shared options ----
+   214→  optAuto: { en: "Auto", ar: "تلقائي" },
+   215→  optAlways: { en: "Always", ar: "دائماً" },
+   216→  optNever: { en: "Never", ar: "أبداً" },
+   217→  optAsk: { en: "Ask", ar: "اسأل" },
+   218→  optDark: { en: "Dark", ar: "داكن" },
+   219→  optLight: { en: "Light", ar: "فاتح" },
+   220→  optStandard: { en: "Standard", ar: "قياسي" },
+   221→  optMedium: { en: "Medium", ar: "متوسط" },
+   222→  optHigh: { en: "High", ar: "مرتفع" },
+   223→  optHarbor: { en: "Harbor", ar: "Harbor" },
+   224→  optClassic: { en: "Classic", ar: "كلاسيكي" },
+   225→  optFit: { en: "Fit", ar: "احتواء" },
+   226→  optFill: { en: "Fill", ar: "ملء" },
+   227→  optZoom: { en: "Zoom", ar: "تكبير" },
+   228→  optDefault: { en: "Default", ar: "افتراضي" },
+   229→  optStremio: { en: "Stremio", ar: "Stremio" },
+   230→  optCondensed: { en: "Condensed", ar: "مضغوط" },
+   231→
+   232→  // ---- basics rows ----
+   233→  instantPlay: { en: "Instant play", ar: "التشغيل الفوري" },
+   234→  instantPlayDesc: { en: "Open the best stream immediately when clicking Play", ar: "افتح أفضل بث فور النقر على تشغيل" },
+   235→  autoPlayNext: { en: "Auto-play next episode", ar: "تشغيل الحلقة التالية تلقائياً" },
+   236→  autoPlayNextDesc: { en: "Continue to the next episode automatically", ar: "الانتقال إلى الحلقة التالية تلقائياً" },
+   237→  resumePlayback: { en: "Resume playback", ar: "استئناف التشغيل" },
+   238→  resumePlaybackDesc: { en: "Pick up where you left off", ar: "تابع من حيث توقفت" },
+   239→  confirmLeave: { en: "Confirm leaving playback", ar: "تأكيد مغادرة التشغيل" },
+   240→  confirmLeaveDesc: { en: "Ask before closing the player", ar: "اسأل قبل إغلاق المشغّل" },
+   241→  showCardBadges: { en: "Show card badges", ar: "إظهار شارات البطاقات" },
+   242→  showCardBadgesDesc: { en: "IMDb rating badges on posters", ar: "شارات تقييم IMDb على الملصقات" },
+   243→  homeMode: { en: "Home mode", ar: "وضع الصفحة الرئيسية" },
+   244→  homeModeDesc: { en: "Harbor layout with hero, or classic rows only", ar: "تخطيط Harbor مع الواجهة الرئيسية، أو الصفوف الكلاسيكية فقط" },
+   245→  showAllAddonRows: { en: "Show all addon rows on home", ar: "إظهار جميع صفوف الإضافات في الرئيسية" },
+   246→  showAllAddonRowsDesc: { en: "Include every addon catalog row", ar: "تضمين كل صفوف كتالوج الإضافات" },
+   247→  hideWatched: { en: "Hide watched in catalogs", ar: "إخفاء ما شاهدته في الكتالوجات" },
+   248→  hideWatchedDesc: { en: "Filter titles you already watched", ar: "تصفية العناوين التي شاهدتها مسبقاً" },
+   249→  autoHideNav: { en: "Auto-hide navigation bar", ar: "الإخفاء التلقائي لشريط التنقل" },
+   250→  autoHideNavDesc: { en: "Hide the glass dock scrolling down, reveal scrolling up", ar: "أخفِ شريط الأزرار عند التمرير للأسفل وأظهِره عند التمرير للأعلى" },
+   251→  posterSize: { en: "Poster size", ar: "حجم الملصق" },
+   252→  posterRadius: { en: "Poster corner radius", ar: "استدارة زوايا الملصق" },
+   253→
+   254→  // ---- player rows ----
+   255→  secureProxy: { en: "Use secure proxy when needed", ar: "استخدام الوسيط الآمن عند الحاجة" },
+   256→  secureProxyDesc: { en: "Routes blocked streams through this server (fixes CORS and source headers)", ar: "يوجّه البثوث المحجوبة عبر هذا الخادم (يصلح CORS وترويسات المصدر)" },
+   257→  convertStreams: { en: "Convert incompatible streams", ar: "تحويل البثوث غير المتوافقة" },
+   258→  convertStreamsDesc: { en: "MKV/HEVC/AC3-DTS → H.264/AAC on the server (uses CPU)", ar: "تحويل MKV/HEVC/AC3-DTS إلى H.264/AAC على الخادم (يستهلك المعالج)" },
+   259→  playableOnly: { en: "Show only streams that play in the browser", ar: "إظهار البثوث القابلة للتشغيل في المتصفح فقط" },
+   260→  playableOnlyDesc: { en: "The stream picker hides unplayable sources by default", ar: "يخفي منتقي البثوث المصادر غير القابلة للتشغيل افتراضياً" },
+   261→  preferH264: { en: "Prefer H.264/AAC", ar: "تفضيل H.264/AAC" },
+   262→  preferH264Desc: { en: "Rank browser-safe codecs above HEVC when sorting streams", ar: "ترتيب الترميزات المتوافقة مع المتصفح فوق HEVC عند الفرز" },
+   263→  seekStep: { en: "Seek step", ar: "خطوة التنقل" },
+   264→  seekStepDesc: { en: "Arrow keys seek ±{n}s", ar: "أسهم لوحة المفاتيح تنقل ±{n}ث" },
+   265→  subSize: { en: "Subtitles size", ar: "حجم الترجمات" },
+   266→  subBackground: { en: "Subtitle background", ar: "خلفية الترجمات" },
+   267→  subBackgroundDesc: { en: "{n}% opacity behind text", ar: "شفافية {n}% خلف النص" },
+   268→  subBorder: { en: "Subtitle border", ar: "حدود الترجمات" },
+   269→  subBorderDesc: { en: "{n}px outline", ar: "تحديد بسماكة {n}بكسل" },
+   270→  videoFill: { en: "Video fill", ar: "ملء الفيديو" },
+   271→  videoFillDesc: { en: "How video fits the screen", ar: "كيفية ملاءمة الفيديو للشاشة" },
+   272→  playerChrome: { en: "Player chrome", ar: "مظهر المشغّل" },
+   273→  playerChromeDesc: { en: "Stremio-style or Harbor-style controls", ar: "أزرار بأسلوب Stremio أو Harbor" },
+   274→  pickerLayout: { en: "Stream picker layout", ar: "تخطيط منتقي البثوث" },
+   275→  pickerLayoutDesc: { en: "Condensed rows or Stremio-style tiers", ar: "صفوف مضغوطة أو فئات بأسلوب Stremio" },
+   276→  qualityInfo: { en: "Quality info in picker", ar: "معلومات الجودة في المنتقي" },
+   277→  qualityInfoDesc: { en: "Show codec, size and source details", ar: "إظهار الترميز والحجم وتفاصيل المصدر" },
+   278→
+   279→  // ---- P2P card ----
+   280→  p2pTitle: { en: "P2P Torrent Engine", ar: "محرك تورنت P2P" },
+   281→  p2pSubtitle: { en: "Play torrents without any account — server-side BitTorrent", ar: "شغّل التورنتات دون أي حساب — BitTorrent من جهة الخادم" },
+   282→  p2pToggle: { en: "Play torrents via P2P", ar: "تشغيل التورنتات عبر P2P" },
+   283→  p2pToggleDesc: { en: "Join swarms directly when a stream addon only offers torrents. Debrid stays the faster path for cached releases.", ar: "انضم إلى الأسراب مباشرة عندما يقدّم ملحق البث ملفات تورنت فقط. ويبقى Debrid المسار الأسرع للإصدارات المخزَّنة مؤقتاً." },
+   284→  p2pAria: { en: "Toggle P2P torrent playback", ar: "تبديل تشغيل التورنت عبر P2P" },
+   285→  p2pNoSwarms: { en: "No active swarms", ar: "لا توجد أسراب نشطة" },
+   286→  p2pSwarms: { en: "{n} active swarm · {speed}", ar: "سرب نشط واحد · {speed}", arOther: "{n} أسراب نشطة · {speed}" },
+   287→  p2pError: { en: "Torrent engine is not reachable — P2P playback will fail until the torrent-service is running. Debrid playback is unaffected.", ar: "محرك التورنت غير قابل للوصول — لن يعمل تشغيل P2P حتى تشغيل خدمة التورنت. تشغيل Debrid غير متأثر." },
+   288→  p2pNote: { en: "Torrents download to a server-side cache and stream over HTTP (native containers) or through an ffmpeg remux (mkv). Idle swarms are evicted after 45 minutes; swarms that never find peers are dropped after 90 seconds.", ar: "تُنزَّل التورنتات إلى ذاكرة تخزين على الخادم وتُبث عبر HTTP (للحاويات المدعومة أصلاً) أو عبر إعادة تغليف بواسطة ffmpeg (لملفات mkv). تُطرد الأسراب الخاملة بعد 45 دقيقة؛ وتُهجر الأسراب التي لا تجد أقراناً بعد 90 ثانية." },
+   289→  p2pStopAll: { en: "Stop all", ar: "إيقاف الكل" },
+   290→  p2pWipe: { en: "Wipe cache", ar: "مسح ذاكرة التخزين" },
+   291→  p2pPeers: { en: "{n} peers", ar: "{n} أقران" },
+   292→  cacheWiped: { en: "Torrent cache wiped", ar: "تم مسح ذاكرة التورنت" },
+   293→  cacheWipedBody: { en: "All downloaded P2P data has been deleted.", ar: "تم حذف جميع بيانات P2P التي تم تنزيلها." },
+   294→  torrentsStopped: { en: "Torrents stopped", ar: "تم إيقاف التورنتات" },
+   295→  torrentsStoppedBody: { en: "Active swarms were closed; cache kept for resume.", ar: "أُغلقت الأسراب النشطة؛ واحتُفظ بالذاكرة للاستئناف." },
+   296→  cleanupFailed: { en: "Cleanup failed", ar: "فشل التنظيف" },
+   297→
+   298→  // ---- integrations / link flow ----
+   299→  integrationsTitle: { en: "Integrations", ar: "التكاملات" },
+   300→  integrationsIntro: { en: "Connect optional third-party services. Activation-code linking keeps tokens encrypted on this app's server; the browser never sees them.", ar: "اربط خدمات طرفية ثالثة اختيارية. يُبقي الربط برمز التنشيط الرموز مشفَّرة على خادم هذا التطبيق؛ والمتصفح لا يراها أبداً." },
+   301→  privacyNote: { en: "Horse links Trakt/Simkl with built-in server-side app credentials — activation-code linking keeps your tokens encrypted on this app's server, and the browser never sees them. Optional keys (debrid, metadata) stay yours.", ar: "يربط Horse حسابَي Trakt وSimkl عبر بيانات تطبيق مدمجة في الخادم — يُبقي الربط برمز التنشيط رموزك مشفَّرة على خادم هذا التطبيق، ولا يراها المتصفح أبداً. أما المفاتيح الاختيارية (ديبريد، البيانات الوصفية) فتبقى لك." },
+   302→  linkWithCode: { en: "Link {name} with a code", ar: "ربط {name} برمز" },
+   303→  noAccountNeeded: { en: "No account setup needed — you'll get a short code to enter on {host}.", ar: "لا حاجة لإعداد حساب — ستحصل على رمز قصير لإدخاله في {host}." },
+   304→  visitEnterCode: { en: "Visit {url} and enter this code:", ar: "زر {url} وأدخل هذا الرمز:" },
+   305→  waitingAuth: { en: "Waiting for authorization…", ar: "في انتظار التفويض…" },
+   306→  waitingSlowDown: { en: "Waiting (provider asked us to slow down)…", ar: "في الانتظار (طلب المزوّد التمهُّل)…" },
+   307→  generateNewCode: { en: "Generate new code", ar: "توليد رمز جديد" },
+   308→  newCode: { en: "New code", ar: "رمز جديد" },
+   309→  openHost: { en: "Open {host}", ar: "افتح {host}" },
+   310→  approveAuto: { en: "Approve on the provider's site and this connects automatically within seconds.", ar: "وافق على موقع المزوّد وسيتم الربط تلقائياً خلال ثوانٍ." },
+   311→  expiresIn: { en: "Expires in", ar: "ينتهي خلال" },
+   312→  clickToCopy: { en: "Click to copy", ar: "انقر للنسخ" },
+   313→  codeExpiresAria: { en: "Code expires in", ar: "ينتهي الرمز خلال" },
+   314→  scanQr: { en: "Scan to open the verification page", ar: "امسح لفتح صفحة التحقق" },
+   315→  importTraktWatchlist: { en: "Import your Trakt watchlist", ar: "استورد قائمة مشاهداتك من Trakt" },
+   316→  importSimklWatchlist: { en: "Import your Simkl watchlist", ar: "استورد قائمة مشاهداتك من Simkl" },
+   317→  importWatchlist: { en: "Import watchlist", ar: "استيراد قائمة المشاهدة" },
+   318→  importHistory: { en: "Import history", ar: "استيراد السجل" },
+   319→  pushWatchlist: { en: "Push watchlist", ar: "دفع قائمة المشاهدة" },
+   320→  scrobbleWhilePlaying: { en: "Scrobble to Trakt while playing", ar: "تسجيل المشاهدة إلى Trakt أثناء التشغيل" },
+   321→  lastImportNew: { en: "Last import: +{n} new", ar: "آخر استيراد: +{n} جديد" },
+   322→  localWatchlistHas: { en: "Local watchlist has {n} titles", ar: "قائمة المشاهدة المحلية تضم {n} عنواناً" },
+   323→  lastImportPlays: { en: "Last import: +{n} plays", ar: "آخر استيراد: +{n} تشغيل" },
+   324→
+   325→  // ---- addons page ----
+   326→  addonsIntro: { en: "Horse is a neutral client for the open Stremio addon protocol. Install catalogs, streams and subtitles addons by manifest URL. Horse hosts no content — you bring your own addons.", ar: "Horse عميل محايد لبروتوكول إضافات Stremio المفتوح. ثبّت إضافات الكتالوجات والبثوث والترجمات عبر رابط manifest. لا يستضيف Horse أي محتوى — أنت توفّر إضافاتك." },
+   327→  manifestLabel: { en: "Addon manifest URL", ar: "رابط manifest للإضافة" },
+   328→  manifestPlaceholder: { en: "https://my-addon.example.com/manifest.json", ar: "https://my-addon.example.com/manifest.json" },
+   329→  installFailed: { en: "Install failed", ar: "فشل التثبيت" },
+   330→  addonReady: { en: "Addon is ready to use.", ar: "الإضافة جاهزة للاستخدام." },
+   331→  installedCount: { en: "Installed ({n})", ar: "مثبتة ({n})" },
+   332→  noAddonsYet: { en: "No addons installed yet.", ar: "لا توجد إضافات مثبتة بعد." },
+   333→  noAddonsMatch: { en: "No addons match your filter.", ar: "لا توجد إضافات تطابق عامل التصفية." },
+   334→  communityAddons: { en: "Community addons", ar: "إضافات المجتمع" },
+   335→  healthSummary: { en: "Addon health summary", ar: "ملخص صحة الإضافات" },
+   336→  nHealthy: { en: "{n} healthy", ar: "{n} سليمة" },
+   337→  nNotResponding: { en: "{n} not responding", ar: "{n} لا تستجيب" },
+   338→  checkedRatio: { en: "· {a}/{b} checked", ar: "· تم فحص {a}/{b}" },
+   339→  retestAll: { en: "Re-test all", ar: "إعادة اختبار الكل" },
+   340→  retestAllTitle: { en: "Re-test every checked addon", ar: "إعادة اختبار كل إضافة تم فحصها" },
+   341→  testAddon: { en: "Test addon", ar: "اختبار الإضافة" },
+   342→  testAria: { en: "Test {name}", ar: "اختبار {name}" },
+   343→  enableAria: { en: "Enable {name}", ar: "تمكين {name}" },
+   344→  disableAria: { en: "Disable {name}", ar: "تعطيل {name}" },
+   345→  configureAria: { en: "Configure {name}", ar: "تهيئة {name}" },
+   346→  uninstallAria: { en: "Uninstall {name}", ar: "إلغاء تثبيت {name}" },
+   347→  uninstallConfirmTitle: { en: "Uninstall {name}?", ar: "إلغاء تثبيت {name}؟" },
+   348→  uninstallConfirmBody: { en: "This removes the addon from this browser. You can reinstall it any time with its manifest URL.", ar: "سيؤدي هذا إلى إزالة الإضافة من هذا المتصفح. يمكنك إعادة تثبيتها في أي وقت عبر رابط manifest الخاص بها." },
+   349→  healthyChip: { en: "HEALTHY", ar: "سليمة" },
+   350→  noReplyChip: { en: "NO REPLY", ar: "لا استجابة" },
+   351→  addonHealthyAria: { en: "Addon healthy", ar: "الإضافة سليمة" },
+   352→  addonDownAria: { en: "Addon not responding", ar: "الإضافة لا تستجيب" },
+   353→  testingAria: { en: "Testing addon", ar: "جارٍ اختبار الإضافة" },
+   354→  nStreams: { en: "{n} streams", ar: "{n} تدفقات" },
+   355→  nSubtitles: { en: "{n} subtitles", ar: "{n} ترجمات" },
+   356→  nCatalogItems: { en: "{n} catalog items", ar: "{n} عنصر كتالوج" },
+   357→  nItems: { en: "{n} items", ar: "{n} عنصر" },
+   358→  checkedAgo: { en: "checked {time}", ar: "فُحصت {time}" },
+   359→  removedToast: { en: "{name} removed", ar: "تمت إزالة {name}" },
+   360→  installedToast: { en: "{name} installed", ar: "تم تثبيت {name}" },
+   361→
+   362→  // ---- detail page (Task 30 redesign) ----
+   363→  watchNow: { en: "Watch Now", ar: "مشاهدة" },
+   364→  resumeSE: { en: "Resume S{s}:E{e}", ar: "متابعة S{s}:E{e}" },
+   365→  moreOptions: { en: "More options", ar: "خيارات أخرى" },
+   366→  addToWatchlist: { en: "Add to watchlist", ar: "أضف إلى قائمة المشاهدة" },
+   367→  inWatchlistItem: { en: "In watchlist", ar: "في قائمة المشاهدة" },
+   368→  availableStreams: { en: "Available streams", ar: "البثوث المتاحة" },
+   369→  streamsHint: { en: "Choose a specific stream", ar: "اختر بثاً محدداً" },
+   370→  share: { en: "Share", ar: "مشاركة" },
+   371→  linkCopied: { en: "Link copied to clipboard", ar: "تم نسخ الرابط إلى الحافظة" },
+   372→  director: { en: "Director", ar: "المخرج" },
+   373→  starring: { en: "Starring", ar: "بطولة" },
+   374→  episodesTitle: { en: "Episodes", ar: "الحلقات" },
+   375→  seasonN: { en: "Season {n}", ar: "الموسم {n}" },
+   376→  selectSeason: { en: "Select season", ar: "اختر الموسم" },
+   377→  newestFirst: { en: "Newest first", ar: "الأحدث أولاً" },
+   378→  oldestFirst: { en: "Oldest first", ar: "الأقدم أولاً" },
+   379→  noEpisodes: { en: "No episode information available for this series.", ar: "لا تتوفر معلومات حلقات لهذا المسلسل." },
+   380→  episodeN: { en: "Episode {n}", ar: "الحلقة {n}" },
+   381→  recommendedTitle: { en: "Recommended for you", ar: "مقترح لك" },
+   382→  recommendedByTmdb: { en: "Recommended by TMDB", ar: "مقترح من TMDB" },
+   383→  viaTmdb: { en: "via TMDB", ar: "عبر TMDB" },
+   384→  moreLikeThis: { en: "More like this", ar: "أعمال مشابهة" },
+   385→  viaAddon: { en: "via {name}", ar: "عبر {name}" },
+   386→  loadingDetails: { en: "Loading details…", ar: "جارٍ تحميل التفاصيل…" },
+   387→  titleNotFound: { en: "Title not found. It may not be in Cinemeta or your addons.", ar: "لم يتم العثور على العنوان. قد لا يكون موجوداً في Cinemeta أو في إضافاتك." },
+   388→  fetchFailed: { en: "Failed to load details", ar: "فشل تحميل التفاصيل" },
+   389→  goBack: { en: "Go back", ar: "رجوع" },
+   390→  contentRating: { en: "Content rating", ar: "التصنيف العمري" },
+   391→  pressPlayHint: { en: "Press Play to fetch streams from your installed addons for this title.", ar: "اضغط تشغيل لجلب البثوث من إضافاتك المثبتة لهذا العنوان." },
+   392→
+   393→  // ---- footer ----
+   394→  footerTagline: { en: "Horse — an open-source media center. Not affiliated with Stremio. Addons are user-installed; Horse hosts no content.", ar: "Horse — مركز وسائط مفتوح المصدر. غير تابع لـ Stremio. الإضافات يثبّتها المستخدم؛ ولا يستضيف Horse أي محتوى." },
+   395→  footerCredit: { en: "Inspired by the Harbor desktop app: github.com/harborstremio/harbor (MIT). This is a web port.", ar: "مستوحى من تطبيق Harbor لسطح المكتب: github.com/harborstremio/harbor (‏MIT). هذه نسخة ويب." },
+   396→} as const satisfies Record<string, { en: string; ar: string; arOther?: string }>;
+   397→
+   398→export type AppStringKey = keyof typeof APP_STRINGS;
+   399→
+   400→/** Dev-time missing-key guard: renders the key itself and fails loudly. */
+   401→function warnMissing(key: string): string {
+   402→  if (process.env.NODE_ENV !== "production") {
+   403→    console.error(`[i18n] Missing translation key: "${key}"`);
+   404→  }
+   405→  return key;
+   406→}
+   407→
+   408→/** Interpolate `{var}` placeholders. */
+   409→function interpolate(template: string, vars?: Vars): string {
+   410→  if (!vars) return template;
+   411→  return template.replace(/\{(\w+)\}/g, (m, k: string) =>
+   412→    k in vars ? String(vars[k]) : m,
+   413→  );
+   414→}
+   415→
+   416→/** Translate an app string. Unknown keys fail loudly in dev. */
+   417→export function t(key: AppStringKey, lang: string, vars?: Vars): string {
+   418→  const entry = APP_STRINGS[key] as { en: string; ar: string; arOther?: string } | undefined;
+   419→  if (!entry) return warnMissing(String(key));
+   420→  if (!isArabic(lang)) return interpolate(entry.en, vars);
+   421→  // Simple English plural shape for Arabic via arOther when {n} ≠ 1
+   422→  if (entry.arOther && vars?.n !== undefined && Number(vars.n) !== 1) {
+   423→    return interpolate(entry.arOther, vars);
+   424→  }
+   425→  return interpolate(entry.ar, vars);
+   426→}
+   427→
+   428→// ---------------------------------------------------------------------------
+   429→// Intl helpers — consistent digits (latn) + real relative time
+   430→// ---------------------------------------------------------------------------
+   431→
+   432→const NUM_FMT: Record<string, Intl.NumberFormat> = {};
+   433→/** Latin-digit number formatting in every locale (digit style stays consistent). */
+   434→export function formatNumber(n: number, lang: string): string {
+   435→  const tag = isArabic(lang) ? "ar-u-nu-latn" : "en";
+   436→  NUM_FMT[tag] ??= new Intl.NumberFormat(tag);
+   437→  return NUM_FMT[tag].format(n);
+   438→}
+   439→
+   440→const REL_FMT: Record<string, Intl.RelativeTimeFormat> = {};
+   441→const REL_UNITS: { limit: number; div: number; unit: Intl.RelativeTimeFormatUnit }[] = [
+   442→  { limit: 45_000, div: 1_000, unit: "second" },
+   443→  { limit: 45 * 60_000, div: 60_000, unit: "minute" },
+   444→  { limit: 22 * 3_600_000, div: 3_600_000, unit: "hour" },
+   445→  { limit: 21 * 86_400_000, div: 86_400_000, unit: "day" },
+   446→  { limit: 300 * 86_400_000, div: 7 * 86_400_000, unit: "week" },
+   447→  { limit: 18 * 31_536_000_000, div: 30 * 86_400_000, unit: "month" },
+   448→  { limit: Infinity, div: 365 * 86_400_000, unit: "year" },
+   449→];
+   450→
+   451→/** Localized "منذ 8 دقائق" / "8 minutes ago" via Intl.RelativeTimeFormat. */
+   452→export function formatTimeAgo(ms: number, lang: string): string {
+   453→  const diff = ms - Date.now(); // negative → past
+   454→  const abs = Math.abs(diff);
+   455→  const { div, unit } = REL_UNITS.find((u) => abs < u.limit) ?? REL_UNITS[REL_UNITS.length - 1];
+   456→  const value = Math.round(diff / div);
+   457→  const tag = isArabic(lang) ? "ar" : "en";
+   458→  REL_FMT[tag] ??= new Intl.RelativeTimeFormat(tag, { numeric: "auto" });
+   459→  return REL_FMT[tag].format(value, unit);
+   460→}
+   461→
