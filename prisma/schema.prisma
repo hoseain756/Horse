@@ -7,11 +7,11 @@ datasource db {
   // Dedicated var name (NOT the generic DATABASE_URL) so the app never picks
   // up a host-injected DATABASE_URL by accident — the value always comes from
   // this project's own config.
-  // Local dev (.env): HARBOR_DATABASE_URL="file:/home/z/my-project/db/harbor.db"
-  // Vercel:           HARBOR_DATABASE_URL="file:/tmp/harbor.db" (ephemeral per
+  // Local dev (.env): HORSE_DATABASE_URL="file:/home/z/my-project/db/horse.db"
+  // Vercel:           HORSE_DATABASE_URL="file:/tmp/horse.db" (ephemeral per
   //                   serverless instance — cloud sync degrades gracefully to
   //                   localStorage; plug Turso/Neon later for real cross-device sync)
-  url = env("HARBOR_DATABASE_URL")
+  url = env("HORSE_DATABASE_URL")
 }
 
 // Multi-profile support (mirrors Harbor's profiles system)

@@ -1653,3 +1653,25 @@ Work Log:
 Stage Summary:
 - Repo is Vercel-ready: user imports hoseain756/Horse on vercel.com/new, leaves defaults, sets HARBOR_DATABASE_URL=file:/tmp/harbor.db (+ optional keys per .env.example) in Environment Variables, then Create Project.
 - Follow-up candidates: Turso/Neon for real cross-device sync; hosted torrent-service (Railway/Fly) for P2P playback.
+
+---
+Task ID: 47
+Agent: Z.ai Code (main)
+Task: Rebrand env vars for Vercel deployment — HARBOR_TOKEN_SECRET→HORSE_TOKEN_SECRET, HARBOR_DATABASE_URL→HORSE_DATABASE_URL, db file harbor.db→horse.db (user request: site is named "Horse")
+
+Work Log:
+- Grepped all functional references: prisma/schema.prisma (datasource env), src/lib/harbor/vault.ts (vault key), .env, .env.example. worklog/project-text-content.md refs left as historical log (append-only).
+- Renamed db file db/harbor.db → db/horse.db via mv (data preserved, 208896 bytes intact).
+- schema.prisma: url = env("HORSE_DATABASE_URL") + updated comments (local path + Vercel file:/tmp/horse.db).
+- vault.ts: process.env.HORSE_TOKEN_SECRET + comment + warning prefix [horse:vault].
+- .env (gitignored): HORSE_DATABASE_URL="file:/home/z/my-project/db/horse.db", HORSE_TOKEN_SECRET=<generated openssl rand -base64 32>, added operator's TMDB_ACCESS_TOKEN (validated live vs TMDB API /configuration → 200 before saving). .env.example mirrored with new names + file:/tmp/horse.db.
+- bunx prisma generate (schema env-name change). postinstall hook already runs prisma generate (Vercel build safe).
+- INCIDENT: POST /api/sync → 500 "attempt to write a readonly database" (SQLITE 1032) after mv+regen — stale Prisma engine from the 04:35 server instance (opened pre-rename); reads OK via open fd, writes refused. Fixed by full dev-server restart. Restart nuances: plain `nohup … &` and bare `setsid … &` spawns were reaped after the tool command ended (reproduced; also confirmed by a setsid sleep test). Working pattern (from worklog 1025): `cd /home/z/my-project && (setsid bun run dev </dev/null >/dev/null 2>&1 &)` — server survived.
+- Post-restart verification: POST /api/sync {"ok":true} + read-back OK on horse.db; GET /api/integrations/status {"tmdb":true,"trakt":true,"simkl":true} (TMDB newly live server-side); smoke-test row (webdevice:horsetest123456) deleted afterwards via project-root Prisma script (note: bun scripts must run from project dir or bun's global cache resolves wrong @prisma/client major).
+- agent-browser QA: home renders (title "Horse — A Stremio Client Built for Adventure"), hero+logo+rails+ratings OK, no console errors. Lint: 0 errors (165 pre-existing warnings, baseline unchanged).
+
+Stage Summary:
+- Vercel env vars are now: HORSE_DATABASE_URL="file:/tmp/horse.db", HORSE_TOKEN_SECRET, TRAKT_CLIENT_ID, SIMKL_CLIENT_ID, TMDB_ACCESS_TOKEN (all validated locally).
+- Operator guidance given: themoviedb.org signup → Settings → API → API Read Access Token (v4); HARBOR_TOKEN_SECRET explained as self-invented random string; Vercel env vars are server-side (never exposed to visitors).
+- Vercel flow status: user at Import/config page, entering env vars, next step = Deploy.
+- Files: prisma/schema.prisma, src/lib/harbor/vault.ts, .env (local only), .env.example, db/horse.db (renamed).

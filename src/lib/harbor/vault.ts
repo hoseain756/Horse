@@ -3,7 +3,7 @@
 // rest with AES-256-GCM. The browser never sees them — it holds an opaque
 // linkId (random 128-bit, sent back on each sync API call).
 //
-// Key material: HARBOR_TOKEN_SECRET (recommended). When absent we derive a
+// Key material: HORSE_TOKEN_SECRET (recommended). When absent we derive a
 // stable machine-local key from DATABASE_URL so restarts keep working in the
 // sandbox; .env.example documents how to set a proper secret.
 import crypto from "crypto";
@@ -12,11 +12,11 @@ let cachedKey: Buffer | null = null;
 
 function vaultKey(): Buffer {
   if (cachedKey) return cachedKey;
-  const secret = process.env.HARBOR_TOKEN_SECRET?.trim();
+  const secret = process.env.HORSE_TOKEN_SECRET?.trim();
   const material = secret && secret.length >= 8 ? secret : `harbor-fallback:${process.env.DATABASE_URL ?? "local"}`;
   if (!secret) {
     console.warn(
-      "[harbor:vault] HARBOR_TOKEN_SECRET is not set — using a derived machine-local key. Set a strong random secret in production.",
+      "[horse:vault] HORSE_TOKEN_SECRET is not set — using a derived machine-local key. Set a strong random secret in production.",
     );
   }
   cachedKey = crypto.createHash("sha256").update(material).digest();
