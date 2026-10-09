@@ -127,6 +127,44 @@ export function p2pHealth(): Promise<P2pHealth> {
   return jfetch<P2pHealth>("/health", undefined, 8_000);
 }
 
+// ---- engine availability probe (cached, in-flight deduped) ----
+let engineProbe: { ok: boolean; at: number } | null = null;
+let engineProbePromise: Promise<boolean> | null = null;
+
+/**
+ * True when the torrent engine answers /health. Cached: success 5 min,
+ * failure 60 s (a freshly started engine is noticed quickly, while serverless
+ * deployments that can never run the engine fail fast instead of stalling the
+ * player through 100 s of peer polling against a 404). Concurrent callers
+ * share one probe.
+ */
+export function p2pEngineAvailable(force = false): Promise<boolean> {
+  const now = Date.now();
+  if (!force && engineProbe && now - engineProbe.at < (engineProbe.ok ? 300_000 : 60_000)) {
+    return Promise.resolve(engineProbe.ok);
+  }
+  if (!engineProbePromise) {
+    engineProbePromise = p2pHealth()
+      .then((h) => {
+        engineProbe = { ok: h.ok === true, at: Date.now() };
+        return engineProbe.ok;
+      })
+      .catch(() => {
+        engineProbe = { ok: false, at: Date.now() };
+        return false;
+      })
+      .finally(() => {
+        engineProbePromise = null;
+      });
+  }
+  return engineProbePromise;
+}
+
+/** Last probe result without re-fetching: true / false / null (never probed). */
+export function cachedEngineAvailable(): boolean | null {
+  return engineProbe ? engineProbe.ok : null;
+}
+
 export function p2pRemove(key: string): Promise<void> {
   return jfetch<void>(`/remove/${key}`, { method: "POST" }, 15_000).then(() => undefined);
 }

@@ -28,7 +28,7 @@ import {
   cachedTranscodeSupported,
   type FailureClass,
 } from "@/lib/harbor/playback";
-import { homeT } from "@/lib/harbor/i18n";
+import { homeT, t } from "@/lib/harbor/i18n";
 import { fetchMeta, defaultVideoId } from "@/lib/harbor/api";
 import {
   PlaybackTimeline,
@@ -40,7 +40,7 @@ import {
 import type { MetaVideo, RawSubtitle, SubtitleResult, Stream } from "@/lib/harbor/types";
 import { upsertCw, pushHistory, resumeMsFor } from "@/lib/harbor/cw";
 import { useTrakt } from "@/lib/harbor/trakt";
-import { p2pStatus, p2pRemuxUrl, p2pCodec, pickAudioRel, audioTrackLabel, formatSpeed, refreshP2pCapabilities, type P2pAudioTrack } from "@/lib/harbor/p2p";
+import { p2pStatus, p2pRemuxUrl, p2pCodec, pickAudioRel, audioTrackLabel, formatSpeed, refreshP2pCapabilities, p2pEngineAvailable, type P2pAudioTrack } from "@/lib/harbor/p2p";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PosterImage } from "../common/poster";
@@ -197,7 +197,13 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         const best = urlBest?.s ?? ranked.find(p2pCandidate) ?? ranked[0];
         if (!best) {
           setPhase("error");
-          setError({ message: "No streams found from your addons.", cls: "fatal", code: null, host: null, canConvert: false });
+          setError({
+            message: t("noStreamsFound", useSettings.getState().settings.uiLanguage),
+            cls: "fatal",
+            code: null,
+            host: null,
+            canConvert: false,
+          });
           return;
         }
         if (best.url) {
@@ -211,15 +217,73 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
           setPhase("loading");
           return;
         }
-        // Best candidate is a torrent → try the server-side P2P engine before giving up
-        if (!best.infoHash || !useSettings.getState().settings.p2pEnabled) {
+        // Best candidate is a torrent → debrid unlock first (instant, works on
+        // any host), then the server-side P2P engine. Both fail honestly.
+        const lang = useSettings.getState().settings.uiLanguage;
+        if (!best.infoHash) {
           setPhase("error");
           setErrorMsg(
-            ranked.length > 0
-              ? "No browser-playable stream found. Open the stream picker to choose manually — torrent streams play via P2P or unlock with debrid."
-              : "No streams found from your addons.",
+            ranked.length > 0 ? t("noPlayableStream", lang) : t("noStreamsFound", lang),
             "torrent",
           );
+          return;
+        }
+        const { useDebrid } = await import("@/lib/harbor/debrid");
+        useDebrid.getState().load(); // idempotent hydration when the picker never mounted
+        const debrid = useDebrid.getState();
+        let debridError: string | null = null;
+        if (debrid.apiKey) {
+          setResolveStatus(t("debridUnlocking", lang));
+          const res = await debrid.resolve(
+            best.infoHash.toLowerCase(),
+            best.behaviorHints?.filename ?? best.parsed?.filename,
+            best.parsed?.size,
+          );
+          if (!alive) return;
+          if ("url" in res && res.url) {
+            setCurrent((c) => ({
+              ...c,
+              url: res.url,
+              stream: {
+                ...best,
+                url: res.url,
+                behaviorHints: {
+                  ...best.behaviorHints,
+                  ...("filename" in res && res.filename ? { filename: res.filename } : {}),
+                },
+              },
+              streamTitle: best.title ?? c.streamTitle,
+              streamDescription: best.description,
+            }));
+            setPhase("loading");
+            return;
+          }
+          debridError = "error" in res ? res.error : null;
+        }
+        if (!useSettings.getState().settings.p2pEnabled) {
+          setPhase("error");
+          setErrorMsg(
+            debridError
+              ? `${t("debridUnlockFailed", lang)} — ${debridError}`
+              : t("noPlayableStream", lang),
+            "torrent",
+          );
+          return;
+        }
+        // Engine probe — serverless deployments cannot run the torrent-service;
+        // fail fast with guidance instead of 100 s of hopeless peer polling.
+        setResolveStatus(t("p2pChecking", lang));
+        const engineOk = await p2pEngineAvailable();
+        if (!alive) return;
+        if (!engineOk) {
+          setPhase("error");
+          setError({
+            message: t("p2pUnavailable", lang),
+            cls: "torrent",
+            code: "P2P_UNAVAILABLE",
+            host: "P2P swarm",
+            canConvert: false,
+          });
           return;
         }
         const { p2pPrepare, p2pStatus, p2pPlan } = await import("@/lib/harbor/p2p");
@@ -240,10 +304,7 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         const st = prep.pending ? await p2pStatus(infoHash).catch(() => null) : null;
         if (prep.pending && !st?.ready) {
           setPhase("error");
-          setErrorMsg(
-            "No peers responded for the best torrent. Open the stream picker to pick another source, or connect debrid for instant cached streams.",
-            "torrent",
-          );
+          setErrorMsg(t("noPeersFound", lang), "torrent");
           return;
         }
         const fileIdx = prep.pending
@@ -264,7 +325,7 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
         if (!plan) {
           setPhase("error");
           setError({
-            message: "Torrent engine could not serve this file. Try another stream in the picker.",
+            message: t("engineNoServe", lang),
             cls: "torrent",
             code: "P2P_NO_PLAN",
             host: "P2P swarm",

@@ -294,6 +294,33 @@ export const APP_STRINGS = {
   torrentsStopped: { en: "Torrents stopped", ar: "تم إيقاف التورنتات" },
   torrentsStoppedBody: { en: "Active swarms were closed; cache kept for resume.", ar: "أُغلقت الأسراب النشطة؛ واحتُفظ بالذاكرة للاستئناف." },
   cleanupFailed: { en: "Cleanup failed", ar: "فشل التنظيف" },
+  p2pChecking: { en: "Checking the torrent engine…", ar: "جارٍ فحص محرك التورنت…" },
+  p2pUnavailable: {
+    en: "P2P playback is not available on this deployment — the torrent engine can't run here (serverless hosting). Torrents unlock instantly with a debrid key (Settings → Integrations), or pick a direct (HTTP) stream from the picker.",
+    ar: "تشغيل P2P غير متاح في هذه البيئة — لا يمكن تشغيل محرك التورنت هنا (استضافة serverless). تُفتح التورنتات فوراً بمفتاح debrid (الإعدادات ← التكاملات)، أو اختر بثاً مباشراً (HTTP) من المنتقي.",
+  },
+  debridUnlocking: { en: "Unlocking with debrid…", ar: "جارٍ الفتح عبر debrid…" },
+  debridUnlockFailed: { en: "Debrid unlock failed", ar: "فشل الفتح عبر debrid" },
+  noPlayableStream: {
+    en: "No browser-playable stream found. Open the stream picker to choose manually — torrent streams unlock with debrid, or play via the P2P engine when available.",
+    ar: "لم يُعثر على بث قابل للتشغيل في المتصفح. افتح منتقي البثوث للاختيار يدوياً — تُفتح التورنتات عبر debrid، أو تُشغَّل عبر محرك P2P عند توافره.",
+  },
+  noPeersFound: {
+    en: "No peers responded for the best torrent. The swarm may be dead or this network blocks BitTorrent. Open the picker to try another source, or connect debrid for instant cached streams.",
+    ar: "لم يستجب أي أقران لأفضل تورنت. قد يكون السرب ميتاً أو أن الشبكة تحجب BitTorrent. افتح المنتقي لتجربة مصدر آخر، أو اربط debrid للحصول على بثوث مخزّنة فورية.",
+  },
+  engineNoServe: {
+    en: "Torrent engine could not serve this file. Try another stream in the picker.",
+    ar: "لم يتمكن محرك التورنت من تقديم هذا الملف. جرّب بثاً آخر من المنتقي.",
+  },
+  engineStartingHint: {
+    en: "Torrent engine offline — P2P unavailable here. Use debrid or direct streams.",
+    ar: "محرك التورنت غير متصل — P2P غير متاح هنا. استخدم debrid أو البثوث المباشرة.",
+  },
+  noStreamsFound: {
+    en: "No streams found from your addons.",
+    ar: "لم يُعثر على أي بثوث من إضافاتك.",
+  },
 
   // ---- integrations / link flow ----
   integrationsTitle: { en: "Integrations", ar: "التكاملات" },

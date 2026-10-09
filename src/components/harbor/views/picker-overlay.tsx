@@ -25,8 +25,11 @@ import {
   p2pPlan,
   pickAudioRel,
   refreshP2pCapabilities,
+  p2pEngineAvailable,
+  cachedEngineAvailable,
   type P2pPlaybackPlan,
 } from "@/lib/harbor/p2p";
+import { t } from "@/lib/harbor/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { PlayerOverlay } from "../player/player-overlay";
 import { cn } from "@/lib/utils";
@@ -474,6 +477,9 @@ function StreamRow({
   const [p2pPhase, setP2pPhase] = useState<"idle" | "joining" | "planning">("idle");
   const [p2pInfo, setP2pInfo] = useState<{ peers: number; elapsed: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Torrent engine reachability: null = probing, true/false = cached probe result.
+  // Drives an honest tooltip on the P2P button (serverless hosts can't run it).
+  const [engineOffline, setEngineOffline] = useState<boolean | null>(cachedEngineAvailable() === false ? true : null);
   const errTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const p2pAbort = useRef<AbortController | null>(null);
 
@@ -481,6 +487,17 @@ function StreamRow({
     return () => {
       if (errTimer.current) clearTimeout(errTimer.current);
       p2pAbort.current?.abort();
+    };
+  }, []);
+
+  // One shared engine probe (cached module-wide) → honest P2P button hint.
+  useEffect(() => {
+    let alive = true;
+    void p2pEngineAvailable().then((ok) => {
+      if (alive) setEngineOffline(!ok);
+    });
+    return () => {
+      alive = false;
     };
   }, []);
 
@@ -540,6 +557,14 @@ function StreamRow({
     if (p2pPhase !== "idle") return;
     if (!useSettings.getState().settings.p2pEnabled) {
       onNeedsSetup();
+      return;
+    }
+    const lang = useSettings.getState().settings.uiLanguage;
+    // Engine probe first — on serverless deployments the torrent-service can't
+    // run; fail fast with guidance instead of polling peers against a 404.
+    if (!(await p2pEngineAvailable())) {
+      setEngineOffline(true);
+      fail(t("p2pUnavailable", lang));
       return;
     }
     setErr(null);
@@ -760,11 +785,23 @@ function StreamRow({
                 "harbor-tv-focus md-btn md-state h-8! px-2.5! text-xs! sm:h-9! sm:px-3.5!",
                 debridKey === null ? "md-btn-filled" : "md-btn-tonal",
               )}
-              aria-label={debridKey === null ? "Play via P2P" : "Play via P2P torrent engine"}
-              title={debridKey === null ? "Play free via the built-in P2P engine" : "Play via the built-in P2P engine (slower)"}
+              aria-label={
+                engineOffline
+                  ? "P2P engine offline — use debrid or direct streams"
+                  : debridKey === null
+                    ? "Play via P2P"
+                    : "Play via P2P torrent engine"
+              }
+              title={
+                engineOffline
+                  ? t("engineStartingHint", useSettings.getState().settings.uiLanguage)
+                  : debridKey === null
+                    ? "Play free via the built-in P2P engine"
+                    : "Play via the built-in P2P engine (slower)"
+              }
             >
-              {p2pPhase !== "idle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Network className="w-3.5 h-3.5" aria-hidden />}
-              {p2pPhase !== "idle" ? "Connecting…" : "Play"}
+              {p2pPhase !== "idle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : engineOffline ? <Network className="w-3.5 h-3.5 opacity-50" aria-hidden /> : <Network className="w-3.5 h-3.5" aria-hidden />}
+              {p2pPhase !== "idle" ? "Connecting…" : engineOffline ? "P2P" : "Play"}
             </button>
           )}
           <button
