@@ -2040,3 +2040,20 @@ Stage Summary:
 - LESSON for future sessions: "working tree clean" ≠ "everything committed" — before pushing features, run the fresh-clone build test (clone → bun install --frozen-lockfile → bun run build) whenever any new file was created; audit with `git ls-files --others -i --exclude-standard -- src/`.
 - The `local-*` pattern removal is safe (nothing matched it); other broad patterns remain (test, prompt — they guard non-src paths, no collision today).
 - Next candidates (unchanged): TorBox 'my torrents' management view, auth/ratelimit.ts Postgres placeholder fix, Kids PIN gate, About capabilities badge, dedupe the two gh-autopush watcher instances.
+
+---
+Task ID: 64
+Agent: Z.ai Code (main)
+Task: "اجلب commit 1feb921 لانك لجعت للورى" — the sandbox environment RESET the repo to an Oct-7 snapshot; recover the good state from GitHub
+
+Work Log:
+- User reported the project "went backwards". Forensics: local git history showed only daemon UUID commits on an Oct-7 base (latest 6b68f53 19:29Z), `origin` remote GONE, src/lib/harbor/local-engine.ts missing from the working tree, worklog without Tasks 62/63, ~/.git-credentials and ~/.gh-autopush.sh WIPED (home reset). The reflog had zero trace of today's commits → the .git directory itself was replaced ~19:29Z. The user saw the OLD app in the preview panel — hence "لجعت للورى".
+- SALVAGE: GitHub main was UNTOUCHED at 78d1ea2 (the autopush watcher died with the reset, so the daemon's bad local state never reached GitHub — lucky). `git remote add origin` + fetch + `git reset --hard origin/main` restored everything (local-engine.ts, device-pairing.tsx, Tasks 62/63 worklog, non-fatal build script). Diffed daemon tree vs origin/main first — only junk (old QA pngs, upload/, platform md files); nothing salvaged needed.
+- FALSE ALARM checked: package.json build line looked corrupted (`orse-build]`) in terminal output — od -c proved the bytes are intact (`'[horse-build]'`); sed|cut display artifact around the em-dash. No fix needed.
+- ENV RESTORE after reset: (1) node_modules was installed from the OLD package.json → `bun install --frozen-lockfile` restored @material/material-color-utilities (dev server 500 "Module not found" fixed); rm -rf .next + clean restart → homepage 200, capabilities torrent:"builtin" debrid:true. (2) torrent-service engine DOWN with node-datachannel native binary missing → rm -rf node_modules + bun install in mini-services/torrent-service → /health {"ok":true,"version":"1.3.0"} on :3031. (3) ~/.gh-autopush.sh recreated (60s loop, skips dirty trees, logs failures) + relaunched. (4) browser smoke test pending below.
+- CREDENTIALS LOST (hard blocker for future pushes): ~/.git-credentials gone, no gh CLI config, no netrc, no token env vars, no history. GitHub == local (78d1ea2) right now, so nothing is stranded YET; the Task 64 worklog commit may fail to push until the user re-adds the token (one command). Push test result recorded in the next commit attempt.
+
+Stage Summary:
+- Full recovery from an environment-level repo rollback: local == GitHub == the deployed-good state 78d1ea2 (the exact tree Vercel built successfully). App verified 200 with all features; engine healthy; watcher relaunched.
+- LESSON: after ANY sandbox reset, run the recovery ritual: (1) git remote add origin + fetch + reset --hard origin/main (GitHub is the source of truth — push keeps it ahead), (2) bun install at root, (3) bun install in mini-services/torrent-service (native binaries), (4) recreate ~/.gh-autopush.sh, (5) restart dev + engine.
+- OPEN RISK: push credentials must be re-provisioned by the user (echo "https://hoseain756:<TOKEN>@github.com" > ~/.git-credentials && git config --global credential.helper store) — until then auto-push is dead and local commits (like this worklog entry) stay stranded.
