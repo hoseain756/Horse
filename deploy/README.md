@@ -5,6 +5,13 @@ cannot run there (no long-lived process, no public TCP sockets, no torrent
 egress guarantees). That is why torrent streams play in the sandbox preview
 (engine runs alongside the app) but are honestly refused on `horse-1.vercel.app`.
 
+> Looking for a **$0 always-on** setup? [HOSTING-FREE.md](./HOSTING-FREE.md)
+> documents the three walls that make Vercel itself impossible (function
+> duration caps, no UDP/inbound sockets, AUP/DMCA) and walks through the
+> free-forever alternative (Oracle Cloud Always Free + Cloudflare Tunnel),
+> including the June-2026 allowance change that makes **2 OCPU / 12 GB** the
+> correct always-free size.
+
 There are exactly three ways to enable torrent playback on the Vercel deployment:
 
 | Option | Cost | Effort | Result |

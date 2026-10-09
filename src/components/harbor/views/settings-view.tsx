@@ -2650,6 +2650,9 @@ type P2pHealthState = {
 
 // Operator docs for self-hosting the torrent engine (also rendered in deploy/README.md).
 const DEPLOY_GUIDE_URL = "https://github.com/hoseain756/Horse/blob/main/deploy/README.md";
+// $0 always-on hosting walkthrough (Oracle Always Free + Cloudflare Tunnel) + the
+// documented proof of why the engine can never run on Vercel functions itself.
+const FREE_HOSTING_GUIDE_URL = "https://github.com/hoseain756/Horse/blob/main/deploy/HOSTING-FREE.md";
 const ENGINE_ENV_VARS = ["ENGINE_URL", "ENGINE_PUBLIC_URL", "ENGINE_API_KEY"] as const;
 type EngineTestState = "idle" | "testing" | "ok" | "unset" | "unreachable" | "unauthorized";
 type LocalTestState = "idle" | "testing" | "ok" | "unreachable" | "unauthorized" | "badurl";
@@ -2870,6 +2873,15 @@ function P2pCard() {
           <ExternalLink className="w-3.5 h-3.5" aria-hidden />
           {tr("engineSetupGuide")}
         </a>
+        <a
+          href={FREE_HOSTING_GUIDE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="md-state harbor-tv-focus inline-flex h-10 items-center gap-1.5 rounded-full border border-edge px-4 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+        >
+          <Server className="w-3.5 h-3.5" aria-hidden />
+          {tr("freeHostingGuide")}
+        </a>
       </div>
       {testFeedback}
     </>
@@ -3078,6 +3090,21 @@ function P2pCard() {
               )}
             </div>
             {localFeedback}
+            <p className="flex items-start gap-2 border-t border-edge-soft pt-2.5 text-[11px] text-ink-subtle">
+              <Server className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
+              <span className="flex-1">
+                <RichBidi text={tr("freeHostingHint")} />{" "}
+                <a
+                  href={FREE_HOSTING_GUIDE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="harbor-tv-focus inline-flex items-center gap-1 rounded-md font-semibold text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+                >
+                  {tr("freeHostingGuide")}
+                  <ExternalLink className="w-3 h-3" aria-hidden />
+                </a>
+              </span>
+            </p>
         </div>
       )}
 

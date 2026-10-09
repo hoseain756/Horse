@@ -11,6 +11,20 @@ transcoded to H.264 when `TRANSCODE_ENABLED=1`).
 This is the free path for the Vercel deployment (Settings → Integrations → P2P
 → "Engine on this device" in the app). Requires **Node 18+** and **ffmpeg**.
 
+### Easiest: one-click launchers (no terminal skills needed)
+
+| OS | Double-click this file in this folder |
+| --- | --- |
+| Windows | `start-engine.bat` |
+| macOS | `start-engine.command` |
+| Linux | `start-engine.sh` |
+
+The launcher installs dependencies on first run and starts the engine on
+`http://localhost:3031`. Keep its window open while watching. (ffmpeg still
+needs to be installed once for MKV remuxing — commands below.)
+
+### Manual launch
+
 ```bash
 # 0. install ffmpeg (once)
 #    Windows:  winget install Gyan.FFmpeg        (then reopen the terminal)
@@ -45,6 +59,11 @@ transcoding; CPU-heavy), `PORT` (fallback for ENGINE_PORT).
 See [deploy/README.md](../../deploy/README.md) for the always-on server
 options (Docker, docker compose, Render blueprint) and the Vercel env vars
 (`ENGINE_URL`, `ENGINE_PUBLIC_URL`, `ENGINE_API_KEY`).
+
+For a **$0 always-on** host (Oracle Cloud Always Free step-by-step +
+Cloudflare Tunnel HTTPS), see [deploy/HOSTING-FREE.md](../../deploy/HOSTING-FREE.md)
+— and for why the engine can never run on Vercel functions itself, read the
+three documented walls at the top of that guide.
 
 ## Endpoints
 

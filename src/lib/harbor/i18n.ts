@@ -346,6 +346,11 @@ export const APP_STRINGS = {
     ar: "عنوان المحرك غير صالح — استخدم شيئاً مثل http://localhost:3031",
   },
   engineSetupGuide: { en: "Deployment guide", ar: "دليل النشر" },
+  freeHostingGuide: { en: "Free 24/7 hosting guide", ar: "دليل الاستضافة المجانية 24/7" },
+  freeHostingHint: {
+    en: "Want it always-on without leaving your computer on? Oracle's free tier runs the engine 24/7 for $0 — step-by-step guide inside.",
+    ar: "تريده دائماً في الخدمة دون إبقاء كمبيوترك شغّالاً؟ الطبقة المجانية من Oracle تشغّل المحرك 24/7 بـ $0 — الدليل خطوة بخطوة بالداخل.",
+  },
   engineTest: { en: "Test engine", ar: "اختبار المحرك" },
   engineTestOk: { en: "Engine reachable — torrent streams will play through it.", ar: "المحرك يستجيب — ستُشغَّل تدفقات التورنت عبره." },
   engineTestUnset: { en: "ENGINE_URL is not set on this deployment yet — add it in Vercel and redeploy.", ar: "المتغير ENGINE_URL غير معيّن على هذا النشر بعد — أضفه في Vercel وأعد النشر." },
