@@ -17,6 +17,19 @@ PORT=5433
 ROOT=/tmp/horse-pg
 SETUP=/tmp/pgsetup
 DATA="$ROOT/data"
+ICU=/tmp/icu60
+
+# 0. ICU 60 shared libs — the embedded-postgres binaries link libicuuc.so.60
+#    but modern sandbox images ship ICU 7x only. Extract the Ubuntu bionic
+#    libicu60 deb next to the binaries and prepend it to LD_LIBRARY_PATH for
+#    every postgres invocation below (wiped on container restart — re-fetched).
+if [[ ! -f "$ICU/usr/lib/x86_64-linux-gnu/libicuuc.so.60" ]]; then
+  mkdir -p "$ICU" && cd "$ICU"
+  curl -sL -o icu.deb "http://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu60_60.2-3ubuntu3.2_amd64.deb"
+  ar x icu.deb && tar xf data.tar.* 2>/dev/null || tar xf data.tar.zst 2>/dev/null
+  cd /home/z/my-project
+fi
+export LD_LIBRARY_PATH="$ICU/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 
 # 1. Binaries (wiped on container restart — re-download in ~1s via bun).
 if [[ ! -x "$SETUP/node_modules/@embedded-postgres/linux-x64/native/bin/initdb" ]]; then

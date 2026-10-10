@@ -1,22 +1,25 @@
 "use client";
 
-// Harbor Web — Device pairing (big screen ↔ phone), PER DEBRID SERVICE
+// Harbor Web — Device pairing (big screen ↔ phone), PER SERVICE
 //
 // A big screen (TV / laptop / iPad) shows a short XXX-XXX code + QR deep link
-// (#pair=CODE). The phone — which already holds the Debrid API key in its
-// localStorage — scans the QR (or types the code), and one tap sends the key
-// over. The server is only a relay: the payload is encrypted at rest,
-// single-use, deleted the moment the waiting screen picks it up.
+// (#pair=CODE). The phone — which already holds the key in its localStorage —
+// scans the QR (or types the code), and one tap sends it over. The server is
+// only a relay: the payload is encrypted at rest, single-use, deleted the
+// moment the waiting screen picks it up.
 //
 // Each service has its OWN, fully independent flow: the QR born on the
 // TorBox tab is pinned to TorBox server-side (PairingCode.pinnedService) and
 // can never be satisfied by an AllDebrid / Real-Debrid key (claim route 409s
-// any mismatch). The phone reads the pin from a non-consuming status peek
-// (?peek=1) and locks its UI to exactly that service.
+// any mismatch) — and the TMDB QR only with a TMDB key. The phone reads the
+// pin from a non-consuming status peek (?peek=1) and locks its UI to exactly
+// that service.
 //
 // Both directions live here:
 //   • <DevicePairingCard service /> — the per-service QR sender inside
 //     Settings → Integrations → Debrid (mounted under the active service tab)
+//   • <TmdbPairingCard />          — the TMDB QR sender inside Settings →
+//     Integrations → TMDB (relays the tmdbUserKey settings credential)
 //   • <PairingReceiverHost />      — mounted ONCE in app-shell so the #pair=
 //     deep link opens the phone-side dialog from ANY view (no mount race),
 //     also opened by the "Send key to a screen" buttons.
@@ -34,6 +37,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useDebrid, type DebridService, type DebridProfile } from "@/lib/harbor/debrid";
+import { useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
 import { useToast } from "@/hooks/use-toast";
 import { RichBidi, Bdi } from "../common/bidi";
@@ -64,24 +68,39 @@ const SERVICES: readonly (readonly [DebridService, string])[] = [
   ["alldebrid", "AllDebrid"],
 ];
 
+/** Every service a pairing code can carry — the three debrid services + TMDB. */
+type PairableService = DebridService | "tmdb";
+
+function isPairableService(v: unknown): v is PairableService {
+  return v === "realdebrid" || v === "alldebrid" || v === "torbox" || v === "tmdb";
+}
+
 function serviceNameOf(svc: DebridService): string {
   return svc === "realdebrid" ? "Real-Debrid" : svc === "alldebrid" ? "AllDebrid" : "TorBox";
 }
 
-function serviceKeyUrl(svc: DebridService): string {
+function pairNameOf(s: PairableService): string {
+  return s === "tmdb" ? "TMDB" : serviceNameOf(s);
+}
+
+function serviceKeyUrl(svc: PairableService): string {
   return svc === "realdebrid"
     ? "https://real-debrid.com/account"
     : svc === "alldebrid"
       ? "https://alldebrid.com/api/"
-      : "https://torbox.app/settings";
+      : svc === "tmdb"
+        ? "https://www.themoviedb.org/settings/api"
+        : "https://torbox.app/settings";
 }
 
-function serviceKeyHost(svc: DebridService): string {
+function serviceKeyHost(svc: PairableService): string {
   return svc === "realdebrid"
     ? "real-debrid.com/account"
     : svc === "alldebrid"
       ? "alldebrid.com/api"
-      : "torbox.app/settings";
+      : svc === "tmdb"
+        ? "themoviedb.org/settings/api"
+        : "torbox.app/settings";
 }
 
 /** "K7Q2XD" → "K7Q-2XD" (Latin-only → safe to render without bidi wrapping). */
@@ -97,15 +116,17 @@ function isDebridService(v: unknown): v is DebridService {
 // ---------------------------------------------------------------- sender ---
 
 /**
- * Per-service QR linking card. `service` is the ACTIVE debrid tab; the pairing
- * code created here is pinned to it server-side, so the phone can only ever
- * complete the flow with a key for exactly this service. The three services'
- * flows share nothing but the visual design — by design and by the 409 guard.
+ * Per-service QR linking card. `service` is the tab this card is mounted on
+ * (a debrid service or "tmdb"); the pairing code created here is pinned to it
+ * server-side, so the phone can only ever complete the flow with a key for
+ * exactly this service. The flows share nothing but the visual design — by
+ * design and by the 409 guard.
  */
-export function DevicePairingCard({ service }: { service: DebridService }) {
+function PairingSenderCard({ service }: { service: PairableService }) {
   const { toast } = useToast();
   const tr = useT();
   const applyLinked = useDebrid((s) => s.applyLinked);
+  const updateSettings = useSettings((s) => s.update);
 
   const [phase, setPhase] = useState<SenderPhase>("idle");
   const [code, setCode] = useState("");
@@ -119,6 +140,7 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
   const alive = useRef(false);
   const serviceRef = useRef(service);
   serviceRef.current = service;
+  const isTmdb = service === "tmdb";
 
   const stopPolling = useCallback(() => {
     alive.current = false;
@@ -148,25 +170,35 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
           });
           const d = (await res.json()) as {
             status?: string;
-            service?: DebridService;
+            service?: PairableService;
             apiKey?: string;
             username?: string | null;
             premium?: boolean;
             expiresAt?: number | null;
             planName?: string | null;
+            kind?: "v3" | "v4" | null;
           };
           if (!alive.current) return;
-          if (res.ok && d.status === "linked" && d.apiKey && isDebridService(d.service)) {
-            const profile: DebridProfile = {
-              username: d.username ?? null,
-              premium: d.premium === true,
-              expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
-              planName: d.planName ?? null,
-            };
-            applyLinked(d.service, d.apiKey, profile);
+          if (res.ok && d.status === "linked" && d.apiKey && isPairableService(d.service)) {
+            let plan = d.planName ?? "";
+            if (d.service === "tmdb") {
+              // TMDB credential → the settings store (same key the manual
+              // TMDB card input writes; validated server-side at claim time).
+              updateSettings({ tmdbUserKey: d.apiKey });
+              plan = d.planName ?? (d.kind === "v4" ? "v4 Read Access Token" : "v3 API key");
+            } else {
+              const profile: DebridProfile = {
+                username: d.username ?? null,
+                premium: d.premium === true,
+                expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
+                planName: d.planName ?? null,
+              };
+              applyLinked(d.service, d.apiKey, profile);
+              plan = d.planName ?? (d.premium ? "Premium" : "Free");
+            }
             setLinked({
-              username: d.username ?? null,
-              plan: d.planName ?? (d.premium ? "Premium" : "Free"),
+              username: d.service === "tmdb" ? null : (d.username ?? null),
+              plan,
             });
             setPhase("linked");
             toast({ title: tr("pairLinkedTitle") });
@@ -186,7 +218,7 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
         schedulePoll(c, exp);
       }, 2500);
     },
-    [applyLinked, toast, tr],
+    [applyLinked, updateSettings, toast, tr],
   );
 
   const start = useCallback(async () => {
@@ -273,7 +305,7 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
     }
   };
 
-  const name = serviceNameOf(service);
+  const name = pairNameOf(service);
 
   return (
     <div className="rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft p-4">
@@ -319,7 +351,11 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
           </p>
           <p className="mt-0.5 text-xs">
             <RichBidi
-              text={tr("pairQrLinkedDesc", { name: linked.username ?? name, plan: linked.plan })}
+              text={
+                isTmdb
+                  ? tr("pairTmdbLinkedDesc", { plan: linked.plan })
+                  : tr("pairQrLinkedDesc", { name, plan: linked.plan })
+              }
             />
           </p>
           <Button onClick={() => void cancel()} variant="ghost" className="md-btn-text !h-9 mt-2 text-xs">
@@ -374,14 +410,14 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
           </div>
 
           <p className="mt-2.5 text-xs text-ink-subtle">
-            <RichBidi text={tr("pairScanHint")} />
+            <RichBidi text={tr(isTmdb ? "pairScanHintTmdb" : "pairScanHint")} />
           </p>
 
           <p className="mt-1.5 flex items-start gap-1.5 text-xs text-ink-subtle">
             <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
             {/* The separation promise: this code serves THIS service only. */}
             <span data-no-ar>
-              <RichBidi text={tr("pairReceivePinnedNote", { name })} />
+              <RichBidi text={tr(isTmdb ? "pairPinnedNoteTmdb" : "pairReceivePinnedNote", { name })} />
             </span>
           </p>
 
@@ -410,6 +446,16 @@ export function DevicePairingCard({ service }: { service: DebridService }) {
       </p>
     </div>
   );
+}
+
+/** Debrid variant — mounted under the active service tab in Settings → Integrations → Debrid. */
+export function DevicePairingCard({ service }: { service: DebridService }) {
+  return <PairingSenderCard service={service} />;
+}
+
+/** TMDB variant — mounted inside Settings → Integrations → TMDB; relays tmdbUserKey. */
+export function TmdbPairingCard() {
+  return <PairingSenderCard service="tmdb" />;
 }
 
 function PairCountdown({ expiresAt }: { expiresAt: number }) {
@@ -488,13 +534,17 @@ function PairingReceiverDialog({
   const savedStatus = useDebrid((s) => s.status);
   const savedUsername = useDebrid((s) => s.username);
   const applyLinked = useDebrid((s) => s.applyLinked);
+  // TMDB credential lives in the settings store, not the debrid store.
+  const savedTmdbKey = useSettings((s) => s.settings.tmdbUserKey);
+  const updateSettings = useSettings((s) => s.update);
 
   const [code, setCode] = useState(() => formatCode(initialCode));
   // Explicit switcher choice (legacy unpinned codes only — pinned codes hide it).
   const [svcOverride, setSvcOverride] = useState<DebridService | null>(null);
   // Pinned service of the screen's code: "unknown" while the peek is in
-  // flight, null = legacy any-service code, otherwise the locked service.
-  const [pinned, setPinned] = useState<DebridService | null | "unknown">("unknown");
+  // flight, null = legacy any-service code, otherwise the locked service
+  // (a debrid service or "tmdb").
+  const [pinned, setPinned] = useState<PairableService | null | "unknown">("unknown");
   const [key, setKey] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -539,7 +589,7 @@ function PairingReceiverDialog({
         const d = (await res.json()) as { status?: string; service?: unknown };
         if (!alive || seq !== peekSeq.current) return;
         if (res.ok && d.status === "waiting") {
-          setPinned(isDebridService(d.service) ? d.service : null);
+          setPinned(isPairableService(d.service) ? d.service : null);
           setErr(null);
           return;
         }
@@ -563,15 +613,23 @@ function PairingReceiverDialog({
     };
   }, [rawCode, done, tr]);
 
-  const hasSaved = savedStatus === "valid" && typeof savedKey === "string" && savedKey.length >= 10;
+  const hasSavedDebrid = savedStatus === "valid" && typeof savedKey === "string" && savedKey.length >= 10;
+  const hasSavedTmdb = typeof savedTmdbKey === "string" && savedTmdbKey.trim().length >= 20;
   const resolved = pinned !== "unknown";
   const locked = resolved && pinned !== null;
-  const svc: DebridService = locked
+  const isTmdb = locked && pinned === "tmdb";
+  const hasSaved = isTmdb ? hasSavedTmdb : hasSavedDebrid;
+  const svc: DebridService = locked && !isTmdb
     ? (pinned as DebridService)
     : (svcOverride ?? (loaded ? savedService : "torbox"));
-  const ready = rawCode.length === 6 && resolved && (hasSaved || key.trim().length >= 10) && !sending;
+  const name = locked ? pairNameOf(pinned as PairableService) : serviceNameOf(svc);
+  const ready =
+    rawCode.length === 6 &&
+    resolved &&
+    (hasSaved || key.trim().length >= (isTmdb ? 20 : 10)) &&
+    !sending;
 
-  const send = async (service: DebridService, apiKey: string) => {
+  const send = async (service: PairableService, apiKey: string) => {
     setSending(true);
     setErr(null);
     try {
@@ -587,6 +645,7 @@ function PairingReceiverDialog({
         planName?: string | null;
         premium?: boolean;
         expiresAt?: number | null;
+        kind?: "v3" | "v4" | null;
         error?: string;
       };
       if (!res.ok || !d.ok) {
@@ -603,15 +662,24 @@ function PairingReceiverDialog({
         setSending(false);
         return;
       }
-      // Save on THIS device too (no-op when the key was already saved here).
-      const profile: DebridProfile = {
-        username: d.username ?? null,
-        premium: d.premium === true,
-        expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
-        planName: d.planName ?? null,
-      };
-      applyLinked(service, apiKey, profile);
-      setDone({ username: profile.username, plan: profile.planName ?? (profile.premium ? "Premium" : "Free") });
+      if (service === "tmdb") {
+        // Save on THIS device too (no-op when the key was already saved here).
+        updateSettings({ tmdbUserKey: apiKey });
+        setDone({
+          username: null,
+          plan: d.planName ?? (d.kind === "v4" ? "v4 Read Access Token" : "v3 API key"),
+        });
+      } else {
+        // Save on THIS device too (no-op when the key was already saved here).
+        const profile: DebridProfile = {
+          username: d.username ?? null,
+          premium: d.premium === true,
+          expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
+          planName: d.planName ?? null,
+        };
+        applyLinked(service, apiKey, profile);
+        setDone({ username: profile.username, plan: profile.planName ?? (profile.premium ? "Premium" : "Free") });
+      }
       toast({ title: tr("pairSent") });
       closeTimer.current = setTimeout(() => onOpenChange(false), 1500);
     } catch (e) {
@@ -619,8 +687,6 @@ function PairingReceiverDialog({
       setSending(false);
     }
   };
-
-  const name = serviceNameOf(svc);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!sending) onOpenChange(v); }}>
@@ -704,7 +770,7 @@ function PairingReceiverDialog({
                     {hasSaved ? (
                       // Phone already holds a key for exactly THIS service → one tap.
                       <Button
-                        onClick={() => void send(svc, savedKey as string)}
+                        onClick={() => void send(isTmdb ? "tmdb" : svc, isTmdb ? (savedTmdbKey as string) : (savedKey as string))}
                         disabled={sending}
                         className="md-btn-filled w-full !h-[52px]"
                       >
@@ -714,9 +780,14 @@ function PairingReceiverDialog({
                           <Send className="md-btn-icon" aria-hidden />
                         )}
                         {sending ? tr("pairSending") : tr("pairReceiveSavedKey")}
-                        {savedUsername && (
+                        {!isTmdb && savedUsername && (
                           <span className="ms-1 opacity-80">
                             (<Bdi>@{savedUsername}</Bdi>)
+                          </span>
+                        )}
+                        {isTmdb && (
+                          <span className="ms-1 opacity-80">
+                            · {tr("tmdbKindLabel")}
                           </span>
                         )}
                       </Button>
@@ -726,24 +797,24 @@ function PairingReceiverDialog({
                           type="password"
                           value={key}
                           onChange={(e) => setKey(e.target.value)}
-                          placeholder={`${name} API key`}
+                          placeholder={isTmdb ? "TMDB API key (v3 or v4)" : `${name} API key`}
                           autoComplete="off"
                           spellCheck={false}
                           className="md-field-outlined bg-transparent px-3 font-mono text-xs"
                         />
                         <p className="text-xs text-ink-subtle">
-                          <RichBidi text={tr("pairKeyFind", { url: serviceKeyHost(svc) })} />{" "}
+                          <RichBidi text={tr("pairKeyFind", { url: serviceKeyHost(isTmdb ? "tmdb" : svc) })} />{" "}
                           <a
-                            href={serviceKeyUrl(svc)}
+                            href={serviceKeyUrl(isTmdb ? "tmdb" : svc)}
                             target="_blank"
                             rel="noreferrer noopener"
                             className="text-accent underline underline-offset-2"
                           >
-                            <Bdi>{serviceKeyHost(svc)}</Bdi>
+                            <Bdi>{serviceKeyHost(isTmdb ? "tmdb" : svc)}</Bdi>
                           </a>
                         </p>
                         <Button
-                          onClick={() => void send(svc, key.trim())}
+                          onClick={() => void send(isTmdb ? "tmdb" : svc, key.trim())}
                           disabled={!ready}
                           className="md-btn-filled w-full !h-[52px]"
                         >
@@ -759,7 +830,9 @@ function PairingReceiverDialog({
                     <p className="flex items-start gap-1.5 text-xs text-ink-subtle">
                       <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
                       <span data-no-ar>
-                        <RichBidi text={tr("pairReceivePinnedNote", { name })} />
+                        <RichBidi
+                          text={tr(isTmdb ? "pairPinnedNoteTmdb" : "pairReceivePinnedNote", { name })}
+                        />
                       </span>
                     </p>
                   </>

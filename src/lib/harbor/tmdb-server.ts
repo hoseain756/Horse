@@ -171,3 +171,59 @@ export async function tmdbFetch(
     inflight.delete(key);
   }
 }
+
+// ---------- device-pairing validation (TMDB QR / XXX-XXX linking) ----------
+
+export class TmdbKeyError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * Validate a user-supplied TMDB credential against the live TMDB API
+ * (/configuration) — the server-side proof used by the pairing claim route so
+ * a waiting screen never ends up with a dead key. Throws TmdbKeyError with a
+ * clear, user-safe message on any failure; resolves with the key kind.
+ */
+export async function validateTmdbKeyServer(raw: string): Promise<{ kind: "v3" | "v4"; imagesBase: string }> {
+  const creds = parseUserKey(raw);
+  if (!creds) {
+    throw new TmdbKeyError(
+      "That doesn't look like a TMDB key. A v3 API key is 32 hex characters; a v4 Read Access Token starts with “ey”.",
+    );
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const url = new URL(`${TMDB_BASE}/configuration`);
+    if (creds.kind === "v3") url.searchParams.set("api_key", creds.key);
+    const res = await fetch(url.toString(), {
+      headers:
+        creds.kind === "v4"
+          ? { Authorization: `Bearer ${creds.token}`, Accept: "application/json" }
+          : { Accept: "application/json" },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { images?: { secure_base_url?: string } } | null;
+      return {
+        kind: creds.kind,
+        imagesBase: body?.images?.secure_base_url ?? "https://image.tmdb.org/t/p/",
+      };
+    }
+    if (res.status === 401) throw new TmdbKeyError("TMDB rejected this key (401 unauthorized).", 401);
+    throw new TmdbKeyError(`TMDB responded ${res.status}. Try again in a moment.`, 502);
+  } catch (e) {
+    if (e instanceof TmdbKeyError) throw e;
+    throw new TmdbKeyError(
+      e instanceof Error && e.message.includes("abort") ? "Validation timed out." : "Could not reach TMDB.",
+      502,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -15,18 +15,31 @@ import { encryptSecret, decryptSecret } from "@/lib/harbor/vault";
 import type { DebridService } from "@/lib/harbor/debrid";
 
 export const PAIRING_TTL_MS = 10 * 60_000;
+
+/**
+ * Services a pairing code can carry. Debrid keys live in the debrid store;
+ * the TMDB credential lives in the settings store (tmdbUserKey) — same relay,
+ * per-service pinning, fully independent flows.
+ */
+export type PairingService = DebridService | "tmdb";
+
+export function isPairingService(v: unknown): v is PairingService {
+  return v === "realdebrid" || v === "alldebrid" || v === "torbox" || v === "tmdb";
+}
 // 32-char alphabet without 0/O/1/I (never mistakable on a TV across the room).
 // Exported so the QR-login + addon-transfer codes use the SAME unambiguous
 // format (no conflicting display conventions across features).
 export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export type PairingPayload = {
-  service: DebridService;
+  service: PairingService;
   apiKey: string;
   username: string | null;
   premium: boolean;
   expiresAt: number | null;
   planName: string | null;
+  /** TMDB only: which credential shape arrived (v3 API key | v4 read token). */
+  kind?: "v3" | "v4" | null;
 };
 
 /** 6-char pairing code, e.g. "K7Q2XD" (displayed as "K7Q-2XD"). */
@@ -63,11 +76,7 @@ export function openPairingPayload(code: string, sealed: string): PairingPayload
   if (!raw) return null;
   try {
     const d = JSON.parse(raw) as Partial<PairingPayload>;
-    if (
-      (d.service !== "realdebrid" && d.service !== "alldebrid" && d.service !== "torbox") ||
-      typeof d.apiKey !== "string" ||
-      d.apiKey.length < 10
-    ) {
+    if (!isPairingService(d.service) || typeof d.apiKey !== "string" || d.apiKey.length < 10) {
       return null;
     }
     return {
@@ -77,6 +86,7 @@ export function openPairingPayload(code: string, sealed: string): PairingPayload
       premium: d.premium === true,
       expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
       planName: typeof d.planName === "string" ? d.planName : null,
+      kind: d.kind === "v3" || d.kind === "v4" ? d.kind : null,
     };
   } catch {
     return null;

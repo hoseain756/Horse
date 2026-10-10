@@ -1,9 +1,9 @@
 // Harbor Web — POST /api/pairing/claim  { code, service, apiKey }
-// The phone side of device pairing: proves the debrid key works (validated
-// against the real service, same code path as settings validation), then
-// seals it (AES-256-GCM, AAD-bound to the code) into the pending pairing row.
-// The claim is ATOMIC (payloadEnc must still be null) so two phones racing on
-// the same code cannot both win. The key is never logged.
+// The phone side of device pairing: proves the key works (debrid keys are
+// validated against the real service; TMDB keys against TMDB /configuration),
+// then seals it (AES-256-GCM, AAD-bound to the code) into the pending pairing
+// row. The claim is ATOMIC (payloadEnc must still be null) so two phones
+// racing on the same code cannot both win. The key is never logged.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { clientIp } from "@/lib/harbor/proxy-core";
@@ -12,9 +12,10 @@ import {
   normalizePairingCode,
   sealPairingPayload,
   type PairingPayload,
+  type PairingService,
 } from "@/lib/harbor/pairing-server";
 import { validApiKey, lookupDebridUser, UpstreamError } from "@/lib/harbor/debrid-server";
-import type { DebridService } from "@/lib/harbor/debrid";
+import { validateTmdbKeyServer, TmdbKeyError } from "@/lib/harbor/tmdb-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,14 +36,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!code) {
     return NextResponse.json({ error: "invalid pairing code" }, { status: 400 });
   }
-  if (body.service !== "realdebrid" && body.service !== "alldebrid" && body.service !== "torbox") {
-    return NextResponse.json({ error: "invalid service (realdebrid | alldebrid | torbox)" }, { status: 400 });
+  const rawService = body.service;
+  if (rawService !== "realdebrid" && rawService !== "alldebrid" && rawService !== "torbox" && rawService !== "tmdb") {
+    return NextResponse.json(
+      { error: "invalid service (realdebrid | alldebrid | torbox | tmdb)" },
+      { status: 400 },
+    );
   }
-  if (!validApiKey(body.apiKey)) {
-    return NextResponse.json({ error: "invalid API key (10-200 characters required)" }, { status: 400 });
+  // Debrid keys: 10-200 chars. TMDB credentials are longer (v4 read tokens are
+  // multi-hundred-char JWTs; settings normalization caps them at 400).
+  const apiKey = typeof body.apiKey === "string" ? body.apiKey : "";
+  const keyOk =
+    rawService === "tmdb"
+      ? apiKey.length >= 20 && apiKey.length <= 400
+      : validApiKey(apiKey);
+  if (!keyOk) {
+    return NextResponse.json(
+      {
+        error:
+          rawService === "tmdb"
+            ? "invalid TMDB key (20-400 characters required)"
+            : "invalid API key (10-200 characters required)",
+      },
+      { status: 400 },
+    );
   }
-  const service = body.service as DebridService;
-  const apiKey = body.apiKey as string;
+  const service = rawService as PairingService;
 
   // Per-service QR linking: when the code was created pinned to one service,
   // a claim with any OTHER service is rejected outright (the TorBox QR can
@@ -64,17 +83,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Prove the key actually works before sealing it — the receiving screen
-  // should never end up with a dead key.
+  // should never end up with a dead key. Debrid keys hit their service's
+  // account endpoint; TMDB keys hit TMDB /configuration.
   try {
-    const user = await lookupDebridUser(service, apiKey);
-    const payload: PairingPayload = {
-      service,
-      apiKey,
-      username: user.username,
-      premium: user.premium,
-      expiresAt: user.expiresAt,
-      planName: user.planName ?? null,
-    };
+    let payload: PairingPayload;
+    if (service === "tmdb") {
+      const v = await validateTmdbKeyServer(apiKey);
+      payload = {
+        service: "tmdb",
+        apiKey,
+        username: null,
+        premium: false,
+        expiresAt: null,
+        planName: v.kind === "v4" ? "v4 Read Access Token" : "v3 API key",
+        kind: v.kind,
+      };
+    } else {
+      const user = await lookupDebridUser(service, apiKey);
+      payload = {
+        service,
+        apiKey,
+        username: user.username,
+        premium: user.premium,
+        expiresAt: user.expiresAt,
+        planName: user.planName ?? null,
+      };
+    }
 
     // Opportunistic purge (cheap, and this route runs once per pairing).
     try {
@@ -102,9 +136,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       planName: payload.planName,
       premium: payload.premium,
       expiresAt: payload.expiresAt,
+      ...(payload.kind ? { kind: payload.kind } : {}),
     });
   } catch (e) {
     if (e instanceof UpstreamError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    if (e instanceof TmdbKeyError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
     return NextResponse.json({ error: "could not validate the key" }, { status: 502 });

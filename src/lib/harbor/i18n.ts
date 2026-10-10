@@ -587,6 +587,20 @@ export const APP_STRINGS = {
     ar: "تعذّر التحقق من الكود — تأكد أن الشاشة لا تزال تعرضه.",
   },
   pairKeyFind: { en: "Get it from {url}", ar: "تجده في {url}" },
+  // ---- TMDB QR linking (per-service pinning, same relay as the debrid flows) ----
+  pairTmdbLinkedDesc: {
+    en: "TMDB metadata ({plan}) is ready on this screen — posters, backdrops and better search.",
+    ar: "بيانات TMDB ({plan}) جاهزة على هذه الشاشة — الملصقات والخلفيات وبحث أفضل.",
+  },
+  pairScanHintTmdb: {
+    en: "Scan the QR with the phone camera — Horse opens ready to send the TMDB key. No QR? On the phone open Horse → Settings → Integrations → TMDB → «Send key to a screen» and type the code.",
+    ar: "امسح رمز QR بكاميرا الجوال — يفتح Horse جاهزاً لإرسال مفتاح TMDB. لا يوجد QR؟ على الجوال افتح Horse ← الإعدادات ← التكاملات ← TMDB ← «أرسل المفتاح إلى شاشة» واكتب الكود.",
+  },
+  pairPinnedNoteTmdb: {
+    en: "This QR is bound to TMDB — no other integration can claim it.",
+    ar: "رمز QR هذا مرتبط بـ TMDB — لا يمكن لأي تكامل آخر استخدامه.",
+  },
+  tmdbKindLabel: { en: "TMDB key saved", ar: "مفتاح TMDB محفوظ" },
   // ---- Integration toasts (previously hardcoded English — now real i18n) ----
   debridValidateFirst: { en: "Paste your API key first", ar: "ألصق مفتاح API أولاً" },
   debridConnected: { en: "{name} connected", ar: "تم ربط {name}" },

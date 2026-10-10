@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Database, Loader2, X } from "lucide-react";
 import { useSettings } from "@/lib/harbor/store";
 import { Switch } from "@/components/ui/switch";
+import { TmdbPairingCard } from "./device-pairing";
 import { cn } from "@/lib/utils";
 
 const LANGS: { id: string; label: string }[] = [
@@ -246,6 +247,14 @@ export function TmdbCard() {
                 </ol>
               </div>
             )}
+          </div>
+
+          {/* Per-service device pairing — the TMDB key usually lives on the
+              phone. The QR born here is pinned to TMDB server-side and can
+              only ever be satisfied with a TMDB credential (claim route
+              validates it against the live TMDB API first). */}
+          <div className="pt-4 border-t border-edge-soft">
+            <TmdbPairingCard />
           </div>
 
           {/* Required attribution */}

@@ -1,11 +1,12 @@
 // Harbor Web — POST /api/pairing/create
 // A big screen (TV / laptop / iPad) asks for a short pairing code. The phone
 // will later claim this code with the debrid key (POST /api/pairing/claim).
-// Optional JSON body { service } pins the code to ONE debrid service
-// (torbox | realdebrid | alldebrid) — the per-service QR linking flows: a QR
-// generated on the TorBox tab can only ever be satisfied with a TorBox key,
-// completely independent of the other services' flows. Omitted body → legacy
-// any-service code (the phone picks the service, as before).
+// Optional JSON body { service } pins the code to ONE service
+// (torbox | realdebrid | alldebrid | tmdb) — the per-service QR linking
+// flows: a QR generated on the TorBox tab can only ever be satisfied with a
+// TorBox key, and the TMDB QR only with a TMDB key — completely independent
+// of the other services' flows. Omitted body → legacy any-service code (the
+// phone picks the service, as before).
 // Expired rows are purged opportunistically; codes are single-use and live
 // for 10 minutes.
 import { NextRequest, NextResponse } from "next/server";
@@ -21,7 +22,7 @@ function parsePinnedService(raw: unknown): string | null | undefined {
   // undefined → no body / no service field (legacy). null → invalid literal.
   if (raw === undefined) return undefined;
   if (raw === null) return null;
-  if (raw === "torbox" || raw === "realdebrid" || raw === "alldebrid") return raw;
+  if (raw === "torbox" || raw === "realdebrid" || raw === "alldebrid" || raw === "tmdb") return raw;
   return null;
 }
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const parsed = parsePinnedService(body?.service);
       if (parsed === null) {
         return NextResponse.json(
-          { error: "invalid service (torbox | realdebrid | alldebrid)" },
+          { error: "invalid service (torbox | realdebrid | alldebrid | tmdb)" },
           { status: 400 },
         );
       }

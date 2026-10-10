@@ -77,6 +77,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       premium: payload.premium,
       expiresAt: payload.expiresAt,
       planName: payload.planName,
+      ...(payload.kind ? { kind: payload.kind } : {}),
     });
   }
 
