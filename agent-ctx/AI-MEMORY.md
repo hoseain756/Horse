@@ -1,7 +1,7 @@
 # HORSE — AI Memory (persistent session context)
 
 > Purpose: restore full AI working context in one read. Keep this file updated after
-> every completed phase. Last updated: Task 68 SAVEPOINT (commit 62d6ee6, pushed).
+> every completed phase. Last updated: Task 71 SAVEPOINT (HEAD == origin/main == de11c95).
 
 ## 0. Identity
 
@@ -14,90 +14,98 @@
 - User language: Arabic (RTL primary) + English. Design language: glassmorphism,
   M3 easing, design tokens in `globals.css`.
 - Docs deliverables live in `docs/` (torbox-playback-investigation.md,
-  large-screen-hero-corrections.md).
+  large-screen-hero-corrections.md, settings-redesign/01-audit-and-ia.md).
 
-## 1. Where we are (SAVEPOINT, Task 68)
+## 1. Where we are (SAVEPOINT, Task 71 — after container restart)
 
-- **Round 26 large-screen correction pass: COMPLETE + pushed.** Commit `3a54130` (code) and
-  `62d6ee6` (savepoint worklog). Local == origin/main == pushed.
-- All 13 defects fixed with measured before/after evidence (see `docs/large-screen-hero-corrections.md`):
-  - A1 side rail → ONE compact auto-hide glass capsule (edge hot-zone 24dp reveal, 80ms
-    intent, 700ms/600ms hide grace, Esc immediate, tooltips replace expanded menu,
-    settings `railAutoHide`, Settings→Basics control). NO expanded mode anymore.
-  - A2 hero prev/next arrows DELETED (component+CSS+tokens+i18n). Nav = wheel (horizontal
-    intent, 450ms lock), drag (>8px suppresses click), segments, up-next cards, keyboard.
-  - A3 synopsis `line-clamp: 2` everywhere ≥1024.
-  - A4 bottom-anchored flow `[logo][meta][synopsis][actions][segments]`; gaps 12/20/24dp,
-    hero pad-bottom clamp(28px,4svh,32px); segments in-flow, hit ≥44dp.
-  - B1 bidi: `dir="auto"`/`<bdi>` on all dynamic text; ellipses land logically.
-  - B2 capsule stadium fixed (overflow hidden; moot after A1).
-  - B3 ONE search, viewport-centered, frozen geometry per band (--fs-geo-w 520/720),
-    contrast ≥4.5:1 (measured 11.1:1), "/" chip ≥20dp.
-  - B4 constant `--side-safe-inset` (rail 80+24; laptop +40, TV +56) → zero column drift.
-  - B5 logo box 320×110 laptop / 480×160 TV; shape classification (square/round ≥72dp min).
-  - B6 adaptive scrim per-artwork (64×36 canvas sample of text zone, cached per failKey,
-    gated ≥1024/wide).
-  - B7 up-next: 12px label, 13px 2-line titles, 2:3 thumbs (52×78), measured count
-    (3 <620px hero else 4), first card "next" affordance, inside hero bounds.
-  - B8 hero height clamp(420px,62svh,680px) laptop / clamp(460px,66svh,760px) TV.
-  - B9 secondary labels ≥12px @62% ink.
-- **FROZEN RULE (non-negotiable): phone <600dp + tablet 600–1023dp design (incl. bottom
-  nav) must stay pixel-identical.** Every CSS change must be value-identical <1024 or
-  scoped ≥1024. Verified via DOM assertions + git-diff audit + qa-shots before/after
-  360/412/768/820.
-- Earlier milestones: TorBox playback fix (Task 66, commit 8a6f110 — readiness gate honors
-  download_finished/download_present/cached booleans; player keeps working direct streams,
-  bounded 2.5s proxy grace); Round 25 adaptive layout (side rail, large hero, TV search).
+- **ALL WORK IS SAFE ON GITHUB**: local main == origin/main == `de11c95`. The autopush
+  watcher saved Tasks 69+70 before the sandbox container restarted (2026-10-10 08:37).
+- **Task 69 (user directives T1/T2/T3) — COMPLETE.**
+  - T1: side rail floats over content in BOTH states (main padding-inline-start 0; zero
+    shift verified by DOM measurement).
+  - T2: search = true glass (shared recipe `rgba(255,255,255,.07)` + blur(12) saturate(1.35)),
+    auto-hides at top ≥1024, 48×5dp peek handle top-center, hover-intent 80ms / leave 700ms,
+    "/" reveals+focus, Esc hides; 768 frozen (peek display:none).
+  - T3: unified player Audio panel — group 1 = current stream tracks (P2P remux report →
+    HLS renditions → native audioTracks), group 2 = "Dubbing sources" (every other addon
+    stream, candidatesRef reuse else one fetchStreams sweep, cap 40, dubTagOf chips); switch
+    = direct instant / debrid / P2P prepare→bounded poll→plan, all resume at current seconds.
+    `dub.ts` detects dub language from stream title. E2E with real multi-dub addon still
+    open (proxy SSRF guard blocks localhost QA addons — by design, do NOT weaken).
+- **Task 70 (Settings redesign, brief "اعد التصميم ابي تصميم جديد 100/100") — COMPLETE.**
+  - NEW design system: `src/components/harbor/settings/design.tsx` (SettingRow/ToggleRow/
+    SectionCard/SegmentedControl/SettingSliderRow/SelectRow/TextFieldRow/ColorRow/ActionRow/
+    DangerActionRow/PreviewCard) + `shell.tsx` (SettingsShell).
+  - IA: 9 categories (account/appearance/playback/subtitles/integrations/addons/kids/data/
+    about). Two-pane ≥840 (list clamp 280-320dp), drill-down <840, TV ≥1600 ten-foot.
+  - Deep links `#settings/<cat>[/<key>]` + 2.4s arrival highlight + settings search (ar/en
+    synonyms) + Kids PIN gate (`parent-pin.ts`: salted SHA-256, 5-min grant, never synced).
+  - 6 dead settings wired (posterScale/posterRadius→CSS vars, showCardBadges/hidePosterTitles
+    →meta-card gates, subFontColor/subBorderColor/subStyle→subtitle layer, customPlaybackSpeeds
+    →speed menu, resumePrompt→ask-before-resume, streamSort→picker sort).
+  - +152 i18n keys. Fixed real bug: sanitizeSettings validated bare-hex vs ColorRow #RRGGBB.
+  - Audit: `bun run audit:ui` (scripts/audit-ui.ts) 13 widths × 2 langs × 2 themes × 2
+    text scales = **104/104 PASS**; supports `--quick`, `--shots`, `--widths=` chunking
+    (background runs get reaped — run in foreground chunks).
+- Earlier milestones: Round 26 large-screen corrections (Task 67, 13 defects, docs/
+  large-screen-hero-corrections.md); TorBox playback gate (Task 66, 8a6f110).
 
 ## 2. Environment quirks & recovery rituals
 
-- **Sandbox reset ritual** (after any env rollback): `git remote add origin` + fetch +
-  `git reset --hard origin/main` (GitHub = source of truth) → `bun install` at root →
-  `bun install` in mini-services/torrent-service (native binaries) → recreate
-  `~/.gh-autopush.sh` → restart dev + engine.
+- **CONTAINER RESTART WIPES $HOME** (happened 2026-10-10): loses ~/.git-credentials,
+  ~/.gh-autopush.sh, ~/.ghflow. Repo and .env survive (project dir persisted).
+  Recovery ritual (all verified this round):
+  1. Dev server: `(setsid bun run dev </dev/null >> dev.log 2>&1 &)` from /home/z/my-project
+     (plain nohup+& gets REAPPED; setsid survives). Verify `curl localhost:3000` → 200.
+  2. Autopush watcher: recreate `~/.gh-autopush.sh` (60s loop, GIT_TERMINAL_PROMPT=0,
+     state ~/.gh-autopush.state, log ~/.gh-autopush.log, only pushes when local SHA
+     changed AND creds exist; does NOT update state on failure → retries). Arm:
+     `(setsid bash ~/.gh-autopush.sh </dev/null >/dev/null 2>&1 &)`.
+  3. Push credentials: GitHub OAuth DEVICE FLOW — POST /login/device/code with public
+     GitHub CLI client_id `178c6fc778ccc68e1d6a` scope=repo → give user
+     https://github.com/login/device + user_code (15-min window) → poller
+     `~/ghflow/poll.sh` (setsid, 230×5s, slow_down-aware) stores `https://hoseain756:<t>@github.com`
+     in ~/.git-credentials (chmod 600) + pushes + logs ~/ghflow/flow.log. Token NEVER
+     printed to chat. Secrets live OUTSIDE the repo.
+  4. If git working tree shows mass `old mode 100644/new mode 100755` noise →
+     `git checkout -- .` (environmental chmod flip; only real deltas matter).
 - **Turbopack stale CSS**: after globals.css edits, if changes don't show → `pkill next dev`,
   `rm -rf .next`, restart `bun run dev`.
 - **OOM (4GB cgroup)**: sharp+Turbopack+Chrome together → use `UV_THREADPOOL_SIZE=2
-  VIPS_CONCURRENCY=1`, heap cap, warm-before-browser cycles (`/tmp/qa-cycle.sh` pattern).
-- **Push credentials**: `~/.git-credentials` (outside repo, chmod 600) + credential.helper
-  store. Auto-push watcher `~/.gh-autopush.sh` (60s loop): check `pgrep -f gh-autopush`,
-  relaunch `(setsid bash ~/.gh-autopush.sh </dev/null >/dev/null 2>&1 &)`. NEVER put tokens
-  in the repo.
+  VIPS_CONCURRENCY=1`, warm-before-browser cycles (`/tmp/qa-cycle.sh` pattern).
+- **Sandbox reaps long background processes** (setsid watchdogs, background audits) —
+  chunk long jobs into foreground runs (audit `--widths=` chunking).
 - **Engine health**: `curl localhost:3031/health`. Runs plain `node index.mjs` (bun --hot
-  crashes webtorrent).
+  crashes webtorrent). NOTE: after container restart the torrent engine is also dead —
+  restart if playback QA needed.
 - QA URLs: test app at `http://localhost:3000/` directly (port 3000 bypasses Caddy gateway
   for engine routes; gateway path is `?XTransformPort=`).
 
 ## 3. Next steps (priority order)
 
-1. **Production smoke test** on horse-1.vercel.app after Round 26 build: auto-hide rail,
-   arrowless hero, adaptive scrim, viewport-centered search, RTL both locales.
-2. **Repeatable Playwright geometry spec** in `scripts/` (port Task 67 assertions:
-   bbox non-intersection, segment/action gap ≥16dp stable, inset constant, synopsis ≤2
-   lines, hidden-rail pointer-events none, contrast sampling, no h-overflow/console errors).
-3. **TorBox "my torrents" management view** (carried over).
-4. **Kids Mode parent-PIN gate** (carried over).
-5. **Pre-existing tsc errors cleanup**: auth/mail.ts, horse-account.ts, skills/*,
-   examples/*, qa addon bun-types (untouched-by-design files).
-6. Deferred/known limit: `/api/media` maxDuration=60 caps proxy-REQUIRED streams on
-   Vercel (documented in route comment; long-term = dedicated media backend).
+1. **Restore push credentials** (device flow armed this round; if expired, re-issue:
+   POST /login/device/code → new user_code → poller). Verify with a trivial push.
+2. **Vercel production smoke** on horse-1.vercel.app: Settings redesign live check
+   (9 categories, deep link, PIN gate), auto-hide rail, arrowless hero, dub audio panel.
+3. **T3 E2E** with a reachable multi-dub addon (public URL; SSRF guard blocks localhost).
+4. TorBox "my torrents" management view (carried over).
+5. Orphan-key tombstones in sanitizeSettings (aiEnabled/soundTheme/wrappedButton/
+   profileId/tmdbKey) — documented in audit F2.
+6. Pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*).
 
-## 4. Key file map (large-screen surfaces)
+## 4. Key file map
 
-- `src/components/harbor/chrome/side-rail.tsx` — the auto-hide rail (Task 67 rewrite).
-- `src/components/harbor/views/home-hero.tsx` — hero engine (~1200+ ln): bottom-anchored
-  column, wheel/drag nav, adaptive scrim, up-next strip, segments.
-- `src/components/harbor/chrome/floating-search.tsx` — the ONE search component (+TV
-  fullscreen ≥1600).
-- `src/components/harbor/chrome/glass-dock.tsx` — bottom dock (<1024 only; phone/tablet
-  FROZEN).
-- `globals.css` — tokens: `--side-safe-inset`, `--rail-*`, `--hero-*`, `--fs-geo-w`,
-  `--fs-anchor-start`, `--home-scale` ladder, `.harbor-page-container`, band blocks.
-- `settings.ts` — `railAutoHide` (migrated from old `railExpanded`).
-- `i18n` resources (ar/en) — removed prevSlide/nextSlide; added localized search
-  placeholder/aria.
-- `worklog.md` — the authoritative chronological handover (Task IDs up to 68).
-- `agent-ctx/` — per-task agent handover notes + THIS memory file.
+- Large-screen: `chrome/side-rail.tsx` (auto-hide rail), `views/home-hero.tsx` (hero
+  engine), `chrome/floating-search.tsx` (ONE search + auto-hide), `chrome/glass-dock.tsx`
+  (<1024 FROZEN), globals.css tokens (`--side-safe-inset`, `--rail-*`, `--hero-*`,
+  `--fs-geo-w`, `--fs-anchor-start`, `--home-scale`, settings token block).
+- Settings: `components/harbor/settings/design.tsx` + `shell.tsx` + `settings-view.tsx`
+  (9 categories) + `lib/harbor/parent-pin.ts` + `lib/harbor/settings.ts`.
+- Player audio: `components/harbor/player/player-overlay.tsx` (unified Audio panel) +
+  `lib/harbor/dub.ts` (dub language detection).
+- Audit: `scripts/audit-ui.ts` + `qa-shots/audit-report.tsv` (cumulative).
+- `worklog.md` — authoritative chronological handover (Tasks up to 70-final).
+- `agent-ctx/` — per-task handover notes + THIS memory file.
 
 ## 5. Hard rules
 
@@ -106,4 +114,6 @@
 - No "..." / TODO in delivered code; full files only.
 - Keep glass design language, tokens, code style, directory structure.
 - No business-logic/API changes in design passes.
-- `bun run lint` must stay 0 errors (161 pre-existing warnings are style-only).
+- `bun run lint` must stay 0 errors (~157 pre-existing warnings are style-only).
+- Never weaken the /api/proxy SSRF guard for QA; use public URLs for test addons.
+- Tokens/credentials NEVER enter the repo, worklog, or chat output.

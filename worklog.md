@@ -2216,3 +2216,21 @@ Work Log:
 Stage Summary:
 - Task 70 COMPLETE and verified: new Settings design (9 categories, two-pane/drill-down/TV bands, deep links + search ar/en, Kids hashed PIN gate, dead settings wired, danger confirms, 152 i18n keys), audit tooling in-repo, 104/104 green.
 - Known residual risks: sandbox reaps long background processes (chunked audit is the workaround); Turbopack stale CSS needs rm -rf .next after CSS edits; Vercel production smoke still pending (auto-deploy of 844d42b).
+
+---
+Task ID: 71
+Agent: Z.ai Code (main)
+Task: User directive "save" — secure the savepoint after the sandbox container restart (2026-10-10 08:37 wiped $HOME: credentials, autopush watcher, ghflow artifacts, dev server).
+
+Work Log:
+- DATA SAFETY FIRST: verified local main == origin/main == de11c95 — ALL Task 69 (T1/T2/T3) + Task 70 (Settings redesign) + Task 70-final (audit 104/104) work was ALREADY pushed by the pre-restart autopush watcher. Nothing lost.
+- Cleaned working tree: 357 files showed `old mode 100644 → new mode 100755` (environmental chmod flip, 0 content delta except .zscripts/dev.pid) → `git checkout -- .` restored; tree now clean.
+- Dev server revived with the surviving pattern `(setsid bun run dev </dev/null >> dev.log 2>&1 &)` — plain `nohup ... &` launch was reaped within seconds (matches worklog Task 38-era lesson). Verified HTTP 200; next-server v16.1.3 up.
+- Recreated ~/.gh-autopush.sh (60s loop, GIT_TERMINAL_PROMPT=0, state ~/.gh-autopush.state, log ~/.gh-autopush.log; retries on credential failure without updating state) and armed it via setsid — watcher ALIVE, correctly reporting PUSH_PENDING (no creds).
+- Re-armed GitHub OAuth DEVICE FLOW (public GitHub CLI client_id 178c6fc778ccc68e1d6a, scope=repo): user_code issued @ https://github.com/login/device (15-min window); poller ~/ghflow/poll.sh (setsid, 230×5s, slow_down-aware) stores credential at ~/.git-credentials (chmod 600, outside repo) + pushes + logs ~/ghflow/flow.log. Token never printed to chat.
+- agent-ctx/AI-MEMORY.md fully rewritten to Task 71 state (where-we-are: Tasks 69/70 complete; container-restart recovery ritual documented step-by-step; updated next-steps priorities).
+
+Stage Summary:
+- SAVEPOINT SECURE: GitHub has every commit (de11c95); dev server running; autopush watcher armed and waiting for credentials; device flow live for one-click re-grant; AI-MEMORY current.
+- OPEN RISK: push credentials are LOST until the user completes the device-flow grant (or provides a fresh PAT). Any new local commits will auto-push the moment credentials land (watcher retries). If the 15-min window expires, next round must re-issue the device code.
+- Torrent engine (:3031) also dead after restart — restart before playback QA.
