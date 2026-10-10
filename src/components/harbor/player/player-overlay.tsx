@@ -43,7 +43,8 @@ import {
 import type { MetaVideo, RawSubtitle, SubtitleResult, Stream } from "@/lib/harbor/types";
 import { upsertCw, pushHistory, resumeMsFor } from "@/lib/harbor/cw";
 import { useTrakt } from "@/lib/harbor/trakt";
-import { p2pStatus, p2pRemuxUrl, p2pCodec, pickAudioRel, audioTrackLabel, formatSpeed, refreshP2pCapabilities, p2pEngineAvailable, type P2pAudioTrack } from "@/lib/harbor/p2p";
+import { p2pStatus, p2pRemuxUrl, p2pCodec, p2pPrepare, p2pPlan, pickAudioRel, audioTrackLabel, formatSpeed, refreshP2pCapabilities, p2pEngineAvailable, type P2pAudioTrack } from "@/lib/harbor/p2p";
+import { dubTagOf, streamKeyOf } from "@/lib/harbor/dub";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PosterImage } from "../common/poster";
@@ -96,6 +97,157 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
   const fallbackAttemptsRef = useRef(0);
   const currentRef = useRef<PlayerPayload>(payload);
   currentRef.current = current;
+
+  // ---- T3: dubbing / audio sources ------------------------------------------
+  // The unified Audio panel lists (1) in-stream tracks (remux codec report,
+  // HLS renditions, native audioTracks) and (2) EVERY other addon stream for
+  // this title as a dubbing source. Group 2 lives here: the resolve path
+  // already holds ranked candidates; otherwise a fresh fetchStreams sweep
+  // gathers them on first panel open ("fetch all dubbing sources").
+  const [dubStreams, setDubStreams] = useState<Stream[]>([]);
+  const [dubLoading, setDubLoading] = useState(false);
+  const dubLoadingRef = useRef(false);
+
+  const ensureDubStreams = useCallback(async () => {
+    if (dubLoadingRef.current) return;
+    const cur = currentRef.current;
+    if (!/^tt\d+|^kitsu|^demo/.test(cur.metaId)) return; // unknown ids have no stream sweep
+    if (candidatesRef.current.length > 0) {
+      setDubStreams(candidatesRef.current.filter((s) => classifyStream(s).verdict !== "external"));
+      return;
+    }
+    dubLoadingRef.current = true;
+    setDubLoading(true);
+    try {
+      const { useAddons } = await import("@/lib/harbor/store");
+      const targetId = cur.videoId ?? cur.metaId;
+      const results = await fetchStreams(useAddons.getState().addons, cur.type, targetId);
+      const ranked = runPipeline(results);
+      candidatesRef.current = ranked;
+      setDubStreams(ranked.filter((s) => classifyStream(s).verdict !== "external"));
+    } catch {
+      setDubStreams([]); // honest empty — the panel says so
+    } finally {
+      dubLoadingRef.current = false;
+      setDubLoading(false);
+    }
+  }, []);
+
+  /** Switch to a different dubbing/audio SOURCE (another addon stream).
+   *  Direct URL streams swap immediately; torrents go debrid-first, then the
+   *  P2P engine (picker contract: prepare → bounded poll → plan). The stage
+   *  remounts on the new URL and resumes at `atSeconds` via payload.resumeAt. */
+  const playDubStream = useCallback(
+    async (s: Stream, atSeconds: number) => {
+      const cur = currentRef.current;
+      if (streamKeyOf(s) && streamKeyOf(s) === streamKeyOf(cur.stream)) return;
+      const lang = useSettings.getState().settings.uiLanguage;
+      toast({ title: homeT("audioSwitching", lang) });
+      const resumeAt = Math.max(0, Math.floor(atSeconds));
+      // 1) Direct URL stream — instant swap.
+      if (s.url && !s.infoHash) {
+        setCurrent((c) => ({
+          ...c,
+          url: s.url!,
+          stream: s,
+          resumeAt,
+          p2p: undefined,
+          p2pBrowser: undefined,
+        }));
+        setPhase("loading");
+        setError(null);
+        return;
+      }
+      if (s.infoHash) {
+        // 2) Torrent + debrid key → unlock instantly.
+        const { useDebrid } = await import("@/lib/harbor/debrid");
+        useDebrid.getState().load();
+        const debrid = useDebrid.getState();
+        if (debrid.apiKey) {
+          try {
+            const res = await debrid.resolve(
+              s.infoHash.toLowerCase(),
+              s.behaviorHints?.filename ?? s.parsed?.filename,
+              s.parsed?.size,
+            );
+            if ("url" in res && res.url) {
+              setCurrent((c) => ({
+                ...c,
+                url: res.url,
+                stream: {
+                  ...s,
+                  url: res.url,
+                  behaviorHints: {
+                    ...s.behaviorHints,
+                    ...("filename" in res && res.filename ? { filename: res.filename } : {}),
+                  },
+                },
+                resumeAt,
+                p2p: undefined,
+                p2pBrowser: undefined,
+              }));
+              setPhase("loading");
+              setError(null);
+              return;
+            }
+          } catch {
+            /* fall through to the P2P engine */
+          }
+        }
+        // 3) Torrent + P2P engine → the picker's contract, bounded to 60s.
+        if (useSettings.getState().settings.p2pEnabled && (await p2pEngineAvailable())) {
+          try {
+            await refreshP2pCapabilities();
+            const infoHash = s.infoHash.toLowerCase();
+            const filename = s.behaviorHints?.filename ?? s.parsed?.filename;
+            const prep = await p2pPrepare(infoHash, { fileIdx: s.fileIdx, filename });
+            const startedAt = Date.now();
+            while (prep.pending && Date.now() - startedAt < 60_000) {
+              await new Promise((r) => setTimeout(r, 2500));
+              const st = await p2pStatus(infoHash).catch(() => null);
+              if (st?.ready) break;
+            }
+            const st = await p2pStatus(infoHash).catch(() => null);
+            const fileIdx = Number.isInteger(s.fileIdx)
+              ? s.fileIdx!
+              : dubPickFileIndex(st?.files, filename);
+            const plan = await p2pPlan(infoHash, fileIdx, filename);
+            if (plan.mode === "unknown" && plan.codec?.video === "hevc") {
+              throw new Error("HEVC");
+            }
+            let url = plan.url;
+            if (plan.mode === "remux") {
+              const tracks = plan.codec?.audioTracks ?? [];
+              if (tracks.length > 0) {
+                const rel = pickAudioRel(tracks, useSettings.getState().settings.preferredLanguages);
+                if (rel > 0) url = `${url}&audio=${rel}`;
+              }
+            }
+            setCurrent((c) => ({
+              ...c,
+              url,
+              stream: {
+                ...s,
+                url,
+                behaviorHints: { ...s.behaviorHints, filename: filename ?? plan.codec?.filename },
+              },
+              resumeAt,
+              p2p: { key: plan.key, fileIdx: plan.fileIdx, infoHash, mode: plan.mode },
+              p2pBrowser: undefined,
+            }));
+            setPhase("loading");
+            setError(null);
+            return;
+          } catch {
+            /* fall through to the honest failure */
+          }
+        }
+      }
+      // 4) Honest failure — nothing swapped.
+      toast({ title: homeT("dubUnavailable", lang) });
+    },
+    [toast],
+  );
 
   // Stable callbacks — identity must never change, otherwise VideoStage re-attaches HLS every render
   const handlePhase = useCallback((p: "loading" | "playing") => {
@@ -565,6 +717,10 @@ export function PlayerOverlay({ payload }: { payload: PlayerPayload }) {
             onError={handleError}
             onPlayNext={handlePlayNext}
             onOpenSwitcher={openSwitcher}
+            dubStreams={dubStreams}
+            dubLoading={dubLoading}
+            onRequestDubStreams={ensureDubStreams}
+            onPlayDubStream={playDubStream}
           />
         )
       )}
@@ -724,6 +880,10 @@ function VideoStage({
   onError,
   onPlayNext,
   onOpenSwitcher,
+  dubStreams,
+  dubLoading,
+  onRequestDubStreams,
+  onPlayDubStream,
 }: {
   payload: PlayerPayload;
   settings: ReturnType<typeof useSettings.getState>["settings"];
@@ -731,6 +891,13 @@ function VideoStage({
   onError: (err: PlaybackError) => void;
   onPlayNext: (next: { season: number; episode: number; videoId: string; episodeName?: string }) => void;
   onOpenSwitcher: () => void;
+  /** T3: all other addon streams for this title (dubbing/audio sources). */
+  dubStreams: Stream[];
+  dubLoading: boolean;
+  /** T3: first panel open gathers every dubbing source (fetchStreams sweep). */
+  onRequestDubStreams: () => void;
+  /** T3: switch to another dubbing source, resuming at the given seconds. */
+  onPlayDubStream: (s: Stream, atSeconds: number) => void;
 }) {
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -777,6 +944,49 @@ function VideoStage({
   const audioSelRef = useRef(0);
   /** Guard: dub list fetched once per torrent+file (discovery effect). */
   const dubFetchedRef = useRef<string | null>(null);
+  // ---- T3 unified audio panel --------------------------------------------
+  // Group 2 (dubbing sources) fetch trigger + native-track probe. The panel
+  // is ALWAYS reachable from the control bar; opening it requests the full
+  // dubbing-source sweep once and samples the element's native audioTracks
+  // (Safari native HLS) so every audio class appears in one list.
+  const dubRequestedRef = useRef<string | null>(null);
+  const [nativeAudio, setNativeAudio] = useState<{ label: string }[]>([]);
+  const probeNativeAudio = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    updateTrackList(video, (t) => setNativeAudio(t));
+  }, []);
+  const activeDubKey = streamKeyOf(payload.stream);
+  const dubRows = useMemo(
+    () =>
+      dubStreams
+        .filter((s) => streamKeyOf(s) !== activeDubKey)
+        .map((s) => ({
+          s,
+          tag: dubTagOf(s),
+          label: (s.title ?? s.description ?? "Stream").split("\n")[0].slice(0, 90),
+        }))
+        .slice(0, 40),
+    [dubStreams, activeDubKey],
+  );
+  const openAudioMenu = useCallback(() => {
+    setAudioMenuOpen((v) => {
+      const opening = !v;
+      if (opening) {
+        // "Fetch all dubbing sources" — once per payload; the sweep reuses
+        // the resolve path's candidates when they exist (no double fetch).
+        const sig = `${payload.metaId}|${payload.videoId ?? ""}`;
+        if (dubRequestedRef.current !== sig) {
+          dubRequestedRef.current = sig;
+          onRequestDubStreams();
+        }
+        probeNativeAudio();
+      }
+      return opening;
+    });
+    setSubMenuOpen(false);
+    setSettingsMenuOpen(false);
+  }, [onRequestDubStreams, probeNativeAudio, payload.metaId, payload.videoId]);
 
   // ---- Seeks (timeline-mapped) ----
   // Element seeks are issued by the timeline; unseekable targets on
@@ -2677,34 +2887,42 @@ function VideoStage({
               overflowing the viewport in RTL (button sits at the far right
               edge, panel extended outward). */}
           <div className="relative ml-auto flex items-center gap-1">
-            {/* Audio / dub — only when the engine listed MORE than one audio
-                track for a torrent remux (multi-dub releases). Panel mirrors
-                the subtitles panel geometry (group-anchored right-0). */}
-            {payload.p2p && audioTracks && audioTracks.length > 1 && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAudioMenuOpen((v) => !v);
-                    setSubMenuOpen(false);
-                    setSettingsMenuOpen(false);
-                  }}
-                  className={cn("md-icon-btn md-state h-12! w-12!", audioMenuOpen || audioSel > 0 ? "text-accent!" : "text-white!")}
-                  aria-label="Audio / dub"
-                  aria-expanded={audioMenuOpen}
+            {/* T3: Audio / dubbing — ALWAYS available from the control bar.
+                Group 1 = the current stream's own audio tracks (P2P remux
+                codec report / HLS renditions / native audioTracks). Group 2 =
+                "dubbing sources": every other addon stream for this title,
+                fetched on first open; selecting one swaps the source and
+                resumes at the current position. Panel mirrors the subtitles
+                panel geometry (group-anchored right-0, max-w guarded). */}
+            <div>
+              <button
+                type="button"
+                onClick={openAudioMenu}
+                className={cn(
+                  "md-icon-btn md-state h-12! w-12!",
+                  audioMenuOpen || audioSel > 0 || activeAudio > 0 ? "text-accent!" : "text-white!",
+                )}
+                aria-label={homeT("audioPanelTitle", settings.uiLanguage)}
+                aria-expanded={audioMenuOpen}
+              >
+                <AudioLines className="w-4.5 h-4.5" />
+              </button>
+              {audioMenuOpen && (
+                <div
+                  className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-80 max-w-[calc(100vw-2rem)] p-3"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <AudioLines className="w-4.5 h-4.5" />
-                </button>
-                {audioMenuOpen && (
-                  <div
-                    className="md-dialog bg-[var(--md-sys-color-surface-container-low)]! absolute bottom-12 right-0 w-72 max-w-[calc(100vw-2rem)] p-3"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <p className="md-label-medium uppercase text-ink-muted mb-2 px-1">
-                      {homeT("audioPanelTitle", settings.uiLanguage)}
-                    </p>
-                    <div className="max-h-64 overflow-y-auto harbor-scroll flex flex-col gap-0.5">
-                      {audioTracks.map((t) => {
+                  <p className="md-label-medium uppercase text-ink-muted mb-2 px-1">
+                    {homeT("audioPanelTitle", settings.uiLanguage)}
+                  </p>
+
+                  {/* Group 1: in-stream audio tracks (whichever class exists). */}
+                  <p className="md-label-medium uppercase text-ink-muted mb-1 px-1">
+                    {homeT("audioCurrentGroup", settings.uiLanguage)}
+                  </p>
+                  <div className="max-h-40 overflow-y-auto harbor-scroll flex flex-col gap-0.5">
+                    {audioTracks && audioTracks.length > 0 ? (
+                      audioTracks.map((t) => {
                         const active = t.rel === audioSel;
                         return (
                           <button
@@ -2728,15 +2946,109 @@ function VideoStage({
                             )}
                           </button>
                         );
-                      })}
-                    </div>
-                    <p className="text-[10px] text-ink-subtle mt-2 px-1">
-                      {audioTracks.length} audio tracks · switching restarts the stream at the current position
-                    </p>
+                      })
+                    ) : availableTracks.length > 0 ? (
+                      availableTracks.map((t, i) => (
+                        <button
+                          key={`hls-${i}`}
+                          type="button"
+                          onClick={() => selectAudioTrack(i)}
+                          aria-pressed={activeAudio === i}
+                          className={cn(
+                            "md-state flex items-center gap-2 w-full text-start rounded-lg px-2.5 py-2 text-xs transition-colors",
+                            activeAudio === i ? "bg-accent/15 text-accent font-semibold" : "text-ink hover:bg-white/8",
+                          )}
+                        >
+                          {activeAudio === i ? (
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/25 shrink-0" aria-hidden />
+                          )}
+                          <span className="truncate flex-1">{t.label}</span>
+                        </button>
+                      ))
+                    ) : nativeAudio.length > 1 ? (
+                      nativeAudio.map((t, i) => (
+                        <button
+                          key={`native-${i}`}
+                          type="button"
+                          onClick={() => selectAudioTrack(i)}
+                          aria-pressed={activeAudio === i}
+                          className={cn(
+                            "md-state flex items-center gap-2 w-full text-start rounded-lg px-2.5 py-2 text-xs transition-colors",
+                            activeAudio === i ? "bg-accent/15 text-accent font-semibold" : "text-ink hover:bg-white/8",
+                          )}
+                        >
+                          {activeAudio === i ? (
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/25 shrink-0" aria-hidden />
+                          )}
+                          <span className="truncate flex-1">{t.label}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-2.5 py-1.5 text-xs text-ink-subtle">
+                        {homeT("audioNoTracks", settings.uiLanguage)}
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Group 2: dubbing sources — every other addon stream. */}
+                  <p className="md-label-medium uppercase text-ink-muted mt-3 mb-1 px-1 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" aria-hidden />
+                    {homeT("dubbingSources", settings.uiLanguage)}
+                    {dubRows.length > 0 && (
+                      <span className="text-[10px] text-ink-subtle tabular-nums">{dubRows.length}</span>
+                    )}
+                  </p>
+                  <div className="max-h-52 overflow-y-auto harbor-scroll flex flex-col gap-0.5">
+                    {dubLoading ? (
+                      <p className="flex items-center gap-2 px-2.5 py-2 text-xs text-ink-subtle">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden />
+                        {homeT("dubLoading", settings.uiLanguage)}
+                      </p>
+                    ) : dubRows.length === 0 ? (
+                      <p className="px-2.5 py-2 text-xs text-ink-subtle">
+                        {homeT("dubNone", settings.uiLanguage)}
+                      </p>
+                    ) : (
+                      dubRows.map(({ s, tag, label }) => {
+                        const active = streamKeyOf(s) === activeDubKey && !payload.p2pBrowser;
+                        return (
+                          <button
+                            key={`${streamKeyOf(s)}-${label}`}
+                            type="button"
+                            disabled={active}
+                            onClick={() => {
+                              setAudioMenuOpen(false);
+                              onPlayDubStream(s, time);
+                            }}
+                            aria-pressed={active}
+                            className={cn(
+                              "md-state flex items-center gap-2 w-full text-start rounded-lg px-2.5 py-2 text-xs transition-colors",
+                              active ? "bg-accent/15 text-accent font-semibold" : "text-ink hover:bg-white/8",
+                              "disabled:cursor-default",
+                            )}
+                          >
+                            <span className="md-chip h-5! px-1.5! text-[9px]! shrink-0" aria-hidden>
+                              {tag?.label ?? "\u2022"}
+                            </span>
+                            <span className="truncate flex-1 min-w-0">{label}</span>
+                            {active && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  <p className="text-[10px] text-ink-subtle mt-2 px-1">
+                    {homeT("audioPanelHint", settings.uiLanguage)}
+                  </p>
+                </div>
+              )}
+            </div>
             {/* Subtitles — NOT a positioning context anymore: the panel anchors
               to the button GROUP above (see comment there). */}
             <div>
@@ -3517,4 +3829,23 @@ function updateTrackList(
     }
     setTracks(list);
   }
+}
+
+/** T3: filename→file-index match for dub-stream P2P plans (the picker's
+ *  pickFileIndex is view-local; this is the same honest contract: exact
+ *  filename hit, else contains, else the largest file). */
+function dubPickFileIndex(
+  files: { index: number; name: string; length: number }[] | undefined,
+  filename?: string,
+): number {
+  if (!files || files.length === 0) return 0;
+  const norm = (s: string) => s.toLowerCase().replace(/[.\s_]+/g, ".");
+  const want = filename ? norm(filename) : "";
+  if (want) {
+    const exact = files.find((f) => norm(f.name) === want);
+    if (exact) return exact.index;
+    const partial = files.find((f) => norm(f.name).includes(want) || want.includes(norm(f.name)));
+    if (partial) return partial.index;
+  }
+  return files.reduce((a, b) => (b.length > a.length ? b : a), files[0]).index;
 }

@@ -2720,16 +2720,13 @@ html[lang^="ar"] {
   /* One navigation, one band: the bottom dock never shows at ≥1024. */
   .glass-dock { display: none; }
   .side-rail { display: block; }
-  /* Content respects the rail's safe inset: a stable start inset for every
-     page — constant whether the rail is hidden or revealed (A1). The
-     Home route's full-bleed black canvas escapes the inset (below) so the
-     art and the OLED background run edge-to-edge UNDER the rail. */
-  .rail-main { padding-inline-start: var(--side-safe-inset); }
-  .home-void {
-    margin-inline-start: calc(-1 * var(--side-safe-inset));
-    width: calc(100% + var(--side-safe-inset));
-  }
-  .home-below { margin-inline-start: var(--side-safe-inset); }
+  /* T1 (user directive): the rail FLOATS OVER the content in BOTH states —
+     hidden or revealed — and must never push layout. The old page-wide
+     padding-inline-start (and the .home-void escape / .home-below indent
+     that compensated for it) are gone: every page spans the full viewport
+     and the rail simply overlays the start edge. The hero TEXT column keeps
+     its own constant --hero-col-inset (derived from --side-safe-inset) so
+     hero copy never sits under a revealed rail. */
 }
 
 /* ---------- TV / 10-foot band (≥1600): larger type + geometry --------------- */
@@ -3261,16 +3258,10 @@ html[lang^="ar"] {
     top: var(--fs-geo-top);
     width: var(--fs-geo-w);
   }
-  /* Guaranteed-contrast frosted surface: the glass tint mixes the theme
-     canvas (dark mode → dark surface, light mode → light surface) so the
-     ink-on-glass pair stays ≥4.5:1 over ANY artwork — this is what kills
-     the washed-out look over bright backdrops. Blur/saturation unchanged. */
-  .fs-shell {
-    background: color-mix(in srgb, var(--color-canvas-var) 72%, transparent);
-  }
-  @supports not (color-mix(in srgb, red 50%, blue)) {
-    .fs-shell { background: var(--glass-fallback); }
-  }
+  /* T2 (user directive): the ≥1024 shell uses the SHARED glass recipe
+     (.glass-surface → --glass-* tokens) — the exact same glass as the side
+     rail. The old canvas-tint override was removed; contrast is carried by
+     the theme-aware glass tokens + the placeholder/kbd ink rules below. */
   .fs-shell .fs-input::placeholder {
     color: color-mix(in srgb, var(--color-ink-var) 88%, transparent);
   }
@@ -3287,6 +3278,59 @@ html[lang^="ar"] {
 @media (min-width: 1600px) {
   .fs-shell { height: 64px; }
   .fs-shell .fs-input { font-size: 18px; }
+}
+/* T2: the top PEEK HANDLE — the only visible affordance while the auto-hide
+   search bar is hidden (≥1024 only): a 48×5dp glass sliver hugging the top
+   edge, viewport-centered above the bar, the same visual language as the
+   side rail's edge handle (~40% opacity glass). A ::after extends the tap
+   target to ≈44dp; reveal/hide state machine lives in floating-search.tsx. */
+.fs-peek { display: none; }
+@media (min-width: 1024px) {
+  .fs-peek {
+    display: block;
+    position: fixed;
+    top: max(0.6rem, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-search-bar);
+    width: 48px;
+    height: 5px;
+    padding: 0;
+    border-radius: 9999px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--glass-shadow);
+    opacity: 0.45;
+    cursor: pointer;
+    transition: opacity 220ms var(--glass-ease), transform 220ms var(--glass-ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Hidden bar slides away under it; keep the handle hoverable/growable. */
+  .fs-peek::after {
+    content: "";
+    position: absolute;
+    inset: -10px -14px;
+  }
+  .fs-peek:hover { opacity: 0.9; transform: translateX(-50%) scaleX(1.25); }
+  .fs-peek:focus-visible {
+    outline: 2px solid var(--glass-accent-border, var(--glass-border));
+    outline-offset: 4px;
+  }
+  /* Bar revealed (or TV fullscreen face up): the handle steps aside — the
+     bar itself is the affordance, same rule as the rail handle. */
+  .fs-peek[data-shown="true"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fs-peek { transition: opacity 200ms ease; }
+    .fs-peek:hover { transform: translateX(-50%); }
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .fs-peek { background: var(--glass-fallback); }
+  }
 }
 /* TV fullscreen search view (opened from the big ≥1600 glass pill). */
 .fs-tv-overlay {

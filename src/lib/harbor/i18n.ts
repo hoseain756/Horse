@@ -39,6 +39,19 @@ const STRINGS = {
   audioSwitching: { en: "Switching audio…", ar: "جارٍ تبديل الصوت…" },
   audioTrackFallback: { en: "Track", ar: "مسار" },
   audioOriginal: { en: "Original", ar: "الأصلي" },
+  audioCurrentGroup: { en: "Current audio track", ar: "مسار الصوت الحالي" },
+  audioNoTracks: { en: "Single fixed audio track", ar: "مسار صوتي واحد ثابت" },
+  dubbingSources: { en: "Dubbing sources", ar: "مصادر الدبلجة" },
+  dubLoading: { en: "Fetching all dubbing sources…", ar: "جارٍ جلب جميع مصادر الدبلجة…" },
+  dubNone: { en: "No other dubbing sources found for this title", ar: "لا توجد مصادر دبلجة أخرى لهذا العمل" },
+  dubUnavailable: {
+    en: "This dubbing source needs a debrid key or the P2P engine (Settings → Integrations)",
+    ar: "يحتاج مصدر الدبلجة هذا إلى مفتاح Debrid أو محرك P2P (الإعدادات ← التكاملات)",
+  },
+  audioPanelHint: {
+    en: "In-stream tracks switch instantly · other sources resume at the current position",
+    ar: "المسارات المدمجة تتبدل فوراً · والمصادر الأخرى تكمل من نفس الموضع",
+  },
   // ---- kids ----
   kidsTitle: { en: "Kids Corner", ar: "زاوية الأطفال" },
   kidsSubtitle: { en: "Fun and safe picks for the little ones.", ar: "اختيارات ممتعة وآمنة للصغار." },
@@ -793,6 +806,7 @@ export const APP_STRINGS = {
   // floating search bar (B1/B3: localized, bidi-safe placeholder)
   searchPlaceholder: { en: "Search…", ar: "ابحث…" },
   searchAria: { en: "Search movies, series, people and addons", ar: "ابحث عن أفلام ومسلسلات وأشخاص وإضافات" },
+  searchShow: { en: "Show search", ar: "إظهار البحث" },
 } as const satisfies Record<string, { en: string; ar: string; arOther?: string }>;
 
 export type AppStringKey = keyof typeof APP_STRINGS;

@@ -109,8 +109,36 @@ export function FloatingSearch() {
   const [tvOpen, setTvOpen] = useState(false); // TV band (≥1600) fullscreen face
   const [tvBand, setTvBand] = useState(false); // ≥1600 window class
   const [hidden, setHidden] = useState(false); // scroll-direction visibility
+  // ---- T2 auto-hide (≥1024 only): the top twin of the side-rail machine --
+  // The bar starts HIDDEN on large screens (a 48×5dp glass sliver peeks at
+  // the top edge), reveals on intent (hot zone around the bar, ~80ms),
+  // focus, the "/"·Ctrl+K hotkeys or the handle, and hides after a ~700ms
+  // leave grace / right after a selection. Below 1024 everything is frozen.
+  const [largeBand, setLargeBand] = useState(false); // ≥1024 window class
+  const [sRevealed, setSRevealed] = useState(false);
+  const sRevealedRef = useRef(false);
+  const sIntentTimer = useRef<number | null>(null);
+  const sHideTimer = useRef<number | null>(null);
+  // Set right after a selection-hide so a resting pointer does not
+  // instantly re-reveal (hysteresis); cleared by the next leave.
+  const sSuppressRef = useRef(false);
+  const largeBandRef = useRef(false);
+  // Ref mirrors sync AFTER render (react-hooks/refs forbids render-phase
+  // writes); timer/probe guards only read them post-commit.
+  useEffect(() => {
+    sRevealedRef.current = sRevealed;
+  }, [sRevealed]);
+  useEffect(() => {
+    largeBandRef.current = largeBand;
+  }, [largeBand]);
   const [query, setQuery] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
+  // Refs mirrors for timer guards (must not depend on render scope):
+  const expandedRef = useRef(false);
+  const shellRef = useRef<HTMLDivElement>(null); // T2: LAYOUT box for the hot zone
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
   const [movies, setMovies] = useState<Meta[]>([]);
   const [series, setSeries] = useState<Meta[]>([]);
   const [addonHits, setAddonHits] = useState<Meta[]>([]);
@@ -136,6 +164,16 @@ export function FloatingSearch() {
   const expandAndFocus = useCallback(() => {
     setExpanded(true);
     setHidden(false); // hotkey reveal: never focus an off-screen bar
+    // T2: hotkey/palette reveal also drives the ≥1024 auto-hide machine.
+    if (sHideTimer.current) {
+      window.clearTimeout(sHideTimer.current);
+      sHideTimer.current = null;
+    }
+    sSuppressRef.current = false;
+    if (!sRevealedRef.current) {
+      sRevealedRef.current = true;
+      setSRevealed(true);
+    }
     setTimeout(() => setRecents(readRecents()), 0);
     setTimeout(() => focusActiveInput(), 20);
   }, [focusActiveInput]);
@@ -181,6 +219,162 @@ export function FloatingSearch() {
     return () => tv.removeEventListener("change", apply);
   }, []);
 
+  // T2 large-band watcher (≥1024): owns the auto-hide machine. Leaving the
+  // band restores the frozen small-band behavior (bar visible / scroll-hide).
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => {
+      setLargeBand(mq.matches);
+      if (!mq.matches) {
+        if (sIntentTimer.current) window.clearTimeout(sIntentTimer.current);
+        if (sHideTimer.current) window.clearTimeout(sHideTimer.current);
+        sIntentTimer.current = null;
+        sHideTimer.current = null;
+        sRevealedRef.current = false;
+        setSRevealed(false);
+        setHidden(false);
+      }
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // ---- T2 machine primitives (mirror side-rail.tsx timings) ----
+  const sCancelHide = useCallback(() => {
+    if (sHideTimer.current) {
+      window.clearTimeout(sHideTimer.current);
+      sHideTimer.current = null;
+    }
+  }, []);
+
+  const sHideNow = useCallback((force = false) => {
+    if (!force) {
+      const wrap = wrapRef.current;
+      if (expandedRef.current) return; // dropdown/results open — never hide
+      if (wrap && wrap.contains(document.activeElement)) return; // input focus
+    }
+    if (sHideTimer.current) {
+      window.clearTimeout(sHideTimer.current);
+      sHideTimer.current = null;
+    }
+    if (sRevealedRef.current) {
+      sRevealedRef.current = false;
+      setSRevealed(false);
+    }
+  }, []);
+
+  const sScheduleHide = useCallback(
+    (ms: number) => {
+      if (!largeBandRef.current) return;
+      sCancelHide();
+      // Null the id BEFORE the callback: a guard-blocked hide must never
+      // block a later scheduleHide (same fix as the rail's stale-id bug).
+      sHideTimer.current = window.setTimeout(() => {
+        sHideTimer.current = null;
+        sHideNow();
+      }, ms);
+    },
+    [sCancelHide, sHideNow],
+  );
+
+  // Hot-zone probe: a document-level pointermove probe (NOT an element) so
+  // the zone can never block page controls. Zone = the bar's LAYOUT box
+  // (offsetWidth/Height are transform-independent — the hidden bar is
+  // translated off-screen) inflated by 32px, plus the top strip above it.
+  useEffect(() => {
+    if (!largeBand) return;
+    let raf = 0;
+    let last: { x: number; y: number; type: string } | null = null;
+    const INTENT_MS = 80;
+    const LEAVE_MS = 700;
+
+    const process = () => {
+      raf = 0;
+      const ev = last;
+      last = null;
+      const shell = shellRef.current;
+      if (!ev || !shell) return;
+      if (ev.type === "touch") return; // touch reveals via the handle tap
+      const w = shell.offsetWidth || 520;
+      const h = shell.offsetHeight || 56;
+      const cx = window.innerWidth / 2;
+      const halfW = w / 2 + 32;
+      const dx = Math.abs(ev.x - cx);
+      const inZone = dx <= halfW && ev.y <= h + 32; // bar box + margin + top strip
+      const inBar =
+        dx <= w / 2 + 4 &&
+        ev.y >= shell.getBoundingClientRect().top - 4 &&
+        ev.y <= shell.getBoundingClientRect().bottom + 4;
+      if (sRevealedRef.current) {
+        if (inBar || inZone) {
+          sCancelHide();
+          return;
+        }
+        if (!sHideTimer.current && !sSuppressRef.current) sScheduleHide(LEAVE_MS);
+        return;
+      }
+      if (sSuppressRef.current) {
+        if (!inZone) sSuppressRef.current = false; // left the zone → armed again
+        return;
+      }
+      if (inZone) {
+        if (sIntentTimer.current === null && sHideTimer.current === null) {
+          sIntentTimer.current = window.setTimeout(() => {
+            sIntentTimer.current = null;
+            sCancelHide();
+            sSuppressRef.current = false;
+            sRevealedRef.current = true;
+            setSRevealed(true);
+          }, INTENT_MS);
+        }
+      } else if (sIntentTimer.current !== null) {
+        window.clearTimeout(sIntentTimer.current);
+        sIntentTimer.current = null;
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      last = { x: e.clientX, y: e.clientY, type: e.pointerType };
+      if (!raf) raf = requestAnimationFrame(process);
+    };
+    const onLeaveWindow = () => {
+      if (sRevealedRef.current) sScheduleHide(300);
+    };
+    document.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("mouseleave", onLeaveWindow);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("mouseleave", onLeaveWindow);
+      if (raf) cancelAnimationFrame(raf);
+      if (sIntentTimer.current) window.clearTimeout(sIntentTimer.current);
+      if (sHideTimer.current) window.clearTimeout(sHideTimer.current);
+      sIntentTimer.current = null;
+      sHideTimer.current = null;
+    };
+  }, [largeBand, sCancelHide, sScheduleHide]);
+
+  // T2: keyboard focus anywhere in the bar reveals it; focus leaving → grace.
+  const onWrapFocusCapture = useCallback(() => {
+    if (!largeBandRef.current) return;
+    sSuppressRef.current = false;
+    sCancelHide();
+    if (!sRevealedRef.current) {
+      sRevealedRef.current = true;
+      setSRevealed(true);
+    }
+  }, [sCancelHide]);
+  const onWrapBlurCapture = useCallback(
+    (e: React.FocusEvent) => {
+      if (!largeBandRef.current) return;
+      const next = e.relatedTarget;
+      const wrap = wrapRef.current;
+      if (next instanceof Node && wrap?.contains(next)) return;
+      sScheduleHide(700);
+    },
+    [sScheduleHide],
+  );
+
   // TV fullscreen face: lock body scroll while open (modal surface).
   useEffect(() => {
     if (!tvOpen) return;
@@ -208,7 +402,9 @@ export function FloatingSearch() {
 
   // Scroll-direction visibility: scrolling DOWN hides the bar (content first),
   // scrolling UP (or returning near the top) reveals it again. While the bar
-  // is expanded/focused it always stays visible.
+  // is expanded/focused it always stays visible. T2: on the large band the
+  // auto-hide machine owns visibility — scroll-down hides immediately, and
+  // scroll-up does NOT force a reveal (approaching the top zone reveals).
   useEffect(() => {
     let lastY = window.scrollY;
     const onScroll = () => {
@@ -216,12 +412,16 @@ export function FloatingSearch() {
       const dy = y - lastY;
       lastY = y;
       if (expanded) return; // never hide while the user is searching
+      if (largeBand) {
+        if (y > 90 && dy > 4) sHideNow(true);
+        return;
+      }
       if (y > 90 && dy > 4) setHidden(true);
       else if (dy < -4 || y <= 90) setHidden(false);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [expanded]);
+  }, [expanded, largeBand, sHideNow]);
 
   // Trending suggestions (idle state) — fetched once per session, errors are silent
   useEffect(() => {
@@ -311,7 +511,11 @@ export function FloatingSearch() {
   const closeTv = useCallback(() => {
     setTvOpen(false);
     setActiveIdx(-1);
-  }, []);
+    // T2: leaving the fullscreen face returns to the auto-hide idle bar —
+    // give it the leave grace so a pointer inside the old overlay area
+    // does not pin it open.
+    sScheduleHide(400);
+  }, [sScheduleHide]);
 
   const openTv = useCallback(() => {
     setExpanded(false);
@@ -325,9 +529,11 @@ export function FloatingSearch() {
       writeRecent(query || m.name);
       setRecents(readRecents());
       collapse();
+      sHideNow(true); // T2: a selection sends the bar away immediately
+      sSuppressRef.current = true;
       push({ kind: "detail", type: m.type, id: m.id });
     },
-    [push, query, collapse],
+    [push, query, collapse, sHideNow],
   );
 
   // Flatten the dropdown for keyboard navigation
@@ -379,6 +585,8 @@ export function FloatingSearch() {
         focusActiveInput();
       } else if (row?.kind === "destination") {
         collapse();
+        sHideNow(true); // T2: selection sends the bar away immediately
+        sSuppressRef.current = true;
         push({ kind: "view", view: row.entry.view });
       } else if (row?.kind === "person" && row.url) {
         window.open(row.url, "_blank", "noopener");
@@ -394,9 +602,17 @@ export function FloatingSearch() {
         setQuery("");
       } else {
         collapse();
-        focusActiveInput();
         inputRef.current?.blur();
         mobileInputRef.current?.blur();
+        if (largeBandRef.current) {
+          // T2: Esc releases the bar — hide immediately WITHOUT refocusing
+          // (a refocus would re-run the input's focus handler, re-expand,
+          // and pin the bar open against the auto-hide machine).
+          sHideNow(true);
+          sSuppressRef.current = true;
+        } else {
+          focusActiveInput(); // frozen bands: keep the old flow exactly
+        }
       }
     }
   };
@@ -412,13 +628,45 @@ export function FloatingSearch() {
   const searching = phase === "searching";
   const showDropdown = expanded && !tvBand;
 
+  // T2: effective off-screen state. ≥1024 the auto-hide machine owns
+  // visibility (bar hidden unless revealed; scroll-hide still applies);
+  // <1024 keeps the frozen scroll-direction behavior only.
+  const barOff = tvOpen ? false : largeBand ? !sRevealed || hidden : hidden;
+  const peekVisible = largeBand && !tvOpen && barOff;
+
   // All hooks above; only the idle presentation is suppressed on immersive
   // surfaces (an open search sheet/bar always renders).
   if (suppressed && !expanded && !tvOpen) return null;
 
   return (
+    <>
+      {/* T2: the top peek handle — the only affordance while the auto-hide
+          bar is hidden (≥1024). Tap/Enter reveals + focuses the input; the
+          hot-zone probe reveals for pointers. Same language as the rail's
+          edge handle; CSS hides it below 1024 and while the bar is shown. */}
+      <button
+        type="button"
+        className="fs-peek"
+        data-shown={peekVisible ? undefined : "true"}
+        tabIndex={peekVisible ? 0 : -1}
+        aria-hidden={!peekVisible || undefined}
+        aria-label={tr("searchShow")}
+        onClick={() => {
+          // Reveal synchronously inside the gesture, then focus the input.
+          if (sHideTimer.current) {
+            window.clearTimeout(sHideTimer.current);
+            sHideTimer.current = null;
+          }
+          sSuppressRef.current = false;
+          sRevealedRef.current = true;
+          setSRevealed(true);
+          expandAndFocus();
+        }}
+      />
     <div
       ref={wrapRef}
+      onFocusCapture={onWrapFocusCapture}
+      onBlurCapture={onWrapBlurCapture}
       className={cn(
         // Fixed top. PHONES (<600): 48×48 glass trigger at the top inline-END
         // corner (over the hero, safe-area offset) that expands THIS bar into
@@ -433,12 +681,13 @@ export function FloatingSearch() {
         "w-12 min-[600px]:w-60",
         // Hide/reveal on scroll direction (smooth; motion-reduce users get instant snap).
         // Width no longer animates on focus — the bar has ONE width per band (B3).
+        // T2 ≥1024: the auto-hide machine owns the off-screen state (barOff).
         "transition-[transform,opacity] duration-300 ease-[var(--md-sys-motion-easing-emphasized)] motion-reduce:transition-none",
         // Scrolled-down: slide the bar fully off-screen. invisible: aria-hidden
         // subtrees must not keep focusable controls.
-        hidden && !tvOpen && "-translate-y-[160%] opacity-0 invisible pointer-events-none",
+        barOff && "-translate-y-[160%] opacity-0 invisible pointer-events-none",
       )}
-      aria-hidden={(hidden && !tvOpen) || undefined}
+      aria-hidden={barOff || undefined}
     >
       {/* PHONE TRIGGER — 48dp glass icon (shared glass recipe). Expands this
           bar into the full-screen glass sheet synchronously inside the tap
@@ -460,6 +709,7 @@ export function FloatingSearch() {
           it opens the fullscreen search view (D-pad friendly); on laptop/
           tablet it focuses the inline combobox as before. */}
       <div
+        ref={shellRef}
         className={cn(
           "fs-shell glass-surface hidden min-[600px]:flex items-center gap-2 rounded-full w-full",
           "shadow-[0_10px_36px_-12px_rgba(0,0,0,0.65),0_2px_10px_rgba(0,0,0,0.3)]",
@@ -811,6 +1061,7 @@ export function FloatingSearch() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
