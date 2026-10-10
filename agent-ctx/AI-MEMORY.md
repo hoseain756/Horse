@@ -1,7 +1,8 @@
 # HORSE — AI Memory (persistent session context)
 
 > Purpose: restore full AI working context in one read. Keep this file updated after
-> every completed phase. Last updated: Task 71 SAVEPOINT (HEAD == origin/main == de11c95).
+> every completed phase. Last updated: Task 71 SAVEPOINT (HEAD == origin/main == 7215eec,
+> push credentials RESTORED via device flow + credential.helper store).
 
 ## 0. Identity
 
@@ -18,8 +19,11 @@
 
 ## 1. Where we are (SAVEPOINT, Task 71 — after container restart)
 
-- **ALL WORK IS SAFE ON GITHUB**: local main == origin/main == `de11c95`. The autopush
-  watcher saved Tasks 69+70 before the sandbox container restarted (2026-10-10 08:37).
+- **ALL WORK IS SAFE ON GITHUB**: local main == origin/main == `7215eec`. The autopush
+  watcher saved Tasks 69+70 before the sandbox container restarted (2026-10-10 08:37);
+  the Task 71 savepoint docs commit was pushed after the user re-granted push access
+  (device flow AUTH_OK 08:56, credential.helper store re-configured — the file alone
+  is NOT enough, the helper config was the missing piece; watcher PUSH_OK 08:57).
 - **Task 69 (user directives T1/T2/T3) — COMPLETE.**
   - T1: side rail floats over content in BOTH states (main padding-inline-start 0; zero
     shift verified by DOM measurement).
@@ -83,15 +87,13 @@
 
 ## 3. Next steps (priority order)
 
-1. **Restore push credentials** (device flow armed this round; if expired, re-issue:
-   POST /login/device/code → new user_code → poller). Verify with a trivial push.
-2. **Vercel production smoke** on horse-1.vercel.app: Settings redesign live check
+1. **Vercel production smoke** on horse-1.vercel.app: Settings redesign live check
    (9 categories, deep link, PIN gate), auto-hide rail, arrowless hero, dub audio panel.
-3. **T3 E2E** with a reachable multi-dub addon (public URL; SSRF guard blocks localhost).
-4. TorBox "my torrents" management view (carried over).
-5. Orphan-key tombstones in sanitizeSettings (aiEnabled/soundTheme/wrappedButton/
+2. **T3 E2E** with a reachable multi-dub addon (public URL; SSRF guard blocks localhost).
+3. TorBox "my torrents" management view (carried over).
+4. Orphan-key tombstones in sanitizeSettings (aiEnabled/soundTheme/wrappedButton/
    profileId/tmdbKey) — documented in audit F2.
-6. Pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*).
+5. Pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*).
 
 ## 4. Key file map
 

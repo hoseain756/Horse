@@ -2234,3 +2234,17 @@ Stage Summary:
 - SAVEPOINT SECURE: GitHub has every commit (de11c95); dev server running; autopush watcher armed and waiting for credentials; device flow live for one-click re-grant; AI-MEMORY current.
 - OPEN RISK: push credentials are LOST until the user completes the device-flow grant (or provides a fresh PAT). Any new local commits will auto-push the moment credentials land (watcher retries). If the 15-min window expires, next round must re-issue the device code.
 - Torrent engine (:3031) also dead after restart — restart before playback QA.
+
+---
+Task ID: 71-b
+Agent: Z.ai Code (main)
+Task: Close the Task 71 credential loop — user completed the device-flow grant ("تم").
+
+Work Log:
+- flow.log: AUTH_OK 08:56:14 (credential stored at ~/.git-credentials, chmod 600, token never logged).
+- ROOT CAUSE of the poller's immediate PUSH_FAILED: credential FILE alone is not enough — `git config --global credential.helper store` was missing after the $HOME wipe (the ~/.gitconfig was recreated fresh). Re-configured it.
+- Push executed: de11c95..7215eec main -> main EXIT=0. Verified local == origin/main == 7215eec; watcher logged PUSH_OK 08:57:04 and synced its state file; working tree clean.
+- AI-MEMORY.md updated: savepoint SHA bumped to 7215eec, credentials marked RESTORED, next-steps renumbered (production smoke is now #1).
+
+Stage Summary:
+- PUSH SYSTEM FULLY RESTORED: credentials + helper + watcher all green; every future local commit auto-pushes within ~60s. Lesson recorded: after any $HOME wipe, restore BOTH ~/.git-credentials AND `credential.helper store`.
