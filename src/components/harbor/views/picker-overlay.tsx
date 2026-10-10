@@ -183,14 +183,27 @@ export function PickerOverlay({
   }, [loading, totalAddons]);
 
   const tiers = useMemo(() => {
+    // FIX 6 (Task 70 / audit F2): streamSort — "score" re-sorts the flat list
+    // by score descending (stable within equal scores, so addon order survives
+    // ties); "addon" (default) keeps today's order EXACTLY (zero change for
+    // default users). Tier headers stay pinned to TIER_ORDER; within a tier,
+    // items follow the ordered flat list (score order is monotonic, so a flat
+    // sort keeps tiers internally score-sorted too).
+    const ordered =
+      settings.streamSort === "score"
+        ? streams
+            .map((s, i) => ({ s, i }))
+            .sort((a, b) => (b.s.score ?? 0) - (a.s.score ?? 0) || a.i - b.i)
+            .map((x) => x.s)
+        : streams;
     const map = new Map<string, Stream[]>();
-    for (const s of streams) {
+    for (const s of ordered) {
       const tier = tierOf(s);
       if (!map.has(tier)) map.set(tier, []);
       map.get(tier)!.push(s);
     }
     return TIER_ORDER.filter((t) => map.has(t)).map((t) => ({ tier: t, items: map.get(t)! }));
-  }, [streams]);
+  }, [streams, settings.streamSort]);
 
   const filteredTiers = useMemo(() => {
     if (filter === "all" && !query.trim() && showAll) return tiers;

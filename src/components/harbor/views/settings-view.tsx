@@ -1,12 +1,26 @@
 "use client";
-// Round 8: palette deep-link marker
+// Harbor Web — Settings (Task 70 redesign).
+// The view is now a thin reorganization layer: <SettingsShell> owns the
+// size-class layout (two-pane ≥840 / drill-down <840 / TV ≥1600), deep links
+// (#settings/<cat>/<key>), settings search and the Kids PIN gate. This file
+// supplies the NINE category content factories, reusing the pre-existing
+// panel components (HorseAccountCard, CloudSyncCard, TraktCard, SimklCard,
+// DebridCard, P2pCard, ThemePanel, AboutPanel, AddonsView…) and composing
+// rows from the shared design system in ../settings/design.
+// Panel logic is MOVED, not rewritten.
 
-
-// Harbor Web — Settings (port of Harbor settings.tsx: basics/player/theme/language/data sections)
-import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { Settings as SettingsIcon, SlidersHorizontal, Palette, Globe2, DatabaseBackup, Info, Check, RotateCcw, Brush, Trash2, CloudUpload, CloudOff, RefreshCw, ShieldCheck, Plug, Unplug, DownloadCloud, Loader2, Square, KeyRound, Zap, History, TvMinimalPlay, UploadCloud, ChevronUp, ChevronDown, X, Network, CircleAlert, UserRound, UserPlus, LogOut, Eye, EyeOff, Download, MonitorSmartphone, MailCheck, MailWarning, RefreshCcwDot, ExternalLink, Server, Rocket } from "lucide-react";
-import { useNav, useSettings } from "@/lib/harbor/store";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  Baby, Brush, Captions, Check, ChevronDown, ChevronUp, CircleAlert, CloudOff, CloudUpload,
+  Compass, DatabaseBackup, Download, DownloadCloud, ExternalLink, Eye, EyeOff, Globe2, History,
+  Images, Info, KeyRound, Languages, ListVideo, Loader2, Lock, LogOut, MailCheck, MailWarning,
+  MonitorSmartphone, Network, Palette, Play, Plug, Puzzle, RefreshCw, Rocket, RotateCcw, Server,
+  Shield, ShieldCheck, SlidersHorizontal, Square, Trash2, TvMinimalPlay, Type, Unplug, Upload,
+  UploadCloud, UserPlus, UserRound, X, Zap,
+} from "lucide-react";
+import { useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
+import { homeT } from "@/lib/harbor/i18n";
 import { RichBidi } from "../common/bidi";
 import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
 import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
@@ -30,6 +44,7 @@ import { useSimkl } from "@/lib/harbor/simkl";
 import { useDebrid, type DebridService } from "@/lib/harbor/debrid";
 import { p2pHealth, p2pCleanup, formatSpeed, P2P_PORT, refreshP2pCapabilities } from "@/lib/harbor/p2p";
 import { getLocalEngine, setLocalEngine, clearLocalEngine, localEngineHealth, type LocalEngineConfig } from "@/lib/harbor/local-engine";
+import { hasParentPin, verifyParentPin, setParentPin, clearParentPin, isValidPinShape } from "@/lib/harbor/parent-pin";
 import { TmdbCard, TmdbAttribution } from "../chrome/tmdb-card";
 import { LinkAccountFlow } from "../chrome/link-account-flow";
 import { DevicePairingCard } from "../chrome/device-pairing";
@@ -54,363 +69,257 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ThemeStudio } from "../chrome/theme-studio";
 import { QuickAccess } from "../chrome/quick-access";
-import { UserChip } from "../chrome/account";
 import { HorseMark } from "../chrome/brand";
 import { cn } from "@/lib/utils";
+import { AddonsView } from "./addons-view";
+// Task 70 design system + shell (size classes, deep links, search, PIN gate)
+import { SettingsShell, type SettingsCategory, type SettingsGroup } from "../settings/shell";
+import {
+  SectionCard,
+  SettingRow,
+  ToggleRow,
+  SegmentedControl,
+  SegmentedRow,
+  SettingSliderRow,
+  SelectRow,
+  ColorRow,
+  ActionRow,
+  DangerActionRow,
+  PreviewCard,
+} from "../settings/design";
 
-type Section = "basics" | "player" | "theme" | "language" | "integrations" | "data" | "about";
-
-const SECTIONS: { id: Section; labelKey: "tabBasics" | "tabPlayer" | "tabTheme" | "tabLanguage" | "tabIntegrations" | "tabData" | "tabAbout"; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "basics", labelKey: "tabBasics", icon: SettingsIcon },
-  { id: "player", labelKey: "tabPlayer", icon: SlidersHorizontal },
-  { id: "theme", labelKey: "tabTheme", icon: Palette },
-  { id: "language", labelKey: "tabLanguage", icon: Globe2 },
-  { id: "integrations", labelKey: "tabIntegrations", icon: Plug },
-  { id: "data", labelKey: "tabData", icon: DatabaseBackup },
-  { id: "about", labelKey: "tabAbout", icon: Info },
+/* --------------------------------------------------------------------------
+ * Category map (audit Part C) — groups + ids order is authoritative.
+ * ------------------------------------------------------------------------ */
+const CATEGORIES: SettingsCategory[] = [
+  { id: "account", group: "general", icon: UserRound, labelKey: "catAccount", summaryKey: "catAccountSum", content: () => <AccountPanel /> },
+  { id: "appearance", group: "general", icon: Palette, labelKey: "catAppearance", summaryKey: "catAppearanceSum", content: () => <AppearancePanel /> },
+  { id: "playback", group: "general", icon: SlidersHorizontal, labelKey: "catPlayback", summaryKey: "catPlaybackSum", content: () => <PlaybackPanel /> },
+  { id: "subtitles", group: "general", icon: Captions, labelKey: "catSubtitles", summaryKey: "catSubtitlesSum", content: () => <SubtitlesPanel /> },
+  { id: "addons", group: "content", icon: Puzzle, labelKey: "catAddons", summaryKey: "catAddonsSum", content: () => <AddonsView /> },
+  { id: "kids", group: "content", icon: Baby, labelKey: "catKids", summaryKey: "catKidsSum", content: () => <KidsPanel /> },
+  { id: "integrations", group: "system", icon: Plug, labelKey: "catIntegrations", summaryKey: "catIntegrationsSum", content: () => <IntegrationsPanel /> },
+  { id: "data", group: "system", icon: DatabaseBackup, labelKey: "catData", summaryKey: "catDataSum", content: () => <DataPanel /> },
+  { id: "about", group: "system", icon: Info, labelKey: "catAbout", summaryKey: "catAboutSum", content: () => <AboutPanel /> },
 ];
 
+const GROUPS: SettingsGroup[] = [
+  { id: "general", labelKey: "setGroupsGeneral", ids: ["account", "appearance", "playback", "subtitles"] },
+  { id: "content", labelKey: "setGroupsContent", ids: ["addons", "kids"] },
+  { id: "system", labelKey: "setGroupsSystem", ids: ["integrations", "data", "about"] },
+];
+
+const LANGS = ["English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese", "Arabic", "Hindi", "Portuguese", "Russian", "Italian"];
+const REGIONS = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "BR", "JP", "KR", "IN", "AE", "SA", "EG"];
+
+/** Subtitle colors are sanitized as BARE 6-hex (settings.ts validates without
+ *  "#") while the native color input renders #RRGGBB — normalize at both
+ *  edges. Legacy values may still carry the leading "#". Mirrors the player
+ *  renderer's subCssColor() so the preview always matches playback. */
+function subColorHex(v: string, fallback: string): string {
+  const hex = (v ?? "").replace(/^#/, "").toUpperCase();
+  return /^[0-9A-F]{6}$/.test(hex) ? hex : fallback;
+}
+
 export function SettingsView() {
-  const [section, setSection] = useState<Section>("basics");
-  const tr = useT();
+  return (
+    <div className="pt-20 md:pt-14 px-4 md:px-8 max-w-[1360px] mx-auto w-full">
+      <SettingsShell categories={CATEGORIES} groups={GROUPS} home={<QuickAccess />} />
+    </div>
+  );
+}
 
-  // Round 8: command palette (and other callers) can jump straight to a section
+/** TV band probe — sliders get ± D-pad steppers only in the ten-foot class. */
+function useTvBand(): boolean {
+  const [tv, setTv] = useState(false);
   useEffect(() => {
-    const h = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      if (SECTIONS.some((s) => s.id === id)) setSection(id as Section);
-    };
-    window.addEventListener("harbor:settings-section", h);
-    return () => window.removeEventListener("harbor:settings-section", h);
+    const mq = window.matchMedia("(min-width: 1600px)");
+    const on = () => setTv(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
   }, []);
+  return tv;
+}
 
+// ---------- 1 · account ----------
+
+function AccountPanel() {
   return (
-    <div className="pt-20 md:pt-14 pb-16 px-4 md:px-8 max-w-6xl">
-      <div className="flex items-center gap-3 mb-7">
-        <SettingsIcon className="w-6 h-6 text-accent" />
-        <h1 className="md-headline-small font-display font-bold text-ink">{tr("settingsTitle")}</h1>
-        {/* Account chip moved here from the removed sidebar (sign in / sync state) */}
-        <div className="ms-auto">
-          <UserChip variant="settings" />
-        </div>
-      </div>
-
-      {/* Quick Access hub — every destination that used to live in the sidebar */}
-      <QuickAccess />
-
-      {/* M3 primary tabs: active = primary text + 3px rounded indicator underneath.
-          harbor-fs-clear reserves the floating-search zone so the LAST tab can
-          always scroll fully past the fixed phone trigger (defect F).
-          tabIndex=0 keeps the scrollable row keyboard-accessible (axe). */}
-      <div
-        className="harbor-scroll-x overflow-x-auto flex gap-1 mb-7 border-b border-edge-soft harbor-fs-clear"
-        role="tablist"
-        aria-label={tr("settingsSections")}
-        tabIndex={0}
-      >
-        {SECTIONS.map((s) => {
-          const Icon = s.icon;
-          const active = section === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSection(s.id)}
-              className={cn(
-                "harbor-tv-focus md-state relative flex min-h-12 items-center gap-2 shrink-0 px-4 py-2.5 md-label-large transition-colors",
-                active
-                  ? "text-[var(--md-sys-color-primary)]"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              <Icon className="w-4 h-4" /> {tr(s.labelKey)}
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[var(--md-sys-color-primary)] transition-opacity duration-200",
-                  active ? "opacity-100" : "opacity-0",
-                )}
-              />
-            </button>
-          );
-        })}
-      </div>
-
-      {section === "basics" && <BasicsPanel />}
-      {section === "player" && <PlayerPanel />}
-      {section === "theme" && <ThemePanel />}
-      {section === "language" && <LanguagePanel />}
-      {section === "integrations" && <IntegrationsPanel />}
-      {section === "data" && <DataPanel />}
-      {section === "about" && <AboutPanel />}
+    <div id="set-horse-account" className="space-y-4 max-w-3xl">
+      <HorseAccountCard />
+      <CloudSyncCard />
     </div>
   );
 }
 
-// ---------- Shared M3 pieces ----------
+// ---------- 2 · appearance ----------
 
-/**
- * M3 segmented button group: rounded-full secondary-container track, selected
- * segment = primary-container. In a narrow SettingRow container (container
- * query < 520px) the group becomes full-width with EQUAL segments and nowrap
- * labels. If the labels still cannot fit (320px, 150% font scale), it degrades
- * to an M3-styled dropdown menu — a label never wraps into a sliver.
- */
-function SegmentedControl<
-  T extends string,
->({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T;
-  options: readonly (readonly [T, string])[];
-  onChange: (v: T) => void;
-  label: string;
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = useState(false);
-
-  // Degrade to a dropdown when the equal segments can no longer fit their
-  // nowrap labels (narrow container and/or large font scale).
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const check = () => {
-      const buttons = el.querySelectorAll<HTMLButtonElement>("[role=\"radio\"], button");
-      let needed = 0;
-      buttons.forEach((b) => { needed += Math.ceil(b.scrollWidth) + 8; });
-      setOverflow(needed > el.clientWidth + 2 && el.clientWidth > 0);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [options]);
-
-  if (overflow) {
-    return (
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="md-field-outlined h-11 min-h-11 w-full max-w-56 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container)] px-2.5 text-sm text-ink"
-      >
-        {options.map(([id, text]) => (
-          <option key={id} value={id}>{text}</option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <div ref={wrapRef} className="harbor-segmented" role="group" aria-label={label}>
-      {options.map(([id, text]) => {
-        const selected = value === id;
-        return (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onChange(id)}
-            className={cn(
-              "md-state min-h-10 rounded-full px-4 py-1.5 md-label-large whitespace-nowrap transition-colors",
-              selected
-                ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
-                : "text-[var(--md-sys-color-on-secondary-container)]",
-            )}
-          >
-            {text}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * M3 list item: body-large headline + body-small supporting text, trailing
- * control. Container-query responsive (defect C): below ~520px container
- * width the row STACKS — title + description full width, control below at
- * full width — so the label can never collapse to one word per line.
- * A11y: the title <p> becomes the control's accessible name via
- * aria-labelledby (cloned onto the child control unless it names itself).
- */
-function SettingRow({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  const titleId = useId();
-  const control = Children.map(children, (child) => {
-    if (isValidElement(child)) {
-      const props = child.props as { "aria-label"?: string; "aria-labelledby"?: string };
-      if (!props["aria-label"] && !props["aria-labelledby"]) {
-        return cloneElement(child as React.ReactElement<Record<string, unknown>>, {
-          "aria-labelledby": titleId,
-        });
-      }
-    }
-    return child;
-  });
-  return (
-    <div className="harbor-setting-row md-state px-4 py-3.5">
-      <div className="harbor-setting-row-label">
-        <p id={titleId} className="md-body-large text-ink">{title}</p>
-        {description && <p className="md-body-small text-ink-muted mt-0.5">{description}</p>}
-      </div>
-      <div className="harbor-setting-row-control">{control}</div>
-    </div>
-  );
-}
-
-/**
- * Slider row (defect C spec): title and value on ONE line (value pinned at
- * the inline-end), slider full width below, 48dp touch height.
- */
-function SettingSliderRow({
-  title,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  format,
-}: {
-  title: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => string;
-}) {
-  const tr = useT();
-  return (
-    <div className="harbor-slider-row md-state rounded-[var(--md-sys-shape-corner-medium)] flex flex-col items-stretch gap-1 px-4 py-2">
-      <div className="flex items-center justify-between gap-4 min-w-0">
-        <p className="md-body-large text-ink min-w-0">{title}</p>
-        <span className="shrink-0 md-label-large text-ink-muted tabular-nums">
-          {format ? format(value) : tr.num(value)}
-        </span>
-      </div>
-      <Slider
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={([v]) => onChange(v)}
-        className="harbor-slider-touch"
-        aria-label={title}
-      />
-    </div>
-  );
-}
-
-/** Outlined section card (corner-large) that hosts M3 list items. The card is
- *  the container-query context for its SettingRows (defect C). */
-function SectionCard({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "harbor-cq md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-2 sm:p-3 max-w-3xl",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function BasicsPanel() {
+function AppearancePanel() {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const tr = useT();
+  const { toast } = useToast();
+  const tv = useTvBand();
+
+  const resetDone = () => toast({ title: tr("setResetDone", { name: tr("catAppearance") }) });
+  const resetPosters = () => {
+    update({
+      posterScale: DEFAULT_SETTINGS.posterScale,
+      posterRadius: DEFAULT_SETTINGS.posterRadius,
+      showCardBadges: DEFAULT_SETTINGS.showCardBadges,
+      hidePosterTitles: DEFAULT_SETTINGS.hidePosterTitles,
+    });
+    resetDone();
+  };
+  const resetNav = () => {
+    update({ dockAutoHide: DEFAULT_SETTINGS.dockAutoHide, railAutoHide: DEFAULT_SETTINGS.railAutoHide });
+    resetDone();
+  };
 
   return (
-    <SectionCard className="space-y-1">
-      <SettingRow title={tr("instantPlay")} description={tr("instantPlayDesc")}>
-        <Switch checked={settings.instantPlay} onCheckedChange={(v) => update({ instantPlay: v })} />
-      </SettingRow>
-      <SettingRow title={tr("autoPlayNext")} description={tr("autoPlayNextDesc")}>
-        <Switch checked={settings.autoPlayNextEpisode} onCheckedChange={(v) => update({ autoPlayNextEpisode: v })} />
-      </SettingRow>
-      <SettingRow title={tr("resumePlayback")} description={tr("resumePlaybackDesc")}>
-        <Switch checked={settings.resumePlayback} onCheckedChange={(v) => update({ resumePlayback: v })} />
-      </SettingRow>
-      <SettingRow title={tr("confirmLeave")} description={tr("confirmLeaveDesc")}>
-        <Switch checked={settings.playerConfirmLeave} onCheckedChange={(v) => update({ playerConfirmLeave: v })} />
-      </SettingRow>
-      <SettingRow title={tr("showCardBadges")} description={tr("showCardBadgesDesc")}>
-        <Switch checked={settings.showCardBadges} onCheckedChange={(v) => update({ showCardBadges: v })} />
-      </SettingRow>
-      <SettingRow title={tr("homeMode")} description={tr("homeModeDesc")}>
-        <SegmentedControl
-          label={tr("homeMode")}
+    <div className="space-y-6 max-w-3xl">
+      {/* Theme — the existing ThemePanel, as-is (now inside a titled card) */}
+      <ThemePanel />
+
+      <SectionCard title={tr("tabLanguage")} icon={Languages}>
+        {/* moved verbatim from LanguagePanel — interface language */}
+        <div id="set-uiLanguage" className="rounded-[var(--md-sys-shape-corner-medium)] px-2 py-2">
+          <p className="md-body-large text-ink mb-1">
+            {tr("uiLanguageRow")} · <span lang="ar">لغة الواجهة</span>
+          </p>
+          <p className="md-body-small text-ink-muted mb-3">
+            {tr("uiLanguageRowDesc")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["en", "English"],
+                ["ar", "العربية"],
+              ] as const
+            ).map(([code, label]) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => update({ uiLanguage: code })}
+                className={cn(
+                  "md-chip md-state harbor-tv-focus",
+                  settings.uiLanguage === code && "md-chip-selected border-transparent",
+                )}
+                aria-pressed={settings.uiLanguage === code}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <SegmentedRow
+          id="homeMode"
+          title={tr("homeMode")}
+          description={tr("homeModeDesc")}
           value={settings.homeMode}
-          options={([
-            ["harbor", tr("optHarbor")],
-            ["classic", tr("optClassic")],
-          ] as const).map(([id, label]) => [id, label] as const)}
+          options={[["harbor", tr("optHarbor")], ["classic", tr("optClassic")]] as const}
           onChange={(m) => update({ homeMode: m })}
         />
-      </SettingRow>
-      <SettingRow title={tr("showAllAddonRows")} description={tr("showAllAddonRowsDesc")}>
-        <Switch checked={settings.homeShowAllAddonRows} onCheckedChange={(v) => update({ homeShowAllAddonRows: v })} />
-      </SettingRow>
-      <SettingRow title={tr("hideWatched")} description={tr("hideWatchedDesc")}>
-        <Switch checked={settings.hideWatchedInCatalogs} onCheckedChange={(v) => update({ hideWatchedInCatalogs: v })} />
-      </SettingRow>
-      <SettingRow title={tr("blurEpisodeThumbs")} description={tr("blurEpisodeThumbsDesc")}>
-        <Switch checked={settings.blurEpisodeThumbnails} onCheckedChange={(v) => update({ blurEpisodeThumbnails: v })} />
-      </SettingRow>
-      <SettingRow title={tr("autoHideNav")} description={tr("autoHideNavDesc")}>
-        <Switch checked={settings.dockAutoHide} onCheckedChange={(v) => update({ dockAutoHide: v })} />
-      </SettingRow>
-      <SettingRow title={tr("railMode")} description={tr("railModeDesc")}>
-        <SegmentedControl
-          label={tr("railMode")}
+        <SegmentedRow
+          id="episodesView"
+          title={tr("episodesViewRow")}
+          description={tr("episodesViewRowDesc")}
+          value={settings.episodesView}
+          options={[["auto", tr("optAutoLayout")], ["list", tr("optList")], ["grid", tr("optGrid")]] as const}
+          onChange={(m) => update({ episodesView: m })}
+        />
+        <ToggleRow
+          id="showAllAddonRows"
+          title={tr("showAllAddonRows")}
+          description={tr("showAllAddonRowsDesc")}
+          checked={settings.homeShowAllAddonRows}
+          onCheckedChange={(v) => update({ homeShowAllAddonRows: v })}
+        />
+        <ToggleRow
+          id="hideWatched"
+          title={tr("hideWatched")}
+          description={tr("hideWatchedDesc")}
+          checked={settings.hideWatchedInCatalogs}
+          onCheckedChange={(v) => update({ hideWatchedInCatalogs: v })}
+        />
+        <ToggleRow
+          id="blurEpisodeThumbs"
+          title={tr("blurEpisodeThumbs")}
+          description={tr("blurEpisodeThumbsDesc")}
+          checked={settings.blurEpisodeThumbnails}
+          onCheckedChange={(v) => update({ blurEpisodeThumbnails: v })}
+        />
+      </SectionCard>
+
+      <SectionCard title="Posters & cards" icon={Images} onReset={resetPosters}>
+        <SettingSliderRow
+          id="posterScale"
+          title={tr("posterSize")}
+          value={Math.round(settings.posterScale * 100)}
+          min={70}
+          max={140}
+          step={5}
+          onChange={(v) => update({ posterScale: v / 100 })}
+          format={(v) => `${tr.num(v)}%`}
+          steppers={tv}
+        />
+        <SettingSliderRow
+          id="posterRadius"
+          title={tr("posterRadius")}
+          value={settings.posterRadius}
+          min={0}
+          max={28}
+          step={1}
+          onChange={(v) => update({ posterRadius: v })}
+          format={(v) => `${tr.num(v)}px`}
+          steppers={tv}
+        />
+        <ToggleRow
+          id="showCardBadges"
+          title={tr("showCardBadges")}
+          description={tr("showCardBadgesDesc")}
+          checked={settings.showCardBadges}
+          onCheckedChange={(v) => update({ showCardBadges: v })}
+        />
+        <ToggleRow
+          id="hidePosterTitles"
+          title={tr("hidePosterTitles")}
+          description={tr("hidePosterTitlesDesc")}
+          checked={settings.hidePosterTitles}
+          onCheckedChange={(v) => update({ hidePosterTitles: v })}
+        />
+      </SectionCard>
+
+      <SectionCard title="Navigation" icon={Compass} onReset={resetNav}>
+        <ToggleRow
+          id="dockAutoHide"
+          title={tr("autoHideNav")}
+          description={tr("autoHideNavDesc")}
+          checked={settings.dockAutoHide}
+          onCheckedChange={(v) => update({ dockAutoHide: v })}
+        />
+        <SegmentedRow
+          id="railAutoHide"
+          title={tr("railMode")}
+          description={tr("railModeDesc")}
           value={settings.railAutoHide ? "auto" : "always"}
-          options={([
-            ["auto", tr("optRailAutoHide")],
-            ["always", tr("optRailAlways")],
-          ] as const).map(([id, label]) => [id, label] as const)}
+          options={[["auto", tr("optRailAutoHide")], ["always", tr("optRailAlways")]] as const}
           onChange={(m) => update({ railAutoHide: m === "auto" })}
         />
-      </SettingRow>
-      <SettingSliderRow
-        title={tr("posterSize")}
-        value={Math.round(settings.posterScale * 100)}
-        min={70}
-        max={140}
-        step={5}
-        onChange={(v) => update({ posterScale: v / 100 })}
-        format={(v) => `${tr.num(v)}%`}
-      />
-      <SettingSliderRow
-        title={tr("posterRadius")}
-        value={settings.posterRadius}
-        min={0}
-        max={28}
-        step={1}
-        onChange={(v) => update({ posterRadius: v })}
-        format={(v) => `${tr.num(v)}px`}
-      />
-    </SectionCard>
+      </SectionCard>
+    </div>
   );
 }
 
-function PlayerPanel() {
+// ---------- 3 · playback ----------
+
+function PlaybackPanel() {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const tr = useT();
+  const { toast } = useToast();
+  const tv = useTvBand();
   // Conversion support is a server capability — the control only shows when
   // the host actually runs ffmpeg with TRANSCODE_ENABLED.
   const [transcodeSupported, setTranscodeSupported] = useState<boolean | null>(null);
@@ -424,408 +333,161 @@ function PlayerPanel() {
     };
   }, []);
 
-  return (
-    <SectionCard className="space-y-1">
-      <SettingRow
-        title={tr("secureProxy")}
-        description={tr("secureProxyDesc")}
-      >
-        <SegmentedControl
-          label={tr("secureProxy")}
-          value={settings.proxyMode}
-          options={([
-            ["auto", tr("optAuto")],
-            ["always", tr("optAlways")],
-            ["never", tr("optNever")],
-          ] as const).map(([id, label]) => [id, label] as const)}
-          onChange={(v) => update({ proxyMode: v })}
-        />
-      </SettingRow>
-      {transcodeSupported && (
-        <SettingRow
-          title={tr("convertStreams")}
-          description={tr("convertStreamsDesc")}
-        >
-          <SegmentedControl
-            label={tr("convertStreams")}
-            value={settings.transcodeMode}
-            options={([
-              ["auto", tr("optAuto")],
-              ["ask", tr("optAsk")],
-              ["never", tr("optNever")],
-            ] as const).map(([id, label]) => [id, label] as const)}
-            onChange={(v) => update({ transcodeMode: v })}
-          />
-        </SettingRow>
-      )}
-      <SettingRow
-        title={tr("playableOnly")}
-        description={tr("playableOnlyDesc")}
-      >
-        <Switch checked={settings.playableOnly} onCheckedChange={(v) => update({ playableOnly: v })} />
-      </SettingRow>
-      <SettingRow
-        title={tr("preferH264")}
-        description={tr("preferH264Desc")}
-      >
-        <Switch checked={settings.preferH264} onCheckedChange={(v) => update({ preferH264: v })} />
-      </SettingRow>
-      <SettingSliderRow
-        title={tr("seekStep")}
-        value={settings.seekBackStepSec}
-        min={5}
-        max={60}
-        step={5}
-        onChange={(v) => update({ seekBackStepSec: v, seekForwardStepSec: v })}
-        format={(v) => `${tr.num(v)}s`}
-      />
-      <SettingSliderRow
-        title={tr("subSize")}
-        value={settings.subFontSize}
-        min={14}
-        max={56}
-        step={2}
-        onChange={(v) => update({ subFontSize: v })}
-        format={(v) => `${tr.num(v)}px`}
-      />
-      <SettingSliderRow
-        title={tr("subBackground")}
-        value={Math.round(settings.subBackgroundOpacity * 100)}
-        min={0}
-        max={100}
-        step={5}
-        onChange={(v) => update({ subBackgroundOpacity: v / 100 })}
-        format={(v) => `${tr.num(v)}%`}
-      />
-      <SettingSliderRow
-        title={tr("subBorder")}
-        value={settings.subBorderSize}
-        min={0}
-        max={8}
-        step={1}
-        onChange={(v) => update({ subBorderSize: v })}
-        format={(v) => `${tr.num(v)}px`}
-      />
-      <SettingRow title={tr("videoFill")} description={tr("videoFillDesc")}>
-        <SegmentedControl
-          label={tr("videoFill")}
-          value={settings.videoFill}
-          options={([
-            ["fit", tr("optFit")],
-            ["fill", tr("optFill")],
-            ["zoom", tr("optZoom")],
-          ] as const).map(([id, label]) => [id, label] as const)}
-          onChange={(m) => update({ videoFill: m })}
-        />
-      </SettingRow>
-      <SettingRow title={tr("playerChrome")} description={tr("playerChromeDesc")}>
-        <SegmentedControl
-          label={tr("playerChrome")}
-          value={settings.playerTheme}
-          options={([
-            ["auto", tr("optAuto")],
-            ["default", tr("optDefault")],
-            ["stremio", tr("optStremio")],
-          ] as const).map(([id, label]) => [id, label] as const)}
-          onChange={(m) => update({ playerTheme: m })}
-        />
-      </SettingRow>
-      <SettingRow title={tr("pickerLayout")} description={tr("pickerLayoutDesc")}>
-        <SegmentedControl
-          label={tr("pickerLayout")}
-          value={settings.pickerLayout}
-          options={([
-            ["stremio", tr("optStremio")],
-            ["condensed", tr("optCondensed")],
-          ] as const).map(([id, label]) => [id, label] as const)}
-          onChange={(m) => update({ pickerLayout: m })}
-        />
-      </SettingRow>
-      <SettingRow title={tr("qualityInfo")} description={tr("qualityInfoDesc")}>
-        <Switch checked={settings.showQualityInfo} onCheckedChange={(v) => update({ showQualityInfo: v })} />
-      </SettingRow>
-    </SectionCard>
-  );
-}
-
-function ThemePanel() {
-  const settings = useSettings((s) => s.settings);
-  const update = useSettings((s) => s.update);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [userThemes, setUserThemes] = useState<UserTheme[]>([]);
-
-  // Load saved themes after mount (client-only storage; avoids hydration mismatch)
-  useEffect(() => {
-    const t = setTimeout(() => setUserThemes(loadUserThemes()), 0);
-    return () => clearTimeout(t);
-  }, []);
-
-  const setPreset = (preset: string) => {
-    update({ theme: { ...settings.theme, preset, customColors: null, customName: null } });
-  };
-
-  const applyUserTheme = (t: UserTheme) => {
+  const resetBehavior = () => {
     update({
-      theme: {
-        ...settings.theme,
-        preset: "custom",
-        customColors: t.colors,
-        fontPair: t.fontPair,
-        customLayout: t.layout,
-        customCardStyle: t.cardStyle,
-        customButtonStyle: t.buttonStyle,
-        customName: t.name,
-      },
+      instantPlay: DEFAULT_SETTINGS.instantPlay,
+      autoPlayNextEpisode: DEFAULT_SETTINGS.autoPlayNextEpisode,
+      resumePlayback: DEFAULT_SETTINGS.resumePlayback,
+      resumePrompt: DEFAULT_SETTINGS.resumePrompt,
+      playerConfirmLeave: DEFAULT_SETTINGS.playerConfirmLeave,
     });
-  };
-
-  const removeUserTheme = (id: string) => {
-    const next = deleteUserTheme(id);
-    setUserThemes(next);
-    // If the deleted theme was active, fall back to the default preset
-    if (settings.theme.preset === "custom") {
-      const stillExists = next.some((t) => t.name === settings.theme.customName);
-      if (!stillExists) {
-        update({ theme: { ...settings.theme, preset: "cool-grey", customColors: null, customName: null } });
-      }
-    }
-  };
-
-  const onBgUpload = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 3 * 1024 * 1024) {
-      toast({ title: "Image too large", description: "Use an image under 3 MB.", variant: "destructive" });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      update({ theme: { ...settings.theme, backgroundImage: reader.result as string } });
-    };
-    reader.readAsDataURL(file);
+    toast({ title: tr("setResetDone", { name: tr("catPlayback") }) });
   };
 
   return (
-    <div className="space-y-7 max-w-4xl">
-      {/* NEW M3 controls — Appearance & Contrast (existing sanitized settings keys,
-          consumed live by app-shell's applyTheme; UI only, no new logic) */}
-      <SectionCard className="space-y-1">
-        <SettingRow title="Appearance" description="Light or dark Material 3 scheme of your current palette">
-          <SegmentedControl
-            label="Appearance"
-            value={settings.appearance}
-            options={[
-              ["dark", "Dark"],
-              ["light", "Light"],
-            ] as const}
-            onChange={(v) => update({ appearance: v })}
-          />
-        </SettingRow>
-        <SettingRow title="Contrast" description="Scheme contrast level — higher for stronger legibility">
-          <SegmentedControl
-            label="Contrast"
-            value={settings.contrastLevel}
-            options={[
-              ["standard", "Standard"],
-              ["medium", "Medium"],
-              ["high", "High"],
-            ] as const}
-            onChange={(v) => update({ contrastLevel: v })}
-          />
-        </SettingRow>
+    <div className="space-y-6 max-w-3xl">
+      <SectionCard title="Behavior" icon={Play} onReset={resetBehavior}>
+        <ToggleRow
+          id="instantPlay"
+          title={tr("rowInstantPlay")}
+          description={tr("instantPlayDesc")}
+          checked={settings.instantPlay}
+          onCheckedChange={(v) => update({ instantPlay: v })}
+        />
+        <ToggleRow
+          id="autoPlayNextEpisode"
+          title={tr("rowAutoPlayNext")}
+          description={tr("autoPlayNextDesc")}
+          checked={settings.autoPlayNextEpisode}
+          onCheckedChange={(v) => update({ autoPlayNextEpisode: v })}
+        />
+        <ToggleRow
+          id="resumePlayback"
+          title={tr("rowResume")}
+          description={tr("resumePlaybackDesc")}
+          checked={settings.resumePlayback}
+          onCheckedChange={(v) => update({ resumePlayback: v })}
+        />
+        <ToggleRow
+          id="resumePrompt"
+          title={tr("resumePrompt")}
+          description={tr("resumePromptDesc")}
+          checked={settings.resumePrompt}
+          onCheckedChange={(v) => update({ resumePrompt: v })}
+        />
+        <ToggleRow
+          id="playerConfirmLeave"
+          title={tr("rowConfirmLeave")}
+          description={tr("confirmLeaveDesc")}
+          checked={settings.playerConfirmLeave}
+          onCheckedChange={(v) => update({ playerConfirmLeave: v })}
+        />
       </SectionCard>
 
-      {/* Theme Studio */}
-      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="min-w-0">
-            <h2 className="md-title-medium font-display font-bold text-ink flex items-center gap-2">
-              <Brush className="w-[18px] h-[18px] text-accent" /> Theme Studio
-            </h2>
-            <p className="md-body-small text-ink-muted mt-0.5">
-              Build a fully custom palette, fonts and layout — with live preview. Your accent color
-              seeds the Material 3 palette.
-              {settings.theme.preset === "custom" && settings.theme.customName && (
-                <span className="text-accent font-medium"> Active: {settings.theme.customName}</span>
-              )}
-            </p>
-          </div>
-          <Button onClick={() => setStudioOpen(true)}>
-            <Brush className="w-4 h-4 me-1.5" /> Open Theme Studio
-          </Button>
-        </div>
-        {userThemes.length > 0 && (
-          <div className="mt-4">
-            <p className="md-label-small uppercase tracking-wide text-ink-subtle mb-2">Your saved themes</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {userThemes.map((t) => (
-                <div
-                  key={t.id}
-                  className={cn(
-                    "md-card-outlined group relative p-2.5 cursor-pointer transition-all hover:scale-[1.02]",
-                    settings.theme.preset === "custom" && settings.theme.customName === t.name
-                      ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
-                      : "",
-                  )}
-                  style={{ background: t.colors.canvas }}
-                  onClick={() => applyUserTheme(t)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && applyUserTheme(t)}
-                  aria-label={`Apply theme ${t.name}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-1">
-                      {[t.colors.canvas, t.colors.accent, t.colors.elevated].map((c, i) => (
-                        <span key={i} className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ background: c }} />
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeUserTheme(t.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-white/50 hover:text-danger transition-all"
-                      aria-label={`Delete theme ${t.name}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <p className="text-xs font-semibold mt-1.5 truncate" style={{ color: t.colors.accent }}>
-                    {t.name}
-                  </p>
-                  <p className="text-[10px] text-white/50 capitalize">{t.layout} · {t.fontPair.split("-")[0]}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <SectionCard title="Streams & sources" icon={ListVideo}>
+        <SettingSliderRow
+          id="seekStep"
+          title={tr("rowSeekStep")}
+          value={settings.seekBackStepSec}
+          min={5}
+          max={60}
+          step={5}
+          onChange={(v) => update({ seekBackStepSec: v, seekForwardStepSec: v })}
+          format={(v) => `${tr.num(v)}s`}
+          steppers={tv}
+        />
+        <SegmentedRow
+          id="streamSort"
+          title={tr("streamSort")}
+          description={tr("streamSortDesc")}
+          value={settings.streamSort}
+          options={[["score", tr("optScore")], ["addon", tr("optAddonOrder")]] as const}
+          onChange={(m) => update({ streamSort: m })}
+        />
+        <SegmentedRow
+          id="pickerLayout"
+          title={tr("rowPickerLayout")}
+          description={tr("pickerLayoutDesc")}
+          value={settings.pickerLayout}
+          options={[["stremio", tr("optStremio")], ["condensed", tr("optCondensed")]] as const}
+          onChange={(m) => update({ pickerLayout: m })}
+        />
+        <ToggleRow
+          id="showQualityInfo"
+          title={tr("rowQualityInfo")}
+          description={tr("qualityInfoDesc")}
+          checked={settings.showQualityInfo}
+          onCheckedChange={(v) => update({ showQualityInfo: v })}
+        />
+        <ToggleRow
+          id="playableOnly"
+          title={tr("rowPlayableOnly")}
+          description={tr("playableOnlyDesc")}
+          checked={settings.playableOnly}
+          onCheckedChange={(v) => update({ playableOnly: v })}
+        />
+        <ToggleRow
+          id="preferH264"
+          title={tr("rowPreferH264")}
+          description={tr("preferH264Desc")}
+          checked={settings.preferH264}
+          onCheckedChange={(v) => update({ preferH264: v })}
+        />
+      </SectionCard>
 
-      <div>
-        <h2 className="md-label-large text-ink-muted uppercase tracking-wide mb-1">Theme presets</h2>
-        <p className="md-body-small text-ink-subtle mb-3">Your accent color seeds the Material 3 palette.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {THEME_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPreset(p.id)}
-              className={cn(
-                "md-card-outlined harbor-tv-focus p-3 text-start transition-all hover:scale-[1.02]",
-                settings.theme.preset === p.id
-                  ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
-                  : "",
-              )}
-              style={{ background: p.canvas }}
-              aria-pressed={settings.theme.preset === p.id}
-            >
-              <div className="flex items-center justify-between mb-2.5">
-                <div className="flex gap-1.5">
-                  {p.swatch.map((c) => (
-                    <span key={c} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
-                  ))}
-                </div>
-                {settings.theme.preset === p.id && (
-                  <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
-                    <Check className="w-3 h-3 text-black" />
-                  </span>
-                )}
-              </div>
-              <p className="text-sm font-semibold" style={{ color: p.accent }}>
-                {p.name}
-              </p>
-              <p className="text-[11px] text-white/50 capitalize">{p.layout} layout</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Font pairing</h2>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(FONT_PAIRS) as FontPairId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                update({ theme: { ...settings.theme, fontPair: id } });
-                // live preview: apply font immediately
-                const pair = FONT_PAIRS[id];
-                document.documentElement.style.setProperty("--font-display-var", pair.display);
-                document.documentElement.style.setProperty("--font-sans-var", pair.sans);
-              }}
-              className={cn(
-                "md-chip harbor-tv-focus px-4 !h-11 transition-colors",
-                settings.theme.fontPair === id
-                  ? "md-chip-selected border-transparent"
-                  : "hover:text-ink",
-              )}
-              style={{ fontFamily: FONT_PAIRS[id].display }}
-              aria-pressed={settings.theme.fontPair === id}
-            >
-              {FONT_PAIRS[id].name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="md-label-large text-ink-muted uppercase tracking-wide mb-3">Custom background</h2>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            Upload image
-          </Button>
-          {settings.theme.backgroundImage && (
-            <Button
-              variant="outline"
-              onClick={() => update({ theme: { ...settings.theme, backgroundImage: null } })}
-            >
-              <RotateCcw className="w-4 h-4 me-1" /> Remove
-            </Button>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-subtle">Dim</span>
-            <div className="w-32">
-              <Slider
-                value={[settings.theme.backgroundDim]}
-                min={0}
-                max={1}
-                step={0.05}
-                onValueChange={([v]) => update({ theme: { ...settings.theme, backgroundDim: v } })}
-              />
-            </div>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && onBgUpload(e.target.files[0])}
-            aria-label="Upload background image"
+      <SectionCard title="Pipeline" icon={Server}>
+        <SegmentedRow
+          id="proxy"
+          title={tr("rowProxy")}
+          description={tr("secureProxyDesc")}
+          value={settings.proxyMode}
+          options={[["auto", tr("optAuto")], ["always", tr("optAlways")], ["never", tr("optNever")]] as const}
+          onChange={(m) => update({ proxyMode: m })}
+        />
+        {transcodeSupported && (
+          <SegmentedRow
+            id="transcodeMode"
+            title={tr("rowTranscode")}
+            description={tr("convertStreamsDesc")}
+            value={settings.transcodeMode}
+            options={[["auto", tr("optAuto")], ["ask", tr("optAsk")], ["never", tr("optNever")]] as const}
+            onChange={(m) => update({ transcodeMode: m })}
           />
-        </div>
-      </div>
+        )}
+        <SegmentedRow
+          id="videoFill"
+          title={tr("rowVideoFill")}
+          description={tr("videoFillDesc")}
+          value={settings.videoFill}
+          options={[["fit", tr("optFit")], ["fill", tr("optFill")], ["zoom", tr("optZoom")]] as const}
+          onChange={(m) => update({ videoFill: m })}
+        />
+        <SegmentedRow
+          id="playerTheme"
+          title={tr("rowPlayerChrome")}
+          description={tr("playerChromeDesc")}
+          value={settings.playerTheme}
+          options={[["auto", tr("optAuto")], ["default", tr("optDefault")], ["stremio", tr("optStremio")]] as const}
+          onChange={(m) => update({ playerTheme: m })}
+        />
+      </SectionCard>
 
-      <ThemeStudio
-        open={studioOpen}
-        onClose={() => {
-          setStudioOpen(false);
-          // Restore the persisted theme in case the draft preview diverged, and refresh the saved list
-          applyTheme(useSettings.getState().settings.theme);
-          setUserThemes(loadUserThemes());
-        }}
-      />
+      {/* P2P torrent engine — moved from Integrations (audit Part C #3) */}
+      <div id="set-p2p">
+        <P2pCard />
+      </div>
     </div>
   );
 }
 
-function LanguagePanel() {
+// ---------- 4 · subtitles ----------
+
+function SubtitlesPanel() {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
-  const LANGS = ["English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese", "Arabic", "Hindi", "Portuguese", "Russian", "Italian"];
+  const tr = useT();
+  const { toast } = useToast();
+  const tv = useTvBand();
   const preferred = settings.preferredSubLangs;
 
   const toggleLang = (lang: string) => {
@@ -857,159 +519,636 @@ function LanguagePanel() {
     setOverIdx(null);
   };
 
+  const resetStyle = () => {
+    update({
+      subFontSize: DEFAULT_SETTINGS.subFontSize,
+      subFontColor: DEFAULT_SETTINGS.subFontColor,
+      subBorderColor: DEFAULT_SETTINGS.subBorderColor,
+      subBorderSize: DEFAULT_SETTINGS.subBorderSize,
+      subBackgroundOpacity: DEFAULT_SETTINGS.subBackgroundOpacity,
+      subStyle: DEFAULT_SETTINGS.subStyle,
+    });
+    toast({ title: tr("setResetDone", { name: tr("catSubtitles") }) });
+  };
+
+  /* Live preview style — exactly what the subtitle renderer applies
+     (player-overlay subCssColor + outline math), scaled to ~half size for the
+     16:9 sample frame. */
+  const fontColor = `#${subColorHex(settings.subFontColor, "FFFFFF")}`;
+  const borderColor = `#${subColorHex(settings.subBorderColor, "000000")}`;
+  const stroke = Math.max(1, settings.subBorderSize / 2);
+  const previewStyle: CSSProperties = {
+    color: fontColor,
+    fontSize: `${Math.max(12, settings.subFontSize * 0.5)}px`,
+    lineHeight: 1.35,
+  };
+  if (settings.subStyle === "shadow") {
+    previewStyle.textShadow = "0 1px 4px rgba(0,0,0,.9)";
+  } else if (settings.subStyle === "outline") {
+    previewStyle.textShadow = `-${stroke}px -${stroke}px 0 ${borderColor}, ${stroke}px -${stroke}px 0 ${borderColor}, -${stroke}px ${stroke}px 0 ${borderColor}, ${stroke}px ${stroke}px 0 ${borderColor}`;
+  } else {
+    previewStyle.background = `rgba(0, 0, 0, ${settings.subBackgroundOpacity})`;
+    previewStyle.padding = "0.1em 0.45em";
+    previewStyle.borderRadius = "4px";
+  }
+
   return (
-    <div className="space-y-3 max-w-3xl">
-      {/* Interface language (UI language) — drives RTL + the Arabic text layer + Tajawal font */}
-      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] px-4 py-4">
-        <p className="md-body-large text-ink mb-1">
-          Interface language · <span lang="ar">لغة الواجهة</span>
-        </p>
-        <p className="md-body-small text-ink-muted mb-3">
-          Switch the whole app interface. Arabic applies the approved translation, right-to-left
-          layout and the Tajawal font.
-          <span lang="ar"> — يبدّل واجهة التطبيق بالكامل: الترجمة المعتمدة، والاتجاه من اليمين إلى اليسار، وخط Tajawal.</span>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              ["en", "English"],
-              ["ar", "العربية"],
-            ] as const
-          ).map(([code, label]) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => update({ uiLanguage: code })}
-              className={cn(
-                "md-chip md-state harbor-tv-focus",
-                settings.uiLanguage === code && "md-chip-selected border-transparent",
-              )}
-              aria-pressed={settings.uiLanguage === code}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] px-4 py-4">
-        <p className="md-body-large text-ink mb-1">Preferred subtitle languages</p>
-        <p className="md-body-small text-ink-muted mb-3">
-          Toggle languages below, then order them — the player picks the highest-priority match first.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {LANGS.map((lang) => (
-            <button
-              key={lang}
-              type="button"
-              onClick={() => toggleLang(lang)}
-              className={cn(
-                "md-chip harbor-tv-focus",
-                preferred.includes(lang) && "md-chip-selected border-transparent",
-              )}
-              aria-pressed={preferred.includes(lang)}
-            >
-              {lang}
-            </button>
-          ))}
-        </div>
-
-        {preferred.length > 0 && (
-          <div className="mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted mb-2">
-              Priority order
-            </p>
-            <div className="space-y-1.5" role="list" aria-label="Subtitle language priority">
-              {preferred.map((lang, i) => (
-                <div
-                  key={lang}
-                  role="listitem"
-                  draggable
-                  onDragStart={() => setDragIdx(i)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setOverIdx(i);
-                  }}
-                  onDragLeave={() => setOverIdx((v) => (v === i ? null : v))}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    dropOn(i);
-                  }}
-                  onDragEnd={() => {
-                    setDragIdx(null);
-                    setOverIdx(null);
-                  }}
-                  className={cn(
-                    "harbor-card flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all",
-                    dragIdx === i
-                      ? "border-accent/60 bg-accent-soft opacity-70"
-                      : overIdx === i && dragIdx !== null
-                        ? "border-accent/60 bg-accent-soft/40"
-                        : "border-edge-soft bg-raised/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "shrink-0 w-8 h-8 rounded-[var(--md-sys-shape-corner-small)] flex items-center justify-center text-xs font-bold tabular-nums cursor-grab active:cursor-grabbing",
-                      i === 0 ? "bg-accent text-black" : "bg-raised text-ink-muted",
-                    )}
-                    title="Drag to reorder"
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-sm text-ink harbor-clamp-1">{lang}</span>
-                  {i === 0 && (
-                    <span className="shrink-0 rounded-full bg-accent-soft text-accent px-2 py-0.5 text-[9px] font-bold tracking-wide">
-                      TOP PICK
-                    </span>
-                  )}
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => move(i, i - 1)}
-                      disabled={i === 0}
-                      className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-ink hover:!bg-raised disabled:opacity-30 disabled:hover:!bg-transparent"
-                      aria-label={`Move ${lang} up`}
-                      title="Move up"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(i, i + 1)}
-                      disabled={i === preferred.length - 1}
-                      className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-ink hover:!bg-raised disabled:opacity-30 disabled:hover:!bg-transparent"
-                      aria-label={`Move ${lang} down`}
-                      title="Move down"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleLang(lang)}
-                      className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-danger hover:!bg-raised"
-                      aria-label={`Remove ${lang}`}
-                      title="Remove"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+    <div className="space-y-6 max-w-3xl">
+      <SectionCard title={tr("tabLanguage")} icon={Languages} id="set-preferredSubLangs">
+        {/* moved verbatim from LanguagePanel — subtitle languages + priority */}
+        <div className="px-2 pt-1">
+          <p className="md-body-large text-ink mb-1">{tr("rowSubLangs")}</p>
+          <p className="md-body-small text-ink-muted mb-3">
+            Toggle languages below, then order them — the player picks the highest-priority match first.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {LANGS.map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => toggleLang(lang)}
+                className={cn(
+                  "md-chip harbor-tv-focus",
+                  preferred.includes(lang) && "md-chip-selected border-transparent",
+                )}
+                aria-pressed={preferred.includes(lang)}
+              >
+                {lang}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
-      <SettingRow title="Subtitles off by default" description="Don't auto-enable subtitle tracks">
-        <Switch checked={settings.subtitlesOffByDefault} onCheckedChange={(v) => update({ subtitlesOffByDefault: v })} />
-      </SettingRow>
+
+          {preferred.length > 0 && (
+            <div className="mt-4 mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted mb-2">
+                Priority order
+              </p>
+              <div className="space-y-1.5" role="list" aria-label="Subtitle language priority">
+                {preferred.map((lang, i) => (
+                  <div
+                    key={lang}
+                    role="listitem"
+                    draggable
+                    onDragStart={() => setDragIdx(i)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setOverIdx(i);
+                    }}
+                    onDragLeave={() => setOverIdx((v) => (v === i ? null : v))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropOn(i);
+                    }}
+                    onDragEnd={() => {
+                      setDragIdx(null);
+                      setOverIdx(null);
+                    }}
+                    className={cn(
+                      "harbor-card flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all",
+                      dragIdx === i
+                        ? "border-accent/60 bg-accent-soft opacity-70"
+                        : overIdx === i && dragIdx !== null
+                          ? "border-accent/60 bg-accent-soft/40"
+                          : "border-edge-soft bg-raised/60",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "shrink-0 w-8 h-8 rounded-[var(--md-sys-shape-corner-small)] flex items-center justify-center text-xs font-bold tabular-nums cursor-grab active:cursor-grabbing",
+                        i === 0 ? "bg-accent text-black" : "bg-raised text-ink-muted",
+                      )}
+                      title="Drag to reorder"
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 text-sm text-ink harbor-clamp-1">{lang}</span>
+                    {i === 0 && (
+                      <span className="shrink-0 rounded-full bg-accent-soft text-accent px-2 py-0.5 text-[9px] font-bold tracking-wide">
+                        TOP PICK
+                      </span>
+                    )}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => move(i, i - 1)}
+                        disabled={i === 0}
+                        className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-ink hover:!bg-raised disabled:opacity-30 disabled:hover:!bg-transparent"
+                        aria-label={`Move ${lang} up`}
+                        title="Move up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => move(i, i + 1)}
+                        disabled={i === preferred.length - 1}
+                        className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-ink hover:!bg-raised disabled:opacity-30 disabled:hover:!bg-transparent"
+                        aria-label={`Move ${lang} down`}
+                        title="Move down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleLang(lang)}
+                        className="md-icon-btn harbor-tv-focus !w-11 !h-11 text-ink-muted hover:!text-danger hover:!bg-raised"
+                        aria-label={`Remove ${lang}`}
+                        title="Remove"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <ToggleRow
+          id="subtitlesOffByDefault"
+          title={tr("rowSubOff")}
+          description="Don't auto-enable subtitle tracks"
+          checked={settings.subtitlesOffByDefault}
+          onCheckedChange={(v) => update({ subtitlesOffByDefault: v })}
+        />
+      </SectionCard>
+
+      <SectionCard title="Style" icon={Type} onReset={resetStyle}>
+        <SettingSliderRow
+          id="subFontSize"
+          title={tr("rowSubSize")}
+          value={settings.subFontSize}
+          min={14}
+          max={56}
+          step={2}
+          onChange={(v) => update({ subFontSize: v })}
+          format={(v) => `${tr.num(v)}px`}
+          steppers={tv}
+        />
+        <ColorRow
+          id="subFontColor"
+          title={tr("subFontColor")}
+          description={tr("subFontColorDesc")}
+          value={`#${subColorHex(settings.subFontColor, "FFFFFF")}`}
+          onChange={(v) => update({ subFontColor: v.replace(/^#/, "") })}
+        />
+        <ColorRow
+          id="subBorderColor"
+          title={tr("subBorderColor")}
+          description={tr("subBorderColorDesc")}
+          value={`#${subColorHex(settings.subBorderColor, "000000")}`}
+          onChange={(v) => update({ subBorderColor: v.replace(/^#/, "") })}
+        />
+        <SegmentedRow
+          id="subStyle"
+          title={tr("subStyle")}
+          description={tr("subStyleDesc")}
+          value={settings.subStyle}
+          options={[["shadow", tr("optShadow")], ["outline", tr("optOutline")], ["box", tr("optBox")]] as const}
+          onChange={(m) => update({ subStyle: m })}
+        />
+        <SettingSliderRow
+          id="subBorderSize"
+          title={tr("subBorder")}
+          value={settings.subBorderSize}
+          min={0}
+          max={8}
+          step={1}
+          onChange={(v) => update({ subBorderSize: v })}
+          format={(v) => `${tr.num(v)}px`}
+          steppers={tv}
+        />
+        <SettingSliderRow
+          id="subBackgroundOpacity"
+          title={tr("subBackground")}
+          value={Math.round(settings.subBackgroundOpacity * 100)}
+          min={0}
+          max={100}
+          step={5}
+          onChange={(v) => update({ subBackgroundOpacity: v / 100 })}
+          format={(v) => `${tr.num(v)}%`}
+          steppers={tv}
+        />
+      </SectionCard>
+
+      <PreviewCard title={tr("subPreview")} description={tr("subPreviewDesc")}>
+        <div className="absolute inset-x-0 bottom-[10%] flex justify-center px-8 text-center">
+          <p dir="auto" style={previewStyle}>{tr("subPreviewLine")}</p>
+        </div>
+      </PreviewCard>
     </div>
   );
 }
 
+// ---------- 5 · integrations (P2pCard moved to playback) ----------
+
+function IntegrationsPanel() {
+  const loadLinks = useLinking((s) => s.load);
+  const checkEnv = useLinking((s) => s.checkEnv);
+  const tr = useT();
+  useEffect(() => {
+    loadLinks();
+    void checkEnv();
+  }, [loadLinks, checkEnv]);
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="md-title-medium font-display font-bold text-ink mb-1">{tr("integrationsTitle")}</h2>
+        <p className="md-body-medium text-ink-muted">
+          <RichBidi text={tr("integrationsIntro")} />
+        </p>
+      </div>
+      <TraktCard />
+      <SimklCard />
+      <TmdbCard />
+      <RatingsSettingsCard />
+      <DebridCard />
+      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] px-4 py-3.5 flex items-start gap-3">
+        <ShieldCheck className="w-4.5 h-4.5 text-accent mt-0.5 shrink-0" />
+        <p className="md-body-small text-ink-muted">
+          <RichBidi text={tr("privacyNote")} />
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- 6 · addons — the existing view embedded as-is ----------
+// (rendered directly via the category factory; no extra wrapper needed)
+
+// ---------- 7 · kids & parental ----------
+
+type VerifyFlow = { title: string; description: string; act: () => void };
+
+function KidsPanel() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const tr = useT();
+  const { toast } = useToast();
+  // PIN existence is client-only storage — resolve after mount (SSR-safe).
+  const [pinExists, setPinExists] = useState<boolean | null>(null);
+  const [verify, setVerify] = useState<VerifyFlow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    // Deferred tick (codebase pattern, cf. CloudSyncCard) — client-only
+    // storage read after mount without a synchronous setState in the effect.
+    const t = setTimeout(() => setPinExists(hasParentPin()), 0);
+    return () => clearTimeout(t);
+  }, [verify, createOpen]);
+
+  // Turning kids mode ON is free; turning it OFF requires the parent PIN
+  // when one exists (audit F1 — the gate added by this redesign).
+  const toggleKidsMode = (v: boolean) => {
+    if (v) {
+      update({ kidsMode: true });
+      return;
+    }
+    if (hasParentPin()) {
+      setVerify({
+        title: tr("kidsPinEnter"),
+        description: tr("kidsModeRowDesc"),
+        act: () => update({ kidsMode: false }),
+      });
+      return;
+    }
+    update({ kidsMode: false });
+  };
+
+  const changePinAfterVerify = () => setCreateOpen(true);
+  const removePinAfterVerify = () => {
+    void clearParentPin().then(() => {
+      toast({ title: tr("kidsPinRemoved") });
+      setPinExists(false);
+    });
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <SectionCard icon={Baby}>
+        <ToggleRow
+          id="kidsMode"
+          title={tr("kidsModeRow")}
+          description={tr("kidsModeRowDesc")}
+          checked={settings.kidsMode}
+          onCheckedChange={toggleKidsMode}
+        />
+      </SectionCard>
+
+      {pinExists !== null && (
+        <SectionCard title={tr("kidsPinSet")} icon={Lock}>
+          {!pinExists ? (
+            <ActionRow
+              id="parentPin"
+              title={tr("kidsPinSet")}
+              description={tr("kidsPinSetDesc")}
+              actionLabel={tr("kidsPinCreate")}
+              icon={KeyRound}
+              onAction={() => setCreateOpen(true)}
+            />
+          ) : (
+            <>
+              <ActionRow
+                id="parentPin"
+                title={tr("kidsPinChange")}
+                description={tr("kidsPinSetDesc")}
+                actionLabel={tr("kidsPinChange")}
+                icon={KeyRound}
+                onAction={() =>
+                  setVerify({
+                    title: tr("kidsPinEnter"),
+                    description: tr("kidsPinEnterDesc"),
+                    act: changePinAfterVerify,
+                  })
+                }
+              />
+              <ActionRow
+                title={tr("kidsPinRemove")}
+                description={tr("kidsPinSetDesc")}
+                actionLabel={tr("kidsPinRemove")}
+                icon={KeyRound}
+                variant="outline"
+                onAction={() =>
+                  setVerify({
+                    title: tr("kidsPinEnter"),
+                    description: tr("kidsPinEnterDesc"),
+                    act: removePinAfterVerify,
+                  })
+                }
+              />
+            </>
+          )}
+        </SectionCard>
+      )}
+
+      <SectionCard title="Content limits" icon={Shield}>
+        <SegmentedRow
+          id="kidsCardSize"
+          title={tr("rowCardSize")}
+          value={settings.kidsCardSize}
+          options={
+            [
+              ["large", homeT("sizeLarge", settings.uiLanguage)],
+              ["medium", homeT("sizeMedium", settings.uiLanguage)],
+              ["small", homeT("sizeSmall", settings.uiLanguage)],
+            ] as const
+          }
+          onChange={(m) => update({ kidsCardSize: m })}
+        />
+        <ToggleRow
+          id="hide-anime"
+          title={tr("hideAnime")}
+          description={tr("hideAnimeDesc")}
+          checked={settings.hideContent.anime}
+          onCheckedChange={(v) => update({ hideContent: { ...settings.hideContent, anime: v } })}
+        />
+        <ToggleRow
+          id="hide-livetv"
+          title={tr("hideLiveTv")}
+          description={tr("hideLiveTvDesc")}
+          checked={settings.hideContent.liveTv}
+          onCheckedChange={(v) => update({ hideContent: { ...settings.hideContent, liveTv: v } })}
+        />
+        <ToggleRow
+          id="hide-adult"
+          title={tr("hideAdult")}
+          description={tr("hideAdultDesc")}
+          checked={settings.hideContent.adult}
+          onCheckedChange={(v) => update({ hideContent: { ...settings.hideContent, adult: v } })}
+        />
+      </SectionCard>
+
+      {verify && (
+        <PinPrompt
+          title={verify.title}
+          description={verify.description}
+          onSubmit={async (pin) => {
+            const ok = await verifyParentPin(pin);
+            if (ok) {
+              verify.act();
+              setVerify(null);
+            }
+            return ok;
+          }}
+          onClose={() => setVerify(null)}
+        />
+      )}
+      {createOpen && <PinCreateDialog onClose={() => setCreateOpen(false)} />}
+    </div>
+  );
+}
+
+/** Local PIN prompt (same pattern as the shell's gate dialog). */
+function PinPrompt({
+  title,
+  description,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  onSubmit: (pin: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const tr = useT();
+  const [pin, setPin] = useState("");
+  const [bad, setBad] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    const ok = await onSubmit(pin);
+    setBusy(false);
+    if (!ok) {
+      setBad(true);
+      setPin("");
+      inputRef.current?.focus();
+      setTimeout(() => setBad(false), 900);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div
+        className={cn(
+          "w-full max-w-xs rounded-[var(--md-sys-shape-corner-extra-large)] border border-edge-soft bg-raised p-5 shadow-2xl transition-transform",
+          bad && "animate-[harbor-shake_0.35s_ease]",
+        )}
+      >
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
+            <Lock className="h-5 w-5 text-accent" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="md-title-medium text-ink">{title}</p>
+            <p className="md-body-small text-ink-muted">{description}</p>
+          </div>
+        </div>
+        <input
+          ref={inputRef}
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          dir="ltr"
+          maxLength={8}
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void submit();
+          }}
+          aria-label={title}
+          aria-invalid={bad}
+          className={cn(
+            "h-14 w-full rounded-[var(--md-sys-shape-corner-large)] border bg-background text-center font-mono text-2xl tracking-[0.5em] text-ink outline-none",
+            bad ? "border-danger" : "border-edge-soft focus:border-accent",
+          )}
+          placeholder="••••"
+        />
+        {bad && <p className="mt-2 text-center md-body-small text-danger">{tr("kidsPinWrong")}</p>}
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose} className="md-chip md-state min-h-11 flex-1">
+            {tr("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={pin.length < 4 || busy}
+            className="md-chip md-chip-selected md-state min-h-11 flex-1 font-semibold disabled:opacity-40"
+          >
+            {tr("kidsUnlock")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Create/change PIN: choose → confirm → hashed save. */
+function PinCreateDialog({ onClose }: { onClose: () => void }) {
+  const tr = useT();
+  const { toast } = useToast();
+  const [step, setStep] = useState<"choose" | "confirm">("choose");
+  const [pin, setPin] = useState("");
+  const [first, setFirst] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [step]);
+
+  const title = step === "choose" ? tr("kidsPinChoose") : tr("kidsPinConfirm");
+
+  const submit = async () => {
+    if (busy) return;
+    if (!isValidPinShape(pin)) {
+      setError(tr("kidsPinDigits"));
+      setPin("");
+      return;
+    }
+    if (step === "choose") {
+      setFirst(pin);
+      setPin("");
+      setError(null);
+      setStep("confirm");
+      return;
+    }
+    if (pin !== first) {
+      setError(tr("kidsPinMismatch"));
+      setPin("");
+      return;
+    }
+    setBusy(true);
+    await setParentPin(pin);
+    setBusy(false);
+    toast({ title: tr("kidsPinSaved") });
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div className="w-full max-w-xs rounded-[var(--md-sys-shape-corner-extra-large)] border border-edge-soft bg-raised p-5 shadow-2xl">
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
+            <Lock className="h-5 w-5 text-accent" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="md-title-medium text-ink">{title}</p>
+            <p className="md-body-small text-ink-muted">{tr("kidsPinSetDesc")}</p>
+          </div>
+        </div>
+        <input
+          ref={inputRef}
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          dir="ltr"
+          maxLength={8}
+          value={pin}
+          onChange={(e) => {
+            setPin(e.target.value.replace(/\D/g, "").slice(0, 8));
+            if (error) setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void submit();
+          }}
+          aria-label={title}
+          aria-invalid={!!error}
+          className={cn(
+            "h-14 w-full rounded-[var(--md-sys-shape-corner-large)] border bg-background text-center font-mono text-2xl tracking-[0.5em] text-ink outline-none",
+            error ? "border-danger" : "border-edge-soft focus:border-accent",
+          )}
+          placeholder="••••"
+        />
+        {error && <p className="mt-2 text-center md-body-small text-danger">{error}</p>}
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose} className="md-chip md-state min-h-11 flex-1">
+            {tr("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={pin.length < 4 || busy}
+            className="md-chip md-chip-selected md-state min-h-11 flex-1 font-semibold disabled:opacity-40"
+          >
+            {step === "choose" ? tr("kidsPinConfirm") : tr("save")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- 8 · data ----------
+
 function DataPanel() {
   const { toast } = useToast();
   const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const tr = useT();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const exportBackup = () => {
@@ -1034,7 +1173,7 @@ function DataPanel() {
     a.download = `harbor-web-backup-${new Date().toISOString().slice(0, 10)}.harbx`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Backup exported", description: `${Object.keys(data).length} keys saved.` });
+    toast({ title: tr("backupExported"), description: tr("backupExportedDesc", { n: Object.keys(data).length }) });
   };
 
   const importBackup = async (file: File) => {
@@ -1042,7 +1181,7 @@ function DataPanel() {
       const text = await file.text();
       const parsed = JSON.parse(text) as { format?: string; data?: Record<string, string> };
       if (parsed.format !== "harbor-web-backup" || !parsed.data) {
-        throw new Error("Not a Horse backup file");
+        throw new Error(tr("restoreFailedBody"));
       }
       let restored = 0;
       for (const [key, value] of Object.entries(parsed.data)) {
@@ -1051,12 +1190,12 @@ function DataPanel() {
           restored++;
         }
       }
-      toast({ title: "Backup restored", description: `${restored} keys restored. Reloading…` });
+      toast({ title: tr("backupRestored"), description: tr("backupRestoredDesc", { n: restored }) });
       setTimeout(() => window.location.reload(), 900);
     } catch (e) {
       toast({
-        title: "Restore failed",
-        description: e instanceof Error ? e.message : "Invalid file",
+        title: tr("restoreFailed"),
+        description: e instanceof Error ? e.message : undefined,
         variant: "destructive",
       });
     }
@@ -1069,43 +1208,102 @@ function DataPanel() {
       if (key?.startsWith("harbor-web.")) keys.push(key);
     }
     keys.forEach((k) => window.localStorage.removeItem(k));
-    toast({ title: "Local data cleared", description: "Reloading…" });
+    toast({ title: tr("dataCleared") });
     setTimeout(() => window.location.reload(), 900);
   };
 
+  const togglePrefLang = (lang: string) => {
+    // Live store read — same rapid-toggle guard as the subtitle chips.
+    const cur = useSettings.getState().settings.preferredLanguages;
+    const set = new Set(cur);
+    if (set.has(lang)) set.delete(lang);
+    else set.add(lang);
+    update({ preferredLanguages: Array.from(set) });
+  };
+
   return (
-    <div className="space-y-3 max-w-3xl">
-      <HorseAccountCard />
-      <CloudSyncCard />
-      <SectionCard className="space-y-1">
-        <SettingRow title="Export backup" description={`Save settings, addons, watchlist (${getWatchlist().length} items) to a .harbx file`}>
-          <Button onClick={exportBackup}>Export</Button>
-        </SettingRow>
-        <SettingRow title="Restore backup" description="Import a .harbx backup file">
-          <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            Restore
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".harbx,.json"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && importBackup(e.target.files[0])}
-            aria-label="Import backup file"
-          />
-        </SettingRow>
-        <SettingRow title="Clear local data" description="Remove all Horse data from this browser">
-          <Button variant="destructive" onClick={clearData}>
-            Clear
-          </Button>
-        </SettingRow>
-        <SettingRow
-          title="Current settings size"
-          description={`${(JSON.stringify(settings).length / 1024).toFixed(1)} KB in localStorage`}
-        >
-          <span />
-        </SettingRow>
+    <div className="space-y-6 max-w-3xl">
+      <SectionCard title="Backup & restore" icon={DatabaseBackup}>
+        <ActionRow
+          id="export"
+          title={tr("exportBackupRow")}
+          description={tr("exportBackupDesc", { n: getWatchlist().length })}
+          actionLabel="Export"
+          icon={Download}
+          onAction={exportBackup}
+        />
+        <ActionRow
+          id="restore"
+          variant="outline"
+          title={tr("restoreBackupRow")}
+          description={tr("restoreBackupDesc")}
+          actionLabel="Restore"
+          icon={Upload}
+          onAction={() => fileRef.current?.click()}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".harbx,.json"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && void importBackup(e.target.files[0])}
+          aria-label={tr("restoreBackupRow")}
+        />
+        <DangerActionRow
+          id="clear"
+          title={tr("clearDataRow")}
+          description={tr("clearDataDesc")}
+          actionLabel="Clear"
+          confirmTitle={tr("clearDataTitle")}
+          confirmBody={tr("clearDataBody")}
+          confirmLabel={tr("clearDataConfirm")}
+          onConfirm={clearData}
+          icon={Trash2}
+        />
       </SectionCard>
+
+      {/* Diagnostics footnote — demoted from a full row (audit Part C #8) */}
+      <p className="px-2 md-body-small text-ink-subtle">
+        {tr("settingsSize")} · {tr("settingsSizeDesc", { kb: (JSON.stringify(settings).length / 1024).toFixed(1) })}
+      </p>
+
+      <SectionCard title="Content preferences" icon={Globe2}>
+        <SelectRow
+          id="region"
+          title={tr("regionRow")}
+          description={tr("regionRowDesc")}
+          value={settings.region}
+          options={REGIONS.map((r) => [r, r] as [string, string])}
+          onChange={(v) => update({ region: v })}
+        />
+        <div id="set-preferred-langs" className="rounded-[var(--md-sys-shape-corner-medium)] px-2 py-2">
+          <p className="md-body-large text-ink">{tr("prefLangRow")}</p>
+          <p className="md-body-small text-ink-muted mt-0.5 mb-3">{tr("prefLangRowDesc")}</p>
+          <div className="flex flex-wrap gap-2">
+            {LANGS.map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => togglePrefLang(lang)}
+                className={cn(
+                  "md-chip md-state harbor-tv-focus",
+                  settings.preferredLanguages.includes(lang) && "md-chip-selected border-transparent",
+                )}
+                aria-pressed={settings.preferredLanguages.includes(lang)}
+              >
+                {lang}
+              </button>
+            ))}
+          </div>
+        </div>
+      </SectionCard>
+
+      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] px-4 py-3.5 flex items-start gap-3">
+        <ShieldCheck className="w-4.5 h-4.5 text-accent mt-0.5 shrink-0" />
+        <p className="md-body-small text-ink-muted">
+          <RichBidi text={tr("privacyNoteData")} />
+        </p>
+      </div>
     </div>
   );
 }
@@ -1853,7 +2051,10 @@ function CloudSyncCard() {
           : t("syncStatusIdle");
 
   return (
-    <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 relative overflow-hidden">
+    // Anchor `set-cloudSync`: the shell's search index points here; the card
+    // lives in the account category (audit Part C #1) — the id keeps the
+    // deep link resolvable whenever this pane is open.
+    <div id="set-cloudSync" className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5 relative overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" aria-hidden />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
@@ -1906,6 +2107,8 @@ function CloudSyncCard() {
     </div>
   );
 }
+
+// ---------- 9 · about ----------
 
 function AboutPanel() {
   const canInstall = usePwa((s) => s.canInstall);
@@ -1984,39 +2187,283 @@ function AboutPanel() {
   );
 }
 
-// ---------- Integrations panel ----------
+// ---------- Theme panel (appearance · Theme card) ----------
 
-function IntegrationsPanel() {
-  const loadLinks = useLinking((s) => s.load);
-  const checkEnv = useLinking((s) => s.checkEnv);
+function ThemePanel() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
   const tr = useT();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [userThemes, setUserThemes] = useState<UserTheme[]>([]);
+
+  // Load saved themes after mount (client-only storage; avoids hydration mismatch)
   useEffect(() => {
-    loadLinks();
-    void checkEnv();
-  }, [loadLinks, checkEnv]);
+    const t = setTimeout(() => setUserThemes(loadUserThemes()), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  const setPreset = (preset: string) => {
+    update({ theme: { ...settings.theme, preset, customColors: null, customName: null } });
+  };
+
+  const applyUserTheme = (t: UserTheme) => {
+    update({
+      theme: {
+        ...settings.theme,
+        preset: "custom",
+        customColors: t.colors,
+        fontPair: t.fontPair,
+        customLayout: t.layout,
+        customCardStyle: t.cardStyle,
+        customButtonStyle: t.buttonStyle,
+        customName: t.name,
+      },
+    });
+  };
+
+  const removeUserTheme = (id: string) => {
+    const next = deleteUserTheme(id);
+    setUserThemes(next);
+    // If the deleted theme was active, fall back to the default preset
+    if (settings.theme.preset === "custom") {
+      const stillExists = next.some((t) => t.name === settings.theme.customName);
+      if (!stillExists) {
+        update({ theme: { ...settings.theme, preset: "cool-grey", customColors: null, customName: null } });
+      }
+    }
+  };
+
+  const onBgUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 3 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Use an image under 3 MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      update({ theme: { ...settings.theme, backgroundImage: reader.result as string } });
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h2 className="md-title-medium font-display font-bold text-ink mb-1">{tr("integrationsTitle")}</h2>
-        <p className="md-body-medium text-ink-muted">
-          <RichBidi text={tr("integrationsIntro")} />
-        </p>
+    <SectionCard title={tr("tabTheme")} icon={Palette} className="sm:p-4">
+      <div className="space-y-6">
+        {/* M3 scheme controls (appearance/contrast — consumed by applyTheme) */}
+        <SettingRow id="appearance" title={tr("rowAppearanceMode")} description="Light or dark Material 3 scheme of your current palette">
+          <SegmentedControl
+            label={tr("rowAppearanceMode")}
+            value={settings.appearance}
+            options={[
+              ["dark", "Dark"],
+              ["light", "Light"],
+            ] as const}
+            onChange={(v) => update({ appearance: v })}
+          />
+        </SettingRow>
+        <SettingRow id="contrastLevel" title={tr("rowContrast")} description="Scheme contrast level — higher for stronger legibility">
+          <SegmentedControl
+            label={tr("rowContrast")}
+            value={settings.contrastLevel}
+            options={[
+              ["standard", "Standard"],
+              ["medium", "Medium"],
+              ["high", "High"],
+            ] as const}
+            onChange={(v) => update({ contrastLevel: v })}
+          />
+        </SettingRow>
+
+        {/* Theme Studio */}
+        <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <h2 className="md-title-medium font-display font-bold text-ink flex items-center gap-2">
+                <Brush className="w-[18px] h-[18px] text-accent" /> Theme Studio
+              </h2>
+              <p className="md-body-small text-ink-muted mt-0.5">
+                Build a fully custom palette, fonts and layout — with live preview. Your accent color
+                seeds the Material 3 palette.
+                {settings.theme.preset === "custom" && settings.theme.customName && (
+                  <span className="text-accent font-medium"> Active: {settings.theme.customName}</span>
+                )}
+              </p>
+            </div>
+            <Button onClick={() => setStudioOpen(true)}>
+              <Brush className="w-4 h-4 me-1.5" /> Open Theme Studio
+            </Button>
+          </div>
+          {userThemes.length > 0 && (
+            <div className="mt-4">
+              <p className="md-label-small uppercase tracking-wide text-ink-subtle mb-2">Your saved themes</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {userThemes.map((t) => (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      "md-card-outlined group relative p-2.5 cursor-pointer transition-all hover:scale-[1.02]",
+                      settings.theme.preset === "custom" && settings.theme.customName === t.name
+                        ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
+                        : "",
+                    )}
+                    style={{ background: t.colors.canvas }}
+                    onClick={() => applyUserTheme(t)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && applyUserTheme(t)}
+                    aria-label={`Apply theme ${t.name}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-1">
+                        {[t.colors.canvas, t.colors.accent, t.colors.elevated].map((c, i) => (
+                          <span key={i} className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ background: c }} />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeUserTheme(t.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-white/50 hover:text-danger transition-all"
+                        aria-label={`Delete theme ${t.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-xs font-semibold mt-1.5 truncate" style={{ color: t.colors.accent }}>
+                      {t.name}
+                    </p>
+                    <p className="text-[10px] text-white/50 capitalize">{t.layout} · {t.fontPair.split("-")[0]}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div id="set-theme-preset">
+          <h2 className="md-label-large text-ink-muted uppercase tracking-wide mb-1">{tr("rowTheme")}</h2>
+          <p className="md-body-small text-ink-subtle mb-3">Your accent color seeds the Material 3 palette.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {THEME_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPreset(p.id)}
+                className={cn(
+                  "md-card-outlined harbor-tv-focus p-3 text-start transition-all hover:scale-[1.02]",
+                  settings.theme.preset === p.id
+                    ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
+                    : "",
+                )}
+                style={{ background: p.canvas }}
+                aria-pressed={settings.theme.preset === p.id}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex gap-1.5">
+                    {p.swatch.map((c) => (
+                      <span key={c} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
+                    ))}
+                  </div>
+                  {settings.theme.preset === p.id && (
+                    <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
+                      <Check className="w-3 h-3 text-black" />
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm font-semibold" style={{ color: p.accent }}>
+                  {p.name}
+                </p>
+                <p className="text-[11px] text-white/50 capitalize">{p.layout} layout</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Font pairing</h2>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(FONT_PAIRS) as FontPairId[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  update({ theme: { ...settings.theme, fontPair: id } });
+                  // live preview: apply font immediately
+                  const pair = FONT_PAIRS[id];
+                  document.documentElement.style.setProperty("--font-display-var", pair.display);
+                  document.documentElement.style.setProperty("--font-sans-var", pair.sans);
+                }}
+                className={cn(
+                  "md-chip harbor-tv-focus px-4 !h-11 transition-colors",
+                  settings.theme.fontPair === id
+                    ? "md-chip-selected border-transparent"
+                    : "hover:text-ink",
+                )}
+                style={{ fontFamily: FONT_PAIRS[id].display }}
+                aria-pressed={settings.theme.fontPair === id}
+              >
+                {FONT_PAIRS[id].name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="md-label-large text-ink-muted uppercase tracking-wide mb-3">Custom background</h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              Upload image
+            </Button>
+            {settings.theme.backgroundImage && (
+              <Button
+                variant="outline"
+                onClick={() => update({ theme: { ...settings.theme, backgroundImage: null } })}
+              >
+                <RotateCcw className="w-4 h-4 me-1" /> Remove
+              </Button>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-ink-subtle">Dim</span>
+              <div className="w-32">
+                <Slider
+                  value={[settings.theme.backgroundDim]}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onValueChange={([v]) => update({ theme: { ...settings.theme, backgroundDim: v } })}
+                />
+              </div>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && onBgUpload(e.target.files[0])}
+              aria-label="Upload background image"
+            />
+          </div>
+        </div>
+
+        <ThemeStudio
+          open={studioOpen}
+          onClose={() => {
+            setStudioOpen(false);
+            // Restore the persisted theme in case the draft preview diverged, and refresh the saved list
+            applyTheme(useSettings.getState().settings.theme);
+            setUserThemes(loadUserThemes());
+          }}
+        />
       </div>
-      <TraktCard />
-      <SimklCard />
-      <TmdbCard />
-      <RatingsSettingsCard />
-      <DebridCard />
-      <P2pCard />
-      <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] px-4 py-3.5 flex items-start gap-3">
-        <ShieldCheck className="w-4.5 h-4.5 text-accent mt-0.5 shrink-0" />
-        <p className="md-body-small text-ink-muted">
-          <RichBidi text={tr("privacyNote")} />
-        </p>
-      </div>
-    </div>
+    </SectionCard>
   );
 }
+
+// ---------- Integrations cards (unchanged) ----------
 
 function TraktCard() {
   const { toast } = useToast();

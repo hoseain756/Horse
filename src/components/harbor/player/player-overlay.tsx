@@ -8,7 +8,7 @@ import Hls from "hls.js";
 import {
   X, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Subtitles, Settings2,
   Loader2, AlertTriangle, ChevronLeft, SkipForward, RotateCcw, RotateCw, ArrowLeftRight, PictureInPicture2, Gauge,
-  AudioLines, Layers, Plus, Search, Network, StepBack, StepForward,
+  AudioLines, Layers, Plus, Search, Network, StepBack, StepForward, History,
 } from "lucide-react";
 import type { PlayerPayload } from "@/lib/harbor/store";
 import { useNav, useSettings } from "@/lib/harbor/store";
@@ -1188,6 +1188,18 @@ function VideoStage({
         : 0),
   );
 
+  // FIX 5 (Task 70 / audit F2): resumePrompt — when ON and a saved position
+  // exists (>30s), ASK before the silent seek. While the chip waits, the
+  // auto-seek AND progress persistence are blocked so a slow decision can
+  // never clobber the stored position with ~0. resumePrompt=false keeps the
+  // old silent-resume behavior exactly as it was.
+  const resumeAskInit =
+    settings.resumePlayback && settings.resumePrompt && resumeAt.current > 30
+      ? resumeAt.current
+      : 0;
+  const [resumeAskAt, setResumeAskAt] = useState<number>(resumeAskInit);
+  const resumeAskPending = useRef(resumeAskInit > 0);
+
   // ---- P2P swarm stats polling ----
   // Server engines are polled here; the IN-BROWSER engine pushes stats through
   // its own callbacks (no polling endpoint exists in the page).
@@ -1756,6 +1768,9 @@ function VideoStage({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    // FIX 5: while the resume chip waits for a decision, do NOT seek silently —
+    // the chip's Resume / Start over buttons own that choice.
+    if (resumeAskPending.current) return;
     if (resumeAt.current > 1 && !seekHandled.current) {
       const seek = () => {
         // Resume position is TITLE seconds; the timeline maps it onto the
@@ -1774,6 +1789,43 @@ function VideoStage({
       else video.addEventListener("loadedmetadata", seek, { once: true });
     }
   }, [ready, timeline]);
+
+  // FIX 5: chip actions. Resume applies the SAME seek the silent path used
+  // (title seconds → element time, near-end guard); Start over clears the
+  // stored position and restarts at 0.
+  const acceptResumeAsk = () => {
+    const video = videoRef.current;
+    const pos = resumeAskAt;
+    resumeAskPending.current = false;
+    setResumeAskAt(0);
+    resumeAt.current = pos;
+    if (video) {
+      const dur = timeline.getSnapshot().duration;
+      if (dur == null || pos < dur - 5) {
+        video.currentTime = Math.max(0, timeline.elementTimeFor(pos));
+      }
+    }
+    seekHandled.current = true;
+  };
+  const startOverFromAsk = () => {
+    const video = videoRef.current;
+    resumeAskPending.current = false;
+    setResumeAskAt(0);
+    resumeAt.current = 0;
+    seekHandled.current = true; // the saved spot must never seek in later
+    if (video) video.currentTime = 0;
+    // Persist the cleared position NOW (position 0 → progress 0 → invisible
+    // on Home) so closing the player within the next few seconds can't
+    // resurrect the old resume point.
+    const snap = timeline.getSnapshot();
+    saveProgress(payload, 0, snap.duration, settings, false, snap.isApproximate);
+  };
+  const dismissResumeAsk = () => {
+    // Keep playing from the start without deciding; persistence re-engages
+    // and overwrites the stale position with the real one within ~5s.
+    resumeAskPending.current = false;
+    setResumeAskAt(0);
+  };
 
   // ---- PlaybackTimeline wiring ----
   // The element persists across srcOverride swaps (no stage remount), so the
@@ -1948,6 +2000,10 @@ function VideoStage({
   // ---- Finalize watch progress on unmount + when tab is hidden/closed (Harbor flush parity) ----
   useEffect(() => {
     const flush = () => {
+      // FIX 5: while the resume chip is pending, the stored position must stay
+      // untouched — flushing ~0 here would erase the very position being asked
+      // about (e.g. tab hidden while the chip waits).
+      if (resumeAskPending.current) return;
       // Values come from the timeline (title seconds, real duration or a
       // clearly-flagged approximate one) — never raw video.duration.
       const snap = timeline.getSnapshot();
@@ -2053,6 +2109,9 @@ function VideoStage({
   // Re-runs on every timeline emit (≈8/s); saveProgressThrottled self-throttles.
   useEffect(() => {
     if (!ready) return;
+    // FIX 5: pending resume decision — do not persist, the stored position
+    // stays exactly what the chip offered.
+    if (resumeAskPending.current) return;
     if (time > 0.5) {
       saveProgressThrottled(payload, time, duration, settings, tlSnap.isApproximate);
     }
@@ -2638,20 +2697,31 @@ function VideoStage({
             style={{
               // Scale with player height (fullscreen scales up, small windows down)
               fontSize: `${Math.round(settings.subFontSize * subFontScale)}px`,
-              color: settings.subFontColor,
-              WebkitTextStroke: settings.subBorderSize > 0 ? `${settings.subBorderSize}px ${settings.subBorderColor}` : undefined,
+              // FIX 3 (Task 70 / audit F2): the user's subtitle look reaches the
+              // CSS text layer — text color, outline color and per-style
+              // decoration. This overlay is the ONLY subtitle rendering path
+              // (native <track> layers are suppressed — see the <video> block
+              // above), so HLS/native playback is unaffected by construction.
+              color: subCssColor(settings.subFontColor, "#FFFFFF"),
+              WebkitTextStroke:
+                settings.subBorderSize > 0
+                  ? `${settings.subBorderSize}px ${subCssColor(settings.subBorderColor, "#000000")}`
+                  : undefined,
               paintOrder: "stroke fill",
               background:
                 settings.subStyle === "box"
                   ? `rgba(0,0,0,${settings.subBackgroundOpacity})`
                   : undefined,
-              borderRadius: settings.subStyle === "box" ? "8px" : undefined,
-              padding: settings.subStyle === "box" ? "4px 12px" : undefined,
+              borderRadius: settings.subStyle === "box" ? "4px" : undefined,
+              padding: settings.subStyle === "box" ? "0.15em 0.35em" : undefined,
               textShadow:
                 settings.subStyle === "shadow"
-                  ? "0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.8)"
+                  ? "0 1px 4px rgba(0,0,0,0.9)"
                   : settings.subStyle === "outline"
-                    ? "0 0 2px #000"
+                    ? subOutlineShadow(
+                        subCssColor(settings.subBorderColor, "#000000"),
+                        settings.subBorderSize,
+                      )
                     : undefined,
             }}
           >
@@ -2746,6 +2816,54 @@ function VideoStage({
                 className="md-btn md-btn-tonal md-state h-9!"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FIX 5 (Task 70 / audit F2): resumePrompt — ask before resuming.
+          Same card language as the Up Next card; sits above the transport. */}
+      {resumeAskAt > 0 && (
+        <div
+          className="absolute bottom-28 start-4 z-30 max-w-[min(22rem,calc(100%-2rem))] harbor-pop-in"
+          role="alert"
+          aria-label="Resume playback"
+        >
+          <div className="md-card-elevated rounded-[var(--md-sys-shape-corner-large)]! px-4 py-3.5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <History className="w-3.5 h-3.5 text-accent" />
+              <p className="md-label-medium uppercase text-ink-muted">
+                {settings.uiLanguage.startsWith("ar") ? "استئناف" : "Resume"}
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-ink">
+              {settings.uiLanguage.startsWith("ar")
+                ? `استئناف من ${fmtTime(resumeAskAt)}؟`
+                : `Resume from ${fmtTime(resumeAskAt)}?`}
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={acceptResumeAsk}
+                className="md-btn md-btn-filled md-state h-9! flex-1"
+              >
+                <Play className="md-btn-icon fill-current" /> {homeT("resumeAria", settings.uiLanguage)}
+              </button>
+              <button
+                type="button"
+                onClick={startOverFromAsk}
+                className="md-btn md-btn-tonal md-state h-9!"
+              >
+                {settings.uiLanguage.startsWith("ar") ? "من البداية" : "Start over"}
+              </button>
+              <button
+                type="button"
+                onClick={dismissResumeAsk}
+                className="md-btn md-btn-tonal md-state h-9! w-9! px-0!"
+                aria-label={settings.uiLanguage.startsWith("ar") ? "تجاهل" : "Dismiss"}
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -3261,7 +3379,7 @@ function VideoStage({
                     <Gauge className="w-3.5 h-3.5" /> Speed
                   </p>
                   <div className="grid grid-cols-3 gap-1.5">
-                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                    {speedMenuItems(settings.customPlaybackSpeeds).map((spd) => (
                       <button
                         key={spd}
                         type="button"
@@ -3704,6 +3822,61 @@ function fmtTime(t: number): string {
     : `${m}:${String(s).padStart(2, "0")}`;
 }
 void fmtTime; // retained for potential debug overlays; UI uses formatClock now
+
+/** FIX 3 (Task 70 / audit F2): subtitle colors may be persisted with or without
+ *  the leading "#" (sanitizeSettings validates bare 6-hex, the color picker
+ *  writes #RRGGBB) — normalize to a valid CSS hex color either way. */
+function subCssColor(v: string | undefined, fallback: string): string {
+  const hex = (v ?? "").replace(/^#/, "");
+  return /^[0-9A-Fa-f]{6}$/.test(hex) ? `#${hex}` : fallback;
+}
+
+/** FIX 3: "outline" text-shadow built from the border color — 4-direction
+ *  strokes sized max(1px, subBorderSize/2). When subBorderSize > 2 the stroke
+ *  is double-weighted (diagonals + inner core) so thick strokes stay solid
+ *  instead of pin-holing at glyph joints. */
+function subOutlineShadow(color: string, borderSize: number): string {
+  const px = (n: number) => `${Math.round(n * 100) / 100}px`;
+  const r = Math.max(1, borderSize / 2);
+  const parts = [
+    `${px(-r)} 0 0 ${color}`,
+    `${px(r)} 0 0 ${color}`,
+    `0 ${px(-r)} 0 ${color}`,
+    `0 ${px(r)} 0 ${color}`,
+  ];
+  if (borderSize > 2) {
+    const d = r * 0.7;
+    const c = r * 0.5;
+    parts.push(
+      `${px(-d)} ${px(-d)} 0 ${color}`,
+      `${px(d)} ${px(-d)} 0 ${color}`,
+      `${px(-d)} ${px(d)} 0 ${color}`,
+      `${px(d)} ${px(d)} 0 ${color}`,
+      `${px(-c)} 0 0 ${color}`,
+      `${px(c)} 0 0 ${color}`,
+      `0 ${px(-c)} 0 ${color}`,
+      `0 ${px(c)} 0 ${color}`,
+    );
+  }
+  return parts.join(", ");
+}
+
+/** FIX 4 (Task 70 / audit F2): customPlaybackSpeeds feeds the speed menu.
+ *  Sanitized READ-ONLY (never written back to settings): finite numbers within
+ *  0.25–4, deduped, ascending; 1 is always available; empty/invalid input
+ *  falls back to the classic preset row. */
+function speedMenuItems(custom: number[]): number[] {
+  const clean = Array.from(
+    new Set(
+      (Array.isArray(custom) ? custom : []).filter(
+        (n) => typeof n === "number" && Number.isFinite(n) && n >= 0.25 && n <= 4,
+      ),
+    ),
+  ).sort((a, b) => a - b);
+  if (clean.length === 0) return [0.5, 0.75, 1, 1.25, 1.5, 2];
+  if (!clean.includes(1)) clean.push(1);
+  return clean.sort((a, b) => a - b);
+}
 
 /** Host-only URL display for diagnostics (never the full tokenized URL). */
 function safeHostOf(url: string): string {

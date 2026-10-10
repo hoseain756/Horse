@@ -231,6 +231,7 @@
   --font-display-var: "Sentient", Georgia, serif;
   --font-sans-var: "Switzer", "Inter", system-ui, sans-serif;
   --poster-radius: var(--md-sys-shape-corner-medium);
+  --poster-scale: 1;
   --theme-bg-image: none;
   --theme-bg-dim: 0.65;
 }
@@ -878,8 +879,12 @@ html[data-kids="on"] .harbor-kids-blob {
 
 /* Poster hover lift — M3 emphasized easing + elevation tokens */
 .harbor-poster {
-  border-radius: var(--poster-radius);
+  /* Task 70 / audit F2: --poster-radius is WRITTEN at runtime by
+     lib/harbor/poster-look.ts (posterRadius setting); the theme token is the
+     static fallback. */
+  border-radius: var(--poster-radius, var(--md-sys-shape-corner-medium));
   overflow: hidden;
+  background: var(--color-raised-var); /* shows only while art loads / scale < 1 (matted inset) */
   transition: transform 0.22s var(--md-sys-motion-easing-emphasized), box-shadow 0.22s var(--md-sys-motion-easing-emphasized), outline-color 0.22s;
   outline: 2px solid transparent;
   outline-offset: -1px;
@@ -897,6 +902,17 @@ html[data-kids="on"] .harbor-kids-blob {
   height: 100%;
   object-fit: cover;
   background: var(--color-raised-var);
+}
+/* Task 70 / audit F2: the posterScale setting reaches the real DOM here —
+   a subtle zoom on the art INSIDE card frames only. Scoped to the direct
+   img child of .harbor-poster so the hero backdrop, player up-next thumbs
+   and palette thumbnails (which reuse .harbor-poster-img) never zoom.
+   The frame (.harbor-poster) already has overflow:hidden, so scale > 1
+   crops cleanly and scale < 1 degrades to an intentional matted inset
+   (the frame background above). */
+.harbor-poster > .harbor-poster-img {
+  transform: scale(var(--poster-scale, 1));
+  transform-origin: center;
 }
 
 /* Hero ken-burns drift (Harbor-style cinematic background motion) */
@@ -3407,3 +3423,197 @@ html[lang^="ar"] {
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
+
+/* ==========================================================================
+   Settings redesign (Task 70) — size-class shell, category list, deep links
+   Bands: drill-down <840px · two-pane ≥840px · ten-foot scale ≥1600px.
+   Tokens are consumed by settings/design.tsx + settings/shell.tsx.
+   ========================================================================== */
+:root {
+  --settings-list-w: clamp(280px, 24vw, 320px);
+  --settings-detail-max: 880px;
+  --settings-row-min-h: 56px;
+  --settings-cat-min-h: 72px;
+  --settings-band: 840px;
+  --settings-tv-band: 1600px;
+}
+
+/* ---- Shell scaffolding --------------------------------------------------- */
+.set-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+/* Two-pane ≥840: fixed list column + fluid detail column. */
+@media (min-width: 840px) {
+  .set-shell[data-layout="panes"] {
+    flex-direction: row;
+    align-items: stretch;
+    gap: clamp(20px, 2.5vw, 36px);
+  }
+  .set-shell[data-layout="panes"] > .set-pane-list {
+    width: var(--settings-list-w);
+    flex: 0 0 var(--settings-list-w);
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .set-shell[data-layout="panes"] > .set-pane-detail {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--settings-detail-max);
+  }
+}
+
+/* ---- Category list rows -------------------------------------------------- */
+.set-cat-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: var(--settings-cat-min-h);
+  padding: 10px 14px;
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid transparent;
+  text-align: start;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.set-cat-item:hover { background: rgba(255, 255, 255, 0.05); }
+.set-cat-item[data-active="true"] {
+  background: var(--glass, rgba(255, 255, 255, 0.07));
+  border-color: var(--edge-soft, rgba(255, 255, 255, 0.1));
+  box-shadow: inset 3px 0 0 0 var(--accent, currentColor);
+}
+[dir="rtl"] .set-cat-item[data-active="true"] {
+  box-shadow: inset -3px 0 0 0 var(--accent, currentColor);
+}
+.set-cat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 14px;
+  background: var(--accent-soft, rgba(255, 255, 255, 0.08));
+}
+/* Horizontal phone flavor: swipeable chips on the home surface (compact mode) */
+.set-cat-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 88px;
+  padding: 12px 10px;
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--edge-soft, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+.set-cat-chip:hover { background: rgba(255, 255, 255, 0.08); }
+.set-cat-chip:active { transform: scale(0.97); }
+
+/* ---- Arrival highlight (deep link / search jump) ------------------------- */
+@keyframes harbor-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes harbor-shake { 0%, 100% { transform: translateX(0); } }
+}
+@keyframes harbor-row-arrive {
+  0% { background-color: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+  60% { background-color: color-mix(in srgb, var(--accent) 12%, transparent); }
+  100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; }
+}
+.harbor-row-arrive {
+  animation: harbor-row-arrive 2.4s ease-out both;
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+@media (prefers-reduced-motion: reduce) {
+  .harbor-row-arrive { animation-duration: 0.8s; }
+}
+
+/* ---- Section header inside a category ----------------------------------- */
+.set-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 6px 10px;
+}
+.set-section-head .set-section-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--edge-soft, rgba(255, 255, 255, 0.1));
+}
+
+/* ---- Detail app bar (drill-down) ---------------------------------------- */
+.set-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px -4px 12px;
+  padding: 10px 4px;
+  background: linear-gradient(to bottom, var(--background) 78%, transparent);
+}
+
+/* ---- Glass search field (settings search) -------------------------------- */
+.set-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(12px) saturate(1.35);
+  backdrop-filter: blur(12px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.set-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: rgba(255, 255, 255, 0.09);
+}
+.set-search input {
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--ink, inherit);
+  font-size: 14.5px;
+  width: 100%;
+  min-width: 0;
+}
+.set-search input::placeholder { color: var(--ink-muted, currentColor); opacity: 0.75; }
+
+/* ---- Ten-foot (TV ≥1600) scale ------------------------------------------ */
+@media (min-width: 1600px) {
+  .set-shell {
+    --settings-row-min-h: 72px;
+    --settings-cat-min-h: 80px;
+    --settings-list-w: clamp(320px, 22vw, 380px);
+  }
+  .set-shell .harbor-setting-row { min-height: var(--settings-row-min-h); }
+  .set-shell .md-body-large { font-size: 19px; line-height: 1.55; }
+  .set-shell .md-body-small { font-size: 14px; }
+  .set-shell .md-label-large { font-size: 16px; }
+  .set-shell .set-cat-icon { width: 52px; height: 52px; }
+  .set-shell .set-search input { font-size: 17px; }
+}
+
+/* ---- Phone polish -------------------------------------------------------- */
+@media (max-width: 599px) {
+  .set-cat-item { padding: 10px 12px; border-color: var(--edge-soft, rgba(255, 255, 255, 0.08)); background: rgba(255, 255, 255, 0.03); }
+}
+
+/* hmr-poke: task 70-c poster scale verification */

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNav, useSettings, useSettingsInit, useAddonsInit, frameKey } from "@/lib/harbor/store";
 import { applyTheme, decodeThemeShare, type ActiveTheme } from "@/lib/harbor/themes";
+import { applyPosterLook } from "@/lib/harbor/poster-look";
 import { decodeListShare, importSharedList, type SharedList } from "@/lib/harbor/lists";
 import { installTvNavigation } from "@/lib/harbor/tvnav";
 import { useAuth } from "@/lib/harbor/auth";
@@ -185,6 +186,24 @@ export function AppShell() {
   useEffect(() => {
     void usePwa.getState().init();
   }, []);
+  // Task 70: a #settings/... deep link opens the Settings view directly (the
+  // shell inside applies the category + anchor from the same hash). Mounted
+  // here — client-only — so SSR/hydration never sees a divergent nav stack.
+  // The hashchange subscription keeps same-document deep links working when
+  // the app is already open on another view.
+  useEffect(() => {
+    const openFromHash = () => {
+      if (/^#settings(\/|$)/.test(window.location.hash)) {
+        const top = useNav.getState().stack[useNav.getState().stack.length - 1];
+        if (top.kind !== "view" || top.view !== "settings") {
+          useNav.getState().resetTo({ kind: "view", view: "settings" });
+        }
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, []);
   const settings = useSettings((s) => s.settings);
   const stack = useNav((s) => s.stack);
 
@@ -222,6 +241,10 @@ export function AppShell() {
       kids: settings.kidsMode,
     });
     document.documentElement.dataset.kids = settings.kidsMode ? "on" : "off";
+    // FIX 1 (Task 70 / audit F2): posterScale + posterRadius now reach the real
+    // CSS consumers (.harbor-poster radius + card-img zoom) — written next to
+    // the theme so the sliders respond live with everything else here.
+    applyPosterLook(settings.posterScale, settings.posterRadius);
     // A1: the side rail is compact-only (auto-hide / always-visible). The old
     // data-rail="expanded" hook is gone — no content inset may ever depend on
     // a rail state (--side-safe-inset is constant, so nothing shifts).

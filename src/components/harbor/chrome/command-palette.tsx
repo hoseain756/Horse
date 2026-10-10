@@ -27,6 +27,7 @@ import {
   Plug,
   DatabaseBackup,
   Info,
+  Lock,
 } from "lucide-react";
 import {
   useNav,
@@ -45,6 +46,8 @@ import { getWatchlist, getCwCards, getHistory } from "@/lib/harbor/cw";
 import { THEME_PRESETS } from "@/lib/harbor/themes";
 import { useCloudSync } from "@/lib/harbor/cloud-sync";
 import { usePwa } from "@/lib/harbor/pwa";
+import { hasParentPin, isParentUnlocked, verifyParentPin } from "@/lib/harbor/parent-pin";
+import { t as appT } from "@/lib/harbor/i18n";
 import { PosterImage } from "../common/poster";
 import { cn } from "@/lib/utils";
 
@@ -485,6 +488,15 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
   const [doneQuery, setDoneQuery] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const runToken = useRef(0);
+  // FIX 7 (Task 70 / audit F2): Kids-mode OFF is PIN-gated when a parent PIN
+  // exists (and this tab holds no fresh unlock grant). Turning ON stays free;
+  // no PIN set → today's behavior. The gate renders as a tiny inline confirm
+  // inside the palette overlay — no restructuring.
+  const [pinGate, setPinGate] = useState<{ run: () => void } | null>(null);
+  const [pinValue, setPinValue] = useState("");
+  const [pinWrong, setPinWrong] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
 
   // Focus + lock scroll while mounted (no state resets needed — fresh mount)
   useEffect(() => {
@@ -638,6 +650,25 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
 
   const sel = Math.min(selected, Math.max(0, items.length - 1));
 
+  // FIX 7: verify the PIN, then run the gated action (verifyParentPin grants
+  // the short session unlock on success, so the next OFF toggle is free).
+  const submitPin = async () => {
+    if (pinBusy || !pinGate) return;
+    setPinBusy(true);
+    const ok = await verifyParentPin(pinValue);
+    setPinBusy(false);
+    if (ok) {
+      const run = pinGate.run;
+      setPinGate(null);
+      setPinValue("");
+      run();
+    } else {
+      setPinWrong(true);
+      setPinValue("");
+      pinInputRef.current?.focus();
+    }
+  };
+
   // Keep the selected row in view
   useEffect(() => {
     document
@@ -645,7 +676,7 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
       ?.scrollIntoView({ block: "nearest" });
   }, [sel, items]);
 
-  const runItem = (item: PaletteItem) => {
+  const commitItem = (item: PaletteItem) => {
     if (item.action) {
       setRecents(
         saveRecent({
@@ -662,7 +693,34 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
     item.run();
   };
 
+  const runItem = (item: PaletteItem) => {
+    // FIX 7: gate Kids-mode OFF behind the parent PIN (fresh grant skips the
+    // re-prompt; no PIN → behave exactly as today). ON is never gated.
+    if (
+      item.uid === "act:kids" &&
+      useSettings.getState().settings.kidsMode &&
+      hasParentPin() &&
+      !isParentUnlocked()
+    ) {
+      setPinValue("");
+      setPinWrong(false);
+      setPinGate({ run: () => commitItem(item) });
+      return;
+    }
+    commitItem(item);
+  };
+
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // FIX 7: while the PIN gate is up the palette input stands down — Esc
+    // cancels the gate instead of closing the palette.
+    if (pinGate) {
+      if (e.key === "Escape" || e.key === "Tab") {
+        e.preventDefault();
+        setPinGate(null);
+        setPinValue("");
+      }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
       // Palette shortcut is now Ctrl/Cmd+Shift+P (Ctrl/Cmd+K belongs to the floating search)
       e.preventDefault();
@@ -733,8 +791,79 @@ function PaletteSurface({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Results */}
-        <div id="harbor-palette-list" role="listbox" aria-label="Commands" className="harbor-scroll harbor-palette-scroll p-2">
-          {items.length === 0 ? (
+        <div
+          id="harbor-palette-list"
+          role={pinGate ? "group" : "listbox"}
+          aria-label={pinGate ? "Parent PIN required" : "Commands"}
+          className="harbor-scroll harbor-palette-scroll p-2"
+        >
+          {pinGate ? (
+            /* FIX 7 (Task 70 / audit F2): inline parent-PIN confirm — required
+               to turn Kids Mode OFF while a PIN exists. Reuses the existing
+               parent-pin module (hashed verify + session grant). */
+            <form
+              className="px-2 py-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submitPin();
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Lock className="h-4 w-4 text-accent" />
+                <p className="text-sm font-semibold text-ink">
+                  {appT("kidsPinEnter", settings.uiLanguage)}
+                </p>
+              </div>
+              <p className="text-xs text-ink-subtle mb-3">
+                {settings.uiLanguage.startsWith("ar")
+                  ? "أدخل الرمز لإيقاف وضع الأطفال"
+                  : "Enter the PIN to turn Kids Mode off"}
+              </p>
+              <input
+                ref={pinInputRef}
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                value={pinValue}
+                onChange={(e) => {
+                  setPinValue(e.target.value.replace(/\D/g, "").slice(0, 8));
+                  setPinWrong(false);
+                }}
+                className={cn(
+                  "md-field-outlined h-11 min-h-11 w-full rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container)] px-3 text-sm tracking-[0.3em] text-ink outline-none",
+                  pinWrong && "border-destructive",
+                )}
+                aria-label={appT("kidsPinEnter", settings.uiLanguage)}
+                aria-invalid={pinWrong || undefined}
+                dir="ltr"
+              />
+              {pinWrong && (
+                <p className="mt-2 text-xs font-semibold text-destructive" role="alert">
+                  {appT("kidsPinWrong", settings.uiLanguage)}
+                </p>
+              )}
+              <div className="flex gap-2 mt-3">
+                <button
+                  type="submit"
+                  disabled={pinBusy || pinValue.length < 4}
+                  className="md-btn md-btn-filled md-state h-9 flex-1 disabled:opacity-50"
+                >
+                  {pinBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : appT("kidsPinConfirm", settings.uiLanguage)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinGate(null);
+                    setPinValue("");
+                  }}
+                  className="md-btn md-btn-tonal md-state h-9"
+                >
+                  {appT("cancel", settings.uiLanguage)}
+                </button>
+              </div>
+            </form>
+          ) : items.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <Search className="mx-auto mb-3 h-8 w-8 text-ink-subtle opacity-50" />
               <p className="text-sm text-ink-muted">No matches for “{query.trim()}”</p>

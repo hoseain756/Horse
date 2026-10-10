@@ -6,8 +6,11 @@
 // uses the M3 type scale (md-title-small / md-body-small).
 // NOTE: the release-date line under the title is intentionally NOT rendered
 // (user request: "اخفي التاريخ الذي يكون تحت اسم المسلسل في البطاقات") — keep it that way.
+// Task 70 / audit F2: showCardBadges + hidePosterTitles are REAL consumers now —
+// the on-poster chip cluster and the title/footer block each obey their switch.
 import { memo } from "react";
 import type { Meta } from "@/lib/harbor/types";
+import { useSettings } from "@/lib/harbor/store";
 import { PosterCard } from "./poster";
 import { Star } from "lucide-react";
 
@@ -25,22 +28,26 @@ export const MetaCard = memo(function MetaCard({
   meta: Meta;
   onOpen: () => void;
 }) {
+  // Atomic selectors: each card re-renders only when ITS switches change,
+  // not on every unrelated settings write.
+  const showBadges = useSettings((s) => s.settings.showCardBadges);
+  const hideTitles = useSettings((s) => s.settings.hidePosterTitles);
   const rating = meta.imdbRating && parseFloat(meta.imdbRating) > 0 ? meta.imdbRating : null;
   return (
     <div className="w-full group">
       <PosterCard poster={meta.poster} background={meta.background} name={meta.name} onClick={onOpen}>
-        {rating && (
+        {showBadges && rating && (
           <span className={`${POSTER_CHIP} absolute top-1.5 start-1.5 !text-amber-300`}>
             <Star className="w-3 h-3 fill-amber-300" />
             {rating}
           </span>
         )}
-        {meta.addonOrigin && (
+        {showBadges && meta.addonOrigin && (
           <span className={`${POSTER_CHIP} absolute top-1.5 end-1.5 max-w-[90px] truncate !text-white/90`}>
             {meta.addonOrigin.name}
           </span>
         )}
-        {meta.releaseInfo && (
+        {showBadges && meta.releaseInfo && (
           <span
             className={`${POSTER_CHIP} !bg-black/70 absolute bottom-1.5 start-1.5 !text-white/90 opacity-0 translate-y-1 group-hover/poster:opacity-100 group-hover/poster:translate-y-0 transition-all duration-200`}
           >
@@ -48,11 +55,13 @@ export const MetaCard = memo(function MetaCard({
           </span>
         )}
       </PosterCard>
-      <div className="mt-1.5 px-0.5">
-        <p className="md-title-small harbor-clamp-1 text-ink group-hover:text-accent transition-colors">
-          {meta.name}
-        </p>
-      </div>
+      {!hideTitles && (
+        <div className="mt-1.5 px-0.5">
+          <p className="md-title-small harbor-clamp-1 text-ink group-hover:text-accent transition-colors">
+            {meta.name}
+          </p>
+        </div>
+      )}
     </div>
   );
 });
