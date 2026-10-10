@@ -1,8 +1,9 @@
 # HORSE — AI Memory (persistent session context)
 
 > Purpose: restore full AI working context in one read. Keep this file updated after
-> every completed phase. Last updated: Task 71 SAVEPOINT (HEAD == origin/main == 7215eec,
-> push credentials RESTORED via device flow + credential.helper store).
+> every completed phase. Last updated: Task 74 SAVEPOINT (HEAD == origin/main == e0f927b,
+> push credentials RESTORED via device flow #2 (8822-3F25, AUTH_OK 12:34:56) +
+> credential.helper store; post-restore smoke: health 17 tables, qr/pairing/transfer creates OK).
 
 ## 0. Identity
 
@@ -17,42 +18,50 @@
 - Docs deliverables live in `docs/` (torbox-playback-investigation.md,
   large-screen-hero-corrections.md, settings-redesign/01-audit-and-ia.md).
 
-## 1. Where we are (SAVEPOINT, Task 71 — after container restart)
+## 1. Where we are (SAVEPOINT, Task 74 — after container restart #3)
 
-- **ALL WORK IS SAFE ON GITHUB**: local main == origin/main == `7215eec`. The autopush
-  watcher saved Tasks 69+70 before the sandbox container restarted (2026-10-10 08:37);
-  the Task 71 savepoint docs commit was pushed after the user re-granted push access
-  (device flow AUTH_OK 08:56, credential.helper store re-configured — the file alone
-  is NOT enough, the helper config was the missing piece; watcher PUSH_OK 08:57).
-- **Task 69 (user directives T1/T2/T3) — COMPLETE.**
-  - T1: side rail floats over content in BOTH states (main padding-inline-start 0; zero
-    shift verified by DOM measurement).
-  - T2: search = true glass (shared recipe `rgba(255,255,255,.07)` + blur(12) saturate(1.35)),
-    auto-hides at top ≥1024, 48×5dp peek handle top-center, hover-intent 80ms / leave 700ms,
-    "/" reveals+focus, Esc hides; 768 frozen (peek display:none).
-  - T3: unified player Audio panel — group 1 = current stream tracks (P2P remux report →
-    HLS renditions → native audioTracks), group 2 = "Dubbing sources" (every other addon
-    stream, candidatesRef reuse else one fetchStreams sweep, cap 40, dubTagOf chips); switch
-    = direct instant / debrid / P2P prepare→bounded poll→plan, all resume at current seconds.
-    `dub.ts` detects dub language from stream title. E2E with real multi-dub addon still
-    open (proxy SSRF guard blocks localhost QA addons — by design, do NOT weaken).
-- **Task 70 (Settings redesign, brief "اعد التصميم ابي تصميم جديد 100/100") — COMPLETE.**
-  - NEW design system: `src/components/harbor/settings/design.tsx` (SettingRow/ToggleRow/
-    SectionCard/SegmentedControl/SettingSliderRow/SelectRow/TextFieldRow/ColorRow/ActionRow/
-    DangerActionRow/PreviewCard) + `shell.tsx` (SettingsShell).
-  - IA: 9 categories (account/appearance/playback/subtitles/integrations/addons/kids/data/
-    about). Two-pane ≥840 (list clamp 280-320dp), drill-down <840, TV ≥1600 ten-foot.
-  - Deep links `#settings/<cat>[/<key>]` + 2.4s arrival highlight + settings search (ar/en
-    synonyms) + Kids PIN gate (`parent-pin.ts`: salted SHA-256, 5-min grant, never synced).
-  - 6 dead settings wired (posterScale/posterRadius→CSS vars, showCardBadges/hidePosterTitles
-    →meta-card gates, subFontColor/subBorderColor/subStyle→subtitle layer, customPlaybackSpeeds
-    →speed menu, resumePrompt→ask-before-resume, streamSort→picker sort).
-  - +152 i18n keys. Fixed real bug: sanitizeSettings validated bare-hex vs ColorRow #RRGGBB.
-  - Audit: `bun run audit:ui` (scripts/audit-ui.ts) 13 widths × 2 langs × 2 themes × 2
-    text scales = **104/104 PASS**; supports `--quick`, `--shots`, `--widths=` chunking
-    (background runs get reaped — run in foreground chunks).
-- Earlier milestones: Round 26 large-screen corrections (Task 67, 13 defects, docs/
-  large-screen-hero-corrections.md); TorBox playback gate (Task 66, 8a6f110).
+- **ALL WORK IS SAFE ON GITHUB**: local main == origin/main == `e0f927b`. Third container
+  restart wiped $HOME again; push restored via device flow #2 (user code 8822-3F25,
+  AUTH_OK 12:34:56, poll.sh PUSH_OK e0f927b). Post-restore smoke GREEN: /api/health
+  17 tables; /api/auth/qr/create OK; /api/pairing/create {service:tmdb} pinned OK;
+  /api/transfer/create valid-payload OK. Cron webDevReview recreated (job 449295).
+- **Task 69 (T1/T2/T3) — COMPLETE**: floating side rail (zero shift), glass auto-hide
+  search + peek handle, unified player Audio panel (stream tracks + dub sources,
+  `dub.ts`). T3 E2E with real multi-dub addon still open (SSRF guard blocks localhost
+  QA addons — by design, do NOT weaken).
+- **Task 70 (Settings redesign) — COMPLETE**: `settings/design.tsx` + `shell.tsx`,
+  9 categories, deep links `#settings/<cat>[/<key>]`, Kids PIN gate (`parent-pin.ts`,
+  salted SHA-256, 5-min grant, NEVER synced), +152 i18n keys, `bun run audit:ui`
+  104/104 PASS (supports --quick/--shots/--widths= chunking; foreground only).
+- **Task 72 (QR sign-in + addon transfer) — COMPLETE, browser-verified**:
+  - Prisma models QrLogin + TransferCode (migration 20261010120000).
+  - `/api/auth/qr/{create,peek,approve,deny,status}` (5-min TTL, pollToken sha256-hashed,
+    status mints REAL DB session via createSession then deletes row) +
+    `/api/transfer/{create,claim,cancel}` (6-min TTL, sealed payload, atomic single-use).
+  - `chrome/qr-login.tsx` (3rd tab in signed-out account card + QrApproveDialog +
+    openQrApprove + QR_APPROVE_EVENT, reuses merge-strategy dialog),
+    `chrome/addon-transfer.tsx` (sender/receiver dialogs, non-destructive
+    manifest.id-dedupe merge + tombstone clearing), `chrome/code-input.tsx`
+    (formatCodeGroups + CodeInput + CodeCountdown). app-shell hash consumers
+    `#qrlogin=` and `#transfer=`. 45 i18n keys.
+  - Account login carries ALL keys via the existing cloud-sync snapshot handoff
+    (settings/addons/watchlist/history/cw/themes/lists); Kids PIN never synced.
+- **Task 73 (per-service debrid QR + mobile integrations fixes) — COMPLETE**:
+  - PairingCode.pinnedService (migration 20261010150000); pairing/create accepts
+    {service}; status `?peek=1` NON-CONSUMING (phone peek can't steal handover);
+    claim 409 on pinned mismatch BEFORE upstream validation.
+  - `device-pairing.tsx`: DevicePairingCard({service}) per-tab sender + shared
+    PairingSenderCard + global PairingReceiverHost in app-shell (#pair= from any view).
+  - Mobile fixes: all 12 dialog callers → `sm:max-w-*` (16px margins on phones);
+    toast.tsx bottom/end/safe-area/dock-clearing viewport + always-tappable close;
+    integration toasts translated (+18 i18n keys, +3 ar-dict); receiver service-default
+    race + bidi mangling fixed (desc data-no-ar, code in input only).
+- **Task 73b (TMDB linking via QR/XXX-XXX) — COMPLETE, E2E verified**: pairing service
+  "tmdb" (PairingService union), validateTmdbKeyServer (live TMDB /configuration proof),
+  TmdbPairingCard inside tmdb-card.tsx; phone locks to TMDB, one-tap send of saved
+  tmdbUserKey; kind "v3"|"v4" sealed + relayed. Committed 089b72d.
+- Earlier milestones: Round 26 large-screen corrections (Task 67); TorBox playback gate
+  (Task 66, 8a6f110).
 
 ## 2. Environment quirks & recovery rituals
 
@@ -77,6 +86,14 @@
   `rm -rf .next`, restart `bun run dev`.
 - **OOM (4GB cgroup)**: sharp+Turbopack+Chrome together → use `UV_THREADPOOL_SIZE=2
   VIPS_CONCURRENCY=1`, warm-before-browser cycles (`/tmp/qa-cycle.sh` pattern).
+- **Embedded local Postgres** (127.0.0.1:5433, data in /tmp → WIPED on restart):
+  `bash .zscripts/local-pg.sh && bunx prisma db push`, then RESTART dev (stale prisma
+  client in the running process 502s new columns). local-pg.sh SELF-HEALS ICU 60
+  (sandbox image ships ICU 76; initdb needs libicuuc.so.60 → script downloads+
+  extracts Ubuntu-bionic libicu60 to /tmp/icu60 + LD_LIBRARY_PATH; re-runs after wipe).
+- **Sandbox chmod noise**: new image flips all files 755 → `git config core.fileMode
+  false` already set (keep after $HOME wipes; it lives in .git/config so it SURVIVES,
+  but verify with `git config core.fileMode`).
 - **Sandbox reaps long background processes** (setsid watchdogs, background audits) —
   chunk long jobs into foreground runs (audit `--widths=` chunking).
 - **Engine health**: `curl localhost:3031/health`. Runs plain `node index.mjs` (bun --hot
@@ -87,13 +104,21 @@
 
 ## 3. Next steps (priority order)
 
-1. **Vercel production smoke** on horse-1.vercel.app: Settings redesign live check
-   (9 categories, deep link, PIN gate), auto-hide rail, arrowless hero, dub audio panel.
+1. **PROD SCHEMA BACKPORT (BLOCKS ALL PROD QR FEATURES)**: production Supabase lacks
+   QrLogin + TransferCode tables and PairingCode.pinnedService column. Apply
+   prisma/migrations/20261010120000_add_qr_login_and_transfer_codes/migration.sql +
+   prisma/migrations/20261010150000_add_pairing_pinned_service/migration.sql
+   (migrate deploy with prod DATABASE_URL — sandbox has NO prod creds, ask user —
+   or Supabase SQL editor). Then prod smoke: QR login, transfer, per-service debrid
+   QR, TMDB linking on horse-1.vercel.app.
 2. **T3 E2E** with a reachable multi-dub addon (public URL; SSRF guard blocks localhost).
 3. TorBox "my torrents" management view (carried over).
 4. Orphan-key tombstones in sanitizeSettings (aiEnabled/soundTheme/wrappedButton/
    profileId/tmdbKey) — documented in audit F2.
-5. Pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*).
+5. F5 literal-string i18n sweep (ThemePanel/Trakt/Simkl/Debrid/About).
+6. Pre-existing tsc errors cleanup (auth/mail.ts, horse-account.ts, skills/*, examples/*,
+   mini-services/*) — 14 known, 0 new.
+7. Polish: "1 addon(s)" English plural in transferSuccess toasts.
 
 ## 4. Key file map
 
@@ -105,8 +130,11 @@
   (9 categories) + `lib/harbor/parent-pin.ts` + `lib/harbor/settings.ts`.
 - Player audio: `components/harbor/player/player-overlay.tsx` (unified Audio panel) +
   `lib/harbor/dub.ts` (dub language detection).
+- QR/pairing/transfer: `chrome/{qr-login,addon-transfer,code-input,device-pairing}.tsx`,
+  `lib/harbor/{qr-login-server,transfer-server,pairing-server,tmdb-server}.ts`,
+  routes `/api/auth/qr/*`, `/api/transfer/*`, `/api/pairing/*`, `/api/tmdb/*`.
 - Audit: `scripts/audit-ui.ts` + `qa-shots/audit-report.tsv` (cumulative).
-- `worklog.md` — authoritative chronological handover (Tasks up to 70-final).
+- `worklog.md` — authoritative chronological handover (Tasks up to 74).
 - `agent-ctx/` — per-task handover notes + THIS memory file.
 
 ## 5. Hard rules

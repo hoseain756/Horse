@@ -2364,3 +2364,20 @@ Stage Summary:
 - TMDB QR/XXX-XXX linking is LIVE end-to-end: Settings → Integrations → TMDB → «اربط TMDB عبر QR» shows XXX-XXX + QR (10-min TTL, single-use, AES-256-GCM AAD-bound relay, live TMDB validation before sealing). Phone scans → locks to TMDB → one tap sends the saved key → big screen auto-links. Fully independent of the three debrid flows (server-side pin + 409 guard).
 - Reusable: PairingSenderCard now takes any PairableService — future integrations (Simkl code, etc.) can mount the same card in one line.
 - NEXT candidates: T3 dub E2E (needs public multi-dub addon, still pending); optional TMDB /account username display if TMDB ever exposes account via key.
+
+---
+Task ID: 74
+Agent: Z.ai Code (main)
+Task: Post-restart push-credential restore (GitHub device flow #2, user code 8822-3F25) + full-system verification
+
+Work Log:
+- Context: third container restart wiped $HOME again (~/.git-credentials, watcher state, /tmp incl. embedded Postgres data). User completed device authorization at github.com/login/device with code 8822-3F25; ~/ghflow/poll.sh captured the token (flow.log: AUTH_OK 2026-10-10T12:34:56Z) and pushed (PUSH_OK 30d5560..e0f927b, incl. auto-commit of dev.pid + 3 Task-73b QA screenshots). Token stored ONLY in ~/.git-credentials (chmod 600, outside repo).
+- Verified restore surface: `git config --global credential.helper` = store (required — file alone is NOT enough, ritual held); ~/.gh-autopush.sh watcher running; dev server up (setsid pattern); prisma/Postgres healthy (Task 73b had already re-provisioned via the self-healing local-pg.sh + db:push after the wipe).
+- POST-RESTORE SMOKE (curl, all GREEN): GET /api/health → {ok:true, mode:postgres-pooler, tables:17}; POST /api/auth/qr/create → KMG-UYJ (5-min TTL) proving QrLogin table; POST /api/pairing/create {"service":"tmdb"} → UFF-9N7 pinned (10-min TTL) proving PairingCode.pinnedService; POST /api/transfer/create valid payload → AKK-K83-A6T (6-min TTL, XXX-XXX-XXX) proving TransferCode; empty-addons payload correctly 400 "invalid addons payload" (validation alive). All three Task-72/73 schema artifacts survived the re-provision.
+- Cron hygiene: found BOTH existing webDevReview 15-min jobs (449191, 449282) disabled by the platform ("exec limits exceeded"); deleted both and recreated a fresh one with updated context (job 449295, fixed_rate 900s, Asia/Riyadh) — priority queue now leads with the PROD SCHEMA BACKPORT.
+- docs: agent-ctx/AI-MEMORY.md refreshed to Task 74 savepoint (header, section 1 now covers Tasks 69→73b condensed, section 2 gains embedded-Postgres/ICU-60-self-heal + core.fileMode false rituals, section 3 priority queue rewritten, section 4 gains QR/pairing/transfer file map).
+
+Stage Summary:
+- PUSH SYSTEM GREEN AGAIN (device flow #2): HEAD == origin/main == e0f927b; watcher armed; every future commit auto-pushes within ~60s. Post-restore smoke proves all QR-era tables/features intact after the third $HOME+/tmp wipe.
+- CURRENT STATUS OF THE USER QUEUE: ALL REQUESTED FEATURES DELIVERED & VERIFIED — (1) Integrations mobile popup overflow FIXED; (2) per-service Debrid QR linking (TorBox/Real-Debrid/AllDebrid, fully independent) DONE; (3) TMDB linking via QR/XXX-XXX DONE; (4) TV/laptop/tablet QR sign-in with phone approval DONE; (5) addon transfer code XXX-XXX-XXX + QR, 6-min TTL DONE; (6) sign-in carries ALL keys (cloud-sync snapshot handoff; Kids PIN never synced) DONE.
+- OPEN ITEMS (priority): (1) PROD Supabase schema backport — QrLogin + TransferCode tables and PairingCode.pinnedService column exist ONLY locally; needs migrate deploy / SQL editor with prod DATABASE_URL (sandbox has no prod creds — ASK USER); without it, horse-1.vercel.app QR/pairing/transfer endpoints will 500. (2) T3 dub E2E (needs a public multi-dub addon). (3) TorBox my-torrents view. (4) Orphan-key tombstones in sanitizeSettings. (5) F5 i18n literal-string sweep. (6) 14 pre-existing tsc errors. (7) "1 addon(s)" plural polish.
