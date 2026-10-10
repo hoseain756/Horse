@@ -248,11 +248,12 @@ model AppSettings {
 // single-use, and the row is deleted the moment the waiting screen picks it up
 // (or opportunistically purged once expired — 10 minute TTL).
 model PairingCode {
-  code       String    @id // 6 chars, unambiguous alphabet (no 0/O/1/I)
-  payloadEnc String? // encrypted JSON {service, apiKey, username, premium, expiresAt, planName}
-  claimedAt  DateTime?
-  expiresAt  DateTime
-  createdAt  DateTime  @default(now())
+  code          String    @id // 6 chars, unambiguous alphabet (no 0/O/1/I)
+  payloadEnc    String? // encrypted JSON {service, apiKey, username, premium, expiresAt, planName}
+  pinnedService String? // per-service QR linking: when set, the code only accepts claims for this exact service (null = legacy any-service codes)
+  claimedAt     DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
 }
 
 // QR login relay — a TV / laptop that is not signed in yet shows a short

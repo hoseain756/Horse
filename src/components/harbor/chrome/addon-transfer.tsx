@@ -199,7 +199,7 @@ function TransferSenderDialog({
         if (!v) closeAndCancel(false);
       }}
     >
-      <DialogContent className="md-dialog max-w-sm">
+      <DialogContent className="md-dialog sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-start">
             <ArrowLeftRight className="h-4.5 w-4.5 text-accent" aria-hidden />
@@ -414,7 +414,7 @@ function TransferReceiverDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="md-dialog max-w-sm">
+      <DialogContent className="md-dialog sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-start">
             <QrCode className="h-4.5 w-4.5 text-accent" aria-hidden />

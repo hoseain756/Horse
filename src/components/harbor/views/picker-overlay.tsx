@@ -33,6 +33,7 @@ import {
 import { browserEngineStreamGate } from "@/lib/harbor/browser-engine";
 import { t } from "@/lib/harbor/i18n";
 import { useToast } from "@/hooks/use-toast";
+import { useT } from "@/hooks/use-t";
 import { PlayerOverlay } from "../player/player-overlay";
 import { cn } from "@/lib/utils";
 
@@ -891,6 +892,7 @@ function pickFileIndex(files: { index: number; name: string; length: number }[],
 // ---------------- Inline debrid setup (no settings detour) ----------------
 function DebridSetupDialog({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
+  const tr = useT();
   const validate = useDebrid((s) => s.validate);
   const [svc, setSvc] = useState<DebridService>("torbox");
   const [key, setKey] = useState("");
@@ -909,7 +911,7 @@ function DebridSetupDialog({ onClose }: { onClose: () => void }) {
     const ok = await validate(svc, key.trim());
     setChecking(false);
     if (ok) {
-      toast({ title: "Debrid connected", description: `${serviceName} verified — cached streams unlock instantly now.` });
+      toast({ title: tr("debridConnected", { name: serviceName }), description: tr("debridPickerConnectedDesc", { name: serviceName }) });
       onClose();
     } else {
       setError(useDebrid.getState().error ?? "Could not verify the key.");

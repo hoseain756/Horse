@@ -1871,7 +1871,7 @@ function HorseAccountCard() {
           Also serves the QR sign-in handoff via qrMergePending — same decision,
           same strategies; only the credential POST is skipped. */}
       <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setPendingCreds(null); setQrMergePending(false); } }}>
-        <DialogContent className="md-dialog max-w-md">
+        <DialogContent className="md-dialog sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-start">
               <DownloadCloud className="w-4 h-4 text-accent" />
@@ -1932,7 +1932,7 @@ function HorseAccountCard() {
 
       {/* Overwrite-account confirmation (local-wins) */}
       <AlertDialog open={mergeOverwrite} onOpenChange={setMergeOverwrite}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("mergeOverwriteConfirm")}</AlertDialogTitle>
             <AlertDialogDescription>{t("mergeOverwriteDesc")}</AlertDialogDescription>
@@ -1958,7 +1958,7 @@ function HorseAccountCard() {
 
       {/* Change-password dialog */}
       <Dialog open={pwOpen} onOpenChange={setPwOpen}>
-        <DialogContent className="md-dialog max-w-sm">
+        <DialogContent className="md-dialog sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-start">
               <KeyRound className="w-4 h-4 text-accent" />
@@ -2012,7 +2012,7 @@ function HorseAccountCard() {
 
       {/* Delete-account confirmation (danger) */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Trash2 className="w-4 h-4 text-danger" />
@@ -2070,7 +2070,7 @@ function ForgotPasswordLink({ onDone }: { onDone: (msg: string, bad?: boolean) =
         {t("accountForgotPassword")}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="md-dialog max-w-sm">
+        <DialogContent className="md-dialog sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-start">{t("accountForgotTitle")}</DialogTitle>
             <DialogDescription className="text-start">{t("accountForgotDesc")}</DialogDescription>
@@ -2598,7 +2598,7 @@ function TraktCard() {
       const result = await pollOnce();
       if (!alive) return;
       if (result === "authorized") {
-        toast({ title: "Trakt connected", description: "You can now import your watchlist." });
+        toast({ title: tr("traktToastConnected"), description: tr("traktToastConnectedDesc") });
         return; // stop polling
       }
       if (result === "pending") {
@@ -2622,7 +2622,7 @@ function TraktCard() {
         description: added > 0 ? "Merged into your Library watchlist." : undefined,
       });
     } else {
-      toast({ title: "Import failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+      toast({ title: tr("integrImportFailed"), description: useTrakt.getState().error ?? undefined, variant: "destructive" });
     }
   };
 
@@ -2635,14 +2635,14 @@ function TraktCard() {
         description: added > 0 ? "Merged into your playback history." : undefined,
       });
     } else {
-      toast({ title: "History import failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+      toast({ title: tr("integrHistoryImportFailed"), description: useTrakt.getState().error ?? undefined, variant: "destructive" });
     }
   };
 
   const doPush = async () => {
     const res = await pushWatchlist();
     if (res === null) {
-      toast({ title: "Push failed", description: useTrakt.getState().error ?? undefined, variant: "destructive" });
+      toast({ title: tr("integrPushFailed"), description: useTrakt.getState().error ?? undefined, variant: "destructive" });
       return;
     }
     if (res === "empty") {
@@ -2688,7 +2688,7 @@ function TraktCard() {
               disconnect();
               setWlCount(null);
               setHistCount(null);
-              toast({ title: "Trakt disconnected" });
+              toast({ title: tr("traktToastDisconnected") });
             }}
             className="md-btn-text harbor-tv-focus !h-9 px-3 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
           >
@@ -2726,7 +2726,7 @@ function TraktCard() {
               type="button"
               onClick={() => {
                 cancelConnect();
-                toast({ title: "Trakt connection cancelled" });
+                toast({ title: tr("traktToastCancelled") });
               }}
               className="md-btn-text ms-auto !h-9 text-xs font-semibold text-ink-muted hover:text-ink"
             >
@@ -2849,7 +2849,7 @@ function SimklCard() {
       const result = await pollOnce();
       if (!alive) return;
       if (result === "authorized") {
-        toast({ title: "Simkl connected", description: "You can now import your watchlist." });
+        toast({ title: tr("simklToastConnected"), description: tr("simklToastConnectedDesc") });
         return; // stop polling
       }
       if (result === "pending") {
@@ -2873,7 +2873,7 @@ function SimklCard() {
         description: added > 0 ? "Merged into your Library watchlist." : undefined,
       });
     } else {
-      toast({ title: "Import failed", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
+      toast({ title: tr("integrImportFailed"), description: useSimkl.getState().error ?? undefined, variant: "destructive" });
     }
   };
 
@@ -2886,7 +2886,7 @@ function SimklCard() {
         description: added > 0 ? "Merged into your playback history." : undefined,
       });
     } else {
-      toast({ title: "History import failed", description: useSimkl.getState().error ?? undefined, variant: "destructive" });
+      toast({ title: tr("integrHistoryImportFailed"), description: useSimkl.getState().error ?? undefined, variant: "destructive" });
     }
   };
 
@@ -2913,7 +2913,7 @@ function SimklCard() {
               disconnect();
               setWlCount(null);
               setHistCount(null);
-              toast({ title: "Simkl disconnected" });
+              toast({ title: tr("simklToastDisconnected") });
             }}
             className="md-btn-text harbor-tv-focus !h-9 px-3 text-xs font-semibold text-ink-muted hover:text-danger transition-colors"
           >
@@ -2951,7 +2951,7 @@ function SimklCard() {
               type="button"
               onClick={() => {
                 cancelConnect();
-                toast({ title: "Simkl connection cancelled" });
+                toast({ title: tr("simklToastCancelled") });
               }}
               className="md-btn-text ms-auto !h-9 text-xs font-semibold text-ink-muted hover:text-ink"
             >
@@ -3022,7 +3022,7 @@ function DebridCard() {
 
   const doValidate = async () => {
     if (!key.trim()) {
-      toast({ title: "Paste your API key first", variant: "destructive" });
+      toast({ title: tr("debridValidateFirst"), variant: "destructive" });
       return;
     }
     setChecking(true);
@@ -3030,10 +3030,10 @@ function DebridCard() {
     setChecking(false);
     if (ok) {
       setKey("");
-      toast({ title: "Debrid connected", description: `${serviceName} account verified.` });
+      toast({ title: tr("debridConnected", { name: serviceName }), description: tr("debridConnectedDesc", { name: serviceName }) });
     } else {
       toast({
-        title: "Validation failed",
+        title: tr("debridValidateFailed"),
         description: useDebrid.getState().error ?? undefined,
         variant: "destructive",
       });
@@ -3213,10 +3213,11 @@ function DebridCard() {
         </div>
       )}
 
-      {/* Device pairing — the key usually lives on the phone; send it to this
-          screen with one tap (TV / laptop / iPad), or the reverse. */}
+      {/* Per-service device pairing — the key usually lives on the phone.
+          The QR born under THIS tab is pinned to exactly this service
+          (TorBox ↔ TorBox only, etc.); each flow is fully independent. */}
       <div className="mt-4 pt-4 border-t border-edge-soft">
-        <DevicePairingCard />
+        <DevicePairingCard service={svc} />
       </div>
 
       <div className="mt-4 space-y-2">

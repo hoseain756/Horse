@@ -44,6 +44,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const service = body.service as DebridService;
   const apiKey = body.apiKey as string;
 
+  // Per-service QR linking: when the code was created pinned to one service,
+  // a claim with any OTHER service is rejected outright (the TorBox QR can
+  // never be satisfied with an AllDebrid key, etc.). Unpinned rows accept all.
+  try {
+    const row = await db.pairingCode.findUnique({
+      where: { code },
+      select: { pinnedService: true },
+    });
+    if (row?.pinnedService && row.pinnedService !== service) {
+      return NextResponse.json(
+        { error: "this code is for a different service" },
+        { status: 409 },
+      );
+    }
+  } catch {
+    // Row lookup failed → fall through; the atomic claim below still guards
+    // single-use, and claim unknown/expired rows answers 404 there.
+  }
+
   // Prove the key actually works before sealing it — the receiving screen
   // should never end up with a dead key.
   try {

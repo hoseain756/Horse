@@ -552,6 +552,67 @@ export const APP_STRINGS = {
     en: "Codes are single-use and expire in 10 minutes. The key travels encrypted and is never logged — the relay deletes it the moment the screen receives it.",
     ar: "الكود للاستخدام مرة واحدة وتنتهي صلاحيته بعد 10 دقائق. ينتقل المفتاح مشفراً ولا يُسجَّل أبداً — يحذفه الوسيط لحظة استلام الشاشة له.",
   },
+  // ---- Per-service debrid QR linking (laptop / tablet / TV) ----
+  // Each debrid service gets its OWN QR flow, fully independent: the QR born
+  // on the TorBox tab is pinned to TorBox server-side and can only be
+  // satisfied with a TorBox key — AllDebrid / Real-Debrid flows never touch it.
+  pairQrStart: { en: "Link {name} via QR", ar: "اربط {name} عبر QR" },
+  pairQrLinkedTitle: { en: "{name} linked on this screen!", ar: "تم ربط {name} على هذه الشاشة!" },
+  pairQrLinkedDesc: {
+    en: "{name} ({plan}) is ready — press play on any torrent title.",
+    ar: "{name} ({plan}) جاهز — اضغط تشغيل على أي عنوان تورنت.",
+  },
+  pairReceivePinned: {
+    en: "The screen is waiting for your {name} key.",
+    ar: "الشاشة بانتظار مفتاح {name}.",
+  },
+  pairReceivePinnedSaved: {
+    en: "Send the saved {name} key to the screen?",
+    ar: "إرسال مفتاح {name} المحفوظ إلى الشاشة؟",
+  },
+  pairReceivePinnedNoKey: {
+    en: "No {name} key is saved on this device — paste it below and it will be sent to the screen and saved here too.",
+    ar: "لا يوجد مفتاح {name} محفوظ على هذا الجهاز — ألصقه بالأسفل ليُرسَل إلى الشاشة ويُحفَظ هنا أيضاً.",
+  },
+  pairReceivePinnedNote: {
+    en: "This QR is bound to {name} — other debrid services can't claim it.",
+    ar: "رمز QR هذا مرتبط بـ {name} — خدمات ديبريد الأخرى لا يمكنها استخدامه.",
+  },
+  pairServiceMismatch: {
+    en: "This code belongs to a different debrid service.",
+    ar: "هذا الكود يخص خدمة ديبريد مختلفة.",
+  },
+  pairPeekFailed: {
+    en: "Could not check the code — make sure the screen is still showing it.",
+    ar: "تعذّر التحقق من الكود — تأكد أن الشاشة لا تزال تعرضه.",
+  },
+  pairKeyFind: { en: "Get it from {url}", ar: "تجده في {url}" },
+  // ---- Integration toasts (previously hardcoded English — now real i18n) ----
+  debridValidateFirst: { en: "Paste your API key first", ar: "ألصق مفتاح API أولاً" },
+  debridConnected: { en: "{name} connected", ar: "تم ربط {name}" },
+  debridConnectedDesc: { en: "{name} account verified.", ar: "تم التحقق من حساب {name}." },
+  debridValidateFailed: { en: "Validation failed", ar: "فشل التحقق" },
+  debridPickerConnectedDesc: {
+    en: "{name} verified — cached streams unlock instantly now.",
+    ar: "تم التحقق من {name} — ستعمل البثوث المخزنة مؤقتاً فوراً الآن.",
+  },
+  traktToastConnected: { en: "Trakt connected", ar: "تم ربط Trakt" },
+  traktToastConnectedDesc: {
+    en: "You can now import your watchlist.",
+    ar: "يمكنك الآن استيراد قائمة المشاهدة.",
+  },
+  traktToastDisconnected: { en: "Trakt disconnected", ar: "تم قطع اتصال Trakt" },
+  traktToastCancelled: { en: "Trakt connection cancelled", ar: "تم إلغاء اتصال Trakt" },
+  simklToastConnected: { en: "Simkl connected", ar: "تم ربط Simkl" },
+  simklToastConnectedDesc: {
+    en: "You can now import your watchlist.",
+    ar: "يمكنك الآن استيراد قائمة المشاهدة.",
+  },
+  simklToastDisconnected: { en: "Simkl disconnected", ar: "تم قطع اتصال Simkl" },
+  simklToastCancelled: { en: "Simkl connection cancelled", ar: "تم إلغاء اتصال Simkl" },
+  integrImportFailed: { en: "Import failed", ar: "فشل الاستيراد" },
+  integrHistoryImportFailed: { en: "History import failed", ar: "فشل استيراد السجل" },
+  integrPushFailed: { en: "Push failed", ar: "فشل الدفع" },
   // ---- QR sign-in (big screen ↔ logged-in phone) ----
   // A TV/laptop/tablet that isn't signed in shows XXX-XXX + QR (#qrlogin=CODE);
   // the signed-in phone approves, the screen's next status poll carries the

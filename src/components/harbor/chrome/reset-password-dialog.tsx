@@ -53,7 +53,7 @@ export function ResetPasswordDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="md-dialog max-w-sm">
+      <DialogContent className="md-dialog sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-start">
             <KeyRound className="w-4 h-4 text-accent" />

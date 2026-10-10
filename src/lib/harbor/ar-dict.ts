@@ -844,4 +844,8 @@ export const AR_DICT: Record<string, string> = {
   "\"Torrent has no files\" — /prepare 404": "\"لا يحتوي التورنت على ملفات\" — /prepare 404",
   "\"Video conversion is disabled on this server (TRANSCODE_ENABLED).\" — /remux?vtrans 503": "\"تحويل الفيديو معطل على هذا الخادم (TRANSCODE_ENABLED).\" — /remux?vtrans 503",
   "\"Remux busy — try again in a moment\" — /remux 503": "\"إعادة التغليف مشغولة — حاول مرة أخرى بعد لحظة\" — /remux 503",
+  // Debrid upstream errors (surface in toasts / inline errors on the phone)
+  "Invalid Real-Debrid API key": "مفتاح Real-Debrid غير صالح",
+  "Invalid AllDebrid API key": "مفتاح AllDebrid غير صالح",
+  "Invalid TorBox API key": "مفتاح TorBox غير صالح",
 };

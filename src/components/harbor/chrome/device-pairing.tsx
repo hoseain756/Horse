@@ -1,6 +1,6 @@
 "use client";
 
-// Harbor Web — Device pairing (big screen ↔ phone)
+// Harbor Web — Device pairing (big screen ↔ phone), PER DEBRID SERVICE
 //
 // A big screen (TV / laptop / iPad) shows a short XXX-XXX code + QR deep link
 // (#pair=CODE). The phone — which already holds the Debrid API key in its
@@ -8,9 +8,18 @@
 // over. The server is only a relay: the payload is encrypted at rest,
 // single-use, deleted the moment the waiting screen picks it up.
 //
+// Each service has its OWN, fully independent flow: the QR born on the
+// TorBox tab is pinned to TorBox server-side (PairingCode.pinnedService) and
+// can never be satisfied by an AllDebrid / Real-Debrid key (claim route 409s
+// any mismatch). The phone reads the pin from a non-consuming status peek
+// (?peek=1) and locks its UI to exactly that service.
+//
 // Both directions live here:
-//   • <DevicePairingCard />  — the pairing surface inside Settings → Debrid
-//   • openPairingReceiver()  — app-shell calls this for #pair= deep links
+//   • <DevicePairingCard service /> — the per-service QR sender inside
+//     Settings → Integrations → Debrid (mounted under the active service tab)
+//   • <PairingReceiverHost />      — mounted ONCE in app-shell so the #pair=
+//     deep link opens the phone-side dialog from ANY view (no mount race),
+//     also opened by the "Send key to a screen" buttons.
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import {
@@ -39,10 +48,11 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-// App-shell dispatches this (detail = 6-char code) when the URL carries #pair=
+// App-shell dispatches this (detail = 6-char code, "" for manual entry) when
+// the URL carries #pair= — and the in-app "Send key to a screen" buttons.
 const PAIR_RECEIVE_EVENT = "harbor:pairing-receive";
 
-export function openPairingReceiver(code: string): void {
+export function openPairingReceiver(code = ""): void {
   window.dispatchEvent(new CustomEvent(PAIR_RECEIVE_EVENT, { detail: code }));
 }
 
@@ -54,15 +64,45 @@ const SERVICES: readonly (readonly [DebridService, string])[] = [
   ["alldebrid", "AllDebrid"],
 ];
 
+function serviceNameOf(svc: DebridService): string {
+  return svc === "realdebrid" ? "Real-Debrid" : svc === "alldebrid" ? "AllDebrid" : "TorBox";
+}
+
+function serviceKeyUrl(svc: DebridService): string {
+  return svc === "realdebrid"
+    ? "https://real-debrid.com/account"
+    : svc === "alldebrid"
+      ? "https://alldebrid.com/api/"
+      : "https://torbox.app/settings";
+}
+
+function serviceKeyHost(svc: DebridService): string {
+  return svc === "realdebrid"
+    ? "real-debrid.com/account"
+    : svc === "alldebrid"
+      ? "alldebrid.com/api"
+      : "torbox.app/settings";
+}
+
 /** "K7Q2XD" → "K7Q-2XD" (Latin-only → safe to render without bidi wrapping). */
 function formatCode(raw: string): string {
   const up = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
   return up.length > 3 ? `${up.slice(0, 3)}-${up.slice(3)}` : up;
 }
 
+function isDebridService(v: unknown): v is DebridService {
+  return v === "realdebrid" || v === "alldebrid" || v === "torbox";
+}
+
 // ---------------------------------------------------------------- sender ---
 
-export function DevicePairingCard() {
+/**
+ * Per-service QR linking card. `service` is the ACTIVE debrid tab; the pairing
+ * code created here is pinned to it server-side, so the phone can only ever
+ * complete the flow with a key for exactly this service. The three services'
+ * flows share nothing but the visual design — by design and by the 409 guard.
+ */
+export function DevicePairingCard({ service }: { service: DebridService }) {
   const { toast } = useToast();
   const tr = useT();
   const applyLinked = useDebrid((s) => s.applyLinked);
@@ -75,12 +115,10 @@ export function DevicePairingCard() {
   const [copied, setCopied] = useState(false);
   const [linked, setLinked] = useState<{ username: string | null; plan: string } | null>(null);
 
-  // Receiver dialog (phone side) — also opened by the #pair= deep link.
-  const [rxOpen, setRxOpen] = useState(false);
-  const [rxCode, setRxCode] = useState("");
-
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(false);
+  const serviceRef = useRef(service);
+  serviceRef.current = service;
 
   const stopPolling = useCallback(() => {
     alive.current = false;
@@ -94,17 +132,6 @@ export function DevicePairingCard() {
     },
     [stopPolling],
   );
-
-  // #pair=CODE deep link (phone scanned the TV's QR)
-  useEffect(() => {
-    const h = (e: Event) => {
-      const c = (e as CustomEvent<string>).detail ?? "";
-      setRxCode(c);
-      setRxOpen(true);
-    };
-    window.addEventListener(PAIR_RECEIVE_EVENT, h);
-    return () => window.removeEventListener(PAIR_RECEIVE_EVENT, h);
-  }, []);
 
   const schedulePoll = useCallback(
     (c: string, exp: number) => {
@@ -129,13 +156,14 @@ export function DevicePairingCard() {
             planName?: string | null;
           };
           if (!alive.current) return;
-          if (res.ok && d.status === "linked" && d.apiKey && d.service) {
-            applyLinked(d.service, d.apiKey, {
+          if (res.ok && d.status === "linked" && d.apiKey && isDebridService(d.service)) {
+            const profile: DebridProfile = {
               username: d.username ?? null,
               premium: d.premium === true,
               expiresAt: typeof d.expiresAt === "number" ? d.expiresAt : null,
               planName: d.planName ?? null,
-            });
+            };
+            applyLinked(d.service, d.apiKey, profile);
             setLinked({
               username: d.username ?? null,
               plan: d.planName ?? (d.premium ? "Premium" : "Free"),
@@ -166,10 +194,21 @@ export function DevicePairingCard() {
     try {
       const res = await fetch("/api/pairing/create", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Pin the code to THIS service — the QR can only ever be satisfied
+        // with a key for it (enforced again server-side at claim time).
+        body: JSON.stringify({ service: serviceRef.current }),
         signal: AbortSignal.timeout(15_000),
       });
-      const d = (await res.json()) as { code?: string; displayCode?: string; expiresAt?: number; error?: string };
+      const d = (await res.json()) as {
+        code?: string;
+        displayCode?: string;
+        service?: string;
+        expiresAt?: number;
+        error?: string;
+      };
       if (!res.ok || !d.code) throw new Error(d.error ?? "create failed");
+      if (d.service !== serviceRef.current) throw new Error("service pin mismatch");
       const exp = typeof d.expiresAt === "number" ? d.expiresAt : Date.now() + 600_000;
       alive.current = true;
       setCode(d.code);
@@ -234,6 +273,8 @@ export function DevicePairingCard() {
     }
   };
 
+  const name = serviceNameOf(service);
+
   return (
     <div className="rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft p-4">
       <div className="flex items-start gap-3">
@@ -241,7 +282,9 @@ export function DevicePairingCard() {
           <MonitorSmartphone className="h-4.5 w-4.5 text-accent" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-ink">{tr("pairCardTitle")}</p>
+          <p className="text-sm font-bold text-ink">
+            <RichBidi text={tr("pairQrStart", { name })} />
+          </p>
           <p className="mt-0.5 text-xs text-ink-subtle">
             <RichBidi text={tr("pairCardDesc")} />
           </p>
@@ -256,9 +299,9 @@ export function DevicePairingCard() {
             ) : (
               <Smartphone className="w-4 h-4 me-1.5" aria-hidden />
             )}
-            {phase === "creating" ? tr("pairStarting") : tr("pairStart")}
+            {phase === "creating" ? tr("pairStarting") : tr("pairQrStart", { name })}
           </Button>
-          <Button variant="outline" onClick={() => { setRxCode(""); setRxOpen(true); }} className="md-btn-outlined">
+          <Button variant="outline" onClick={() => openPairingReceiver("")} className="md-btn-outlined">
             <Send className="w-4 h-4 me-1.5" aria-hidden />
             {tr("pairReceiveOpen")}
           </Button>
@@ -271,10 +314,17 @@ export function DevicePairingCard() {
           <div className="mx-auto mb-1.5 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
             <Check className="h-4.5 w-4.5" aria-hidden />
           </div>
-          <p className="md-title-small font-semibold">{tr("pairLinkedTitle")}</p>
-          <p className="mt-0.5 text-xs">
-            <RichBidi text={tr("pairLinkedDesc", { name: linked.username ?? "Debrid", plan: linked.plan })} />
+          <p className="md-title-small font-semibold">
+            <RichBidi text={tr("pairQrLinkedTitle", { name })} />
           </p>
+          <p className="mt-0.5 text-xs">
+            <RichBidi
+              text={tr("pairQrLinkedDesc", { name: linked.username ?? name, plan: linked.plan })}
+            />
+          </p>
+          <Button onClick={() => void cancel()} variant="ghost" className="md-btn-text !h-9 mt-2 text-xs">
+            {tr("pairNewCode")}
+          </Button>
         </div>
       ) : phase === "expired" ? (
         <div className="mt-3 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] p-3.5" role="alert">
@@ -318,13 +368,21 @@ export function DevicePairingCard() {
 
             {qr && (
               <div className="rounded-xl bg-white p-1.5 shadow-lg" title={tr("pairScanTitle")}>
-                <img src={qr} alt={tr("pairScanTitle")} className="h-36 w-36" />
+                <img src={qr} alt={tr("pairScanTitle")} className="h-36 w-36 max-w-full" />
               </div>
             )}
           </div>
 
           <p className="mt-2.5 text-xs text-ink-subtle">
             <RichBidi text={tr("pairScanHint")} />
+          </p>
+
+          <p className="mt-1.5 flex items-start gap-1.5 text-xs text-ink-subtle">
+            <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
+            {/* The separation promise: this code serves THIS service only. */}
+            <span data-no-ar>
+              <RichBidi text={tr("pairReceivePinnedNote", { name })} />
+            </span>
           </p>
 
           <div className="mt-3 flex items-center gap-3 flex-wrap">
@@ -346,22 +404,10 @@ export function DevicePairingCard() {
         </div>
       )}
 
-      <p className="mt-3 flex items-start gap-1.5 text-[11px] text-ink-subtle/80">
+      <p className="mt-3 flex items-start gap-1.5 text-xs text-ink-subtle/80">
         <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
         <RichBidi text={tr("pairSecurity")} />
       </p>
-
-      {/* Mount-on-open: fresh state per scan, no reset effects needed. */}
-      {rxOpen && (
-        <PairingReceiverDialog
-          key={`${rxCode}-${String(rxOpen)}`}
-          open
-          initialCode={rxCode}
-          onOpenChange={(v) => {
-            if (!v) setRxOpen(false);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -376,7 +422,7 @@ function PairCountdown({ expiresAt }: { expiresAt: number }) {
   const mm = String(Math.floor(left / 60)).padStart(2, "0");
   const ss = String(left % 60).padStart(2, "0");
   return (
-    <p className="mt-1.5 text-[11px] text-ink-subtle tabular-nums" role="timer">
+    <p className="mt-1.5 text-xs text-ink-subtle tabular-nums" role="timer">
       <Bdi className={cn("font-semibold", left < 60 && "text-danger")}>{mm}:{ss}</Bdi>
     </p>
   );
@@ -385,9 +431,44 @@ function PairCountdown({ expiresAt }: { expiresAt: number }) {
 // -------------------------------------------------------------- receiver ---
 
 /**
- * Phone-side dialog: send THIS device's saved debrid key (or a freshly pasted
- * one) to the screen that shows the code. On success the key is ALSO saved
- * locally — so a phone that had no key yet ends up configured too.
+ * Global host — mounted ONCE in app-shell so the #pair= deep link opens the
+ * receiver from ANY view (previously it only listened while Settings →
+ * Integrations was mounted, so a fresh QR scan could miss the event entirely).
+ */
+export function PairingReceiverHost() {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+
+  useEffect(() => {
+    const h = (e: Event) => {
+      const c = (e as CustomEvent<string>).detail ?? "";
+      setCode(c);
+      setOpen(true);
+    };
+    window.addEventListener(PAIR_RECEIVE_EVENT, h);
+    return () => window.removeEventListener(PAIR_RECEIVE_EVENT, h);
+  }, []);
+
+  // Mount-on-open: fresh state per scan, no reset effects needed.
+  if (!open) return null;
+  return (
+    <PairingReceiverDialog
+      key={`${code}-${String(open)}`}
+      open
+      initialCode={code}
+      onOpenChange={(v) => {
+        if (!v) setOpen(false);
+      }}
+    />
+  );
+}
+
+/**
+ * Phone-side dialog: send THIS device's saved key (or a freshly pasted one)
+ * to the screen that shows the code. When the screen's code is pinned to a
+ * service (per-service QR linking) the UI locks to exactly that service — a
+ * TorBox QR can only be satisfied with the TorBox key. On success the key is
+ * ALSO saved locally — so a phone that had no key yet ends up configured too.
  */
 function PairingReceiverDialog({
   open,
@@ -409,7 +490,11 @@ function PairingReceiverDialog({
   const applyLinked = useDebrid((s) => s.applyLinked);
 
   const [code, setCode] = useState(() => formatCode(initialCode));
-  const [svc, setSvc] = useState<DebridService>(savedService);
+  // Explicit switcher choice (legacy unpinned codes only — pinned codes hide it).
+  const [svcOverride, setSvcOverride] = useState<DebridService | null>(null);
+  // Pinned service of the screen's code: "unknown" while the peek is in
+  // flight, null = legacy any-service code, otherwise the locked service.
+  const [pinned, setPinned] = useState<DebridService | null | "unknown">("unknown");
   const [key, setKey] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -427,9 +512,64 @@ function PairingReceiverDialog({
     [],
   );
 
-  const hasSaved = savedStatus === "valid" && typeof savedKey === "string" && savedKey.length >= 10;
   const rawCode = code.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  const ready = rawCode.length === 6 && (hasSaved || key.trim().length >= 10) && !sending;
+  const peekedFor = useRef("");
+  const peekSeq = useRef(0);
+
+  // Non-consuming peek (status?peek=1): resolves WHICH service this code is
+  // for (per-service QR linking) and rejects wrong/expired codes early —
+  // before the user digs a key out for nothing. Never claims the handover.
+  useEffect(() => {
+    if (done || rawCode.length !== 6) return;
+    if (peekedFor.current === rawCode) return;
+    peekedFor.current = rawCode;
+    const seq = ++peekSeq.current;
+    let alive = true;
+    // Deferred tick (codebase pattern, cf. CloudSyncPrompt) — the state reset
+    // must not run synchronously inside the effect body.
+    const t = setTimeout(async () => {
+      if (!alive) return;
+      setPinned("unknown");
+      setErr(null);
+      try {
+        const res = await fetch(`/api/pairing/status?code=${encodeURIComponent(rawCode)}&peek=1`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(12_000),
+        });
+        const d = (await res.json()) as { status?: string; service?: unknown };
+        if (!alive || seq !== peekSeq.current) return;
+        if (res.ok && d.status === "waiting") {
+          setPinned(isDebridService(d.service) ? d.service : null);
+          setErr(null);
+          return;
+        }
+        if (res.ok && d.status === "claimed") {
+          setPinned(null);
+          setErr(tr("pairAlreadyUsed"));
+          return;
+        }
+        // missing → wrong / expired / already relayed
+        setPinned(null);
+        setErr(tr("pairWrongCode"));
+      } catch {
+        // network hiccup → fall back to the free-choice UI; the claim call
+        // still validates the code server-side.
+        if (alive && seq === peekSeq.current) setPinned(null);
+      }
+    }, 0);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [rawCode, done, tr]);
+
+  const hasSaved = savedStatus === "valid" && typeof savedKey === "string" && savedKey.length >= 10;
+  const resolved = pinned !== "unknown";
+  const locked = resolved && pinned !== null;
+  const svc: DebridService = locked
+    ? (pinned as DebridService)
+    : (svcOverride ?? (loaded ? savedService : "torbox"));
+  const ready = rawCode.length === 6 && resolved && (hasSaved || key.trim().length >= 10) && !sending;
 
   const send = async (service: DebridService, apiKey: string) => {
     setSending(true);
@@ -450,12 +590,15 @@ function PairingReceiverDialog({
         error?: string;
       };
       if (!res.ok || !d.ok) {
+        const msg = d.error ?? "";
         setErr(
-          res.status === 404
-            ? tr("pairWrongCode")
+          msg.includes("different service")
+            ? tr("pairServiceMismatch")
             : res.status === 409
               ? tr("pairAlreadyUsed")
-              : d.error ?? tr("pairFailed"),
+              : res.status === 404
+                ? tr("pairWrongCode")
+                : msg || tr("pairFailed"),
         );
         setSending(false);
         return;
@@ -477,25 +620,35 @@ function PairingReceiverDialog({
     }
   };
 
-  const serviceName = svc === "realdebrid" ? "Real-Debrid" : svc === "alldebrid" ? "AllDebrid" : "TorBox";
+  const name = serviceNameOf(svc);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!sending) onOpenChange(v); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="md-dialog sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="h-4.5 w-4.5 text-accent" aria-hidden />
             {tr("pairReceiveTitle")}
           </DialogTitle>
-          {rawCode.length === 6 && !done && (
-            <DialogDescription>
+          {!done && rawCode.length === 6 && resolved && (
+            <DialogDescription data-no-ar>
+              {/* Code-free descriptions — the code lives in the input below it.
+                  Interpolating "XXX-XXX" mid-sentence was the bidi-mangling vector. */}
               <RichBidi
-                text={tr("pairReceiveDesc", { code: formatCode(rawCode), name: hasSaved ? serviceName : "Debrid" })}
+                text={
+                  locked
+                    ? hasSaved
+                      ? tr("pairReceivePinnedSaved", { name })
+                      : tr("pairReceivePinnedNoKey", { name })
+                    : hasSaved
+                      ? tr("pairReceivePinnedSaved", { name })
+                      : tr("pairReceiveNoKey")
+                }
               />
             </DialogDescription>
           )}
-          {rawCode.length !== 6 && !done && (
-            <DialogDescription>
+          {!done && rawCode.length !== 6 && (
+            <DialogDescription data-no-ar>
               <RichBidi text={tr("pairReceiveEnterCode")} />
             </DialogDescription>
           )}
@@ -537,70 +690,154 @@ function PairingReceiverDialog({
               />
             </div>
 
-            {hasSaved ? (
-              <Button onClick={() => void send(savedService, savedKey as string)} disabled={sending} className="md-btn-filled w-full !h-[52px]">
-                {sending ? (
-                  <Loader2 className="md-btn-icon animate-spin" aria-hidden />
+            {rawCode.length === 6 && !resolved && (
+              <p className="flex items-center gap-2 text-xs text-ink-muted" role="status">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                {tr("qrApproveChecking")}
+              </p>
+            )}
+
+            {resolved && (
+              <>
+                {locked ? (
+                  <>
+                    {hasSaved ? (
+                      // Phone already holds a key for exactly THIS service → one tap.
+                      <Button
+                        onClick={() => void send(svc, savedKey as string)}
+                        disabled={sending}
+                        className="md-btn-filled w-full !h-[52px]"
+                      >
+                        {sending ? (
+                          <Loader2 className="md-btn-icon animate-spin" aria-hidden />
+                        ) : (
+                          <Send className="md-btn-icon" aria-hidden />
+                        )}
+                        {sending ? tr("pairSending") : tr("pairReceiveSavedKey")}
+                        {savedUsername && (
+                          <span className="ms-1 opacity-80">
+                            (<Bdi>@{savedUsername}</Bdi>)
+                          </span>
+                        )}
+                      </Button>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <Input
+                          type="password"
+                          value={key}
+                          onChange={(e) => setKey(e.target.value)}
+                          placeholder={`${name} API key`}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="md-field-outlined bg-transparent px-3 font-mono text-xs"
+                        />
+                        <p className="text-xs text-ink-subtle">
+                          <RichBidi text={tr("pairKeyFind", { url: serviceKeyHost(svc) })} />{" "}
+                          <a
+                            href={serviceKeyUrl(svc)}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-accent underline underline-offset-2"
+                          >
+                            <Bdi>{serviceKeyHost(svc)}</Bdi>
+                          </a>
+                        </p>
+                        <Button
+                          onClick={() => void send(svc, key.trim())}
+                          disabled={!ready}
+                          className="md-btn-filled w-full !h-[52px]"
+                        >
+                          {sending ? (
+                            <Loader2 className="md-btn-icon animate-spin" aria-hidden />
+                          ) : (
+                            <Send className="md-btn-icon" aria-hidden />
+                          )}
+                          {sending ? tr("pairSending") : tr("pairSend")}
+                        </Button>
+                      </div>
+                    )}
+                    <p className="flex items-start gap-1.5 text-xs text-ink-subtle">
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
+                      <span data-no-ar>
+                        <RichBidi text={tr("pairReceivePinnedNote", { name })} />
+                      </span>
+                    </p>
+                  </>
                 ) : (
-                  <Send className="md-btn-icon" aria-hidden />
+                  // Legacy unpinned code (or peek fell back) → free choice.
+                  <>
+                    {hasSaved ? (
+                      <Button
+                        onClick={() => void send(svc, savedKey as string)}
+                        disabled={sending}
+                        className="md-btn-filled w-full !h-[52px]"
+                      >
+                        {sending ? (
+                          <Loader2 className="md-btn-icon animate-spin" aria-hidden />
+                        ) : (
+                          <Send className="md-btn-icon" aria-hidden />
+                        )}
+                        {sending ? tr("pairSending") : tr("pairReceiveSavedKey")}
+                        {savedUsername && (
+                          <span className="ms-1 opacity-80">
+                            (<Bdi>@{savedUsername}</Bdi>)
+                          </span>
+                        )}
+                      </Button>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <p className="text-xs text-ink-subtle">
+                          <RichBidi text={tr("pairReceiveNoKey")} />
+                        </p>
+                        <div
+                          className="inline-flex rounded-full bg-[var(--md-sys-color-secondary-container)] p-1 w-fit"
+                          role="tablist"
+                          aria-label="Debrid service"
+                        >
+                          {SERVICES.map(([id, label]) => (
+                            <button
+                              key={id}
+                              type="button"
+                              role="tab"
+                              aria-selected={svc === id}
+                              onClick={() => setSvcOverride(id)}
+                              className={cn(
+                                "md-state harbor-tv-focus rounded-full min-h-9 px-3 py-1 text-xs font-semibold transition-colors",
+                                svc === id
+                                  ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
+                                  : "text-[var(--md-sys-color-on-secondary-container)]",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <Input
+                          type="password"
+                          value={key}
+                          onChange={(e) => setKey(e.target.value)}
+                          placeholder={`${name} API key`}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="md-field-outlined bg-transparent px-3 font-mono text-xs"
+                        />
+                        <Button
+                          onClick={() => void send(svc, key.trim())}
+                          disabled={!ready}
+                          className="md-btn-filled w-full !h-[52px]"
+                        >
+                          {sending ? (
+                            <Loader2 className="md-btn-icon animate-spin" aria-hidden />
+                          ) : (
+                            <Send className="md-btn-icon" aria-hidden />
+                          )}
+                          {sending ? tr("pairSending") : tr("pairSend")}
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
-                {sending ? tr("pairSending") : tr("pairReceiveSavedKey")}
-                {savedUsername && (
-                  <span className="ms-1 opacity-80">
-                    (<Bdi>@{savedUsername}</Bdi>)
-                  </span>
-                )}
-              </Button>
-            ) : (
-              <div className="space-y-2.5">
-                <p className="text-xs text-ink-subtle">
-                  <RichBidi text={tr("pairReceiveNoKey")} />
-                </p>
-                <div
-                  className="inline-flex rounded-full bg-[var(--md-sys-color-secondary-container)] p-1 w-fit"
-                  role="tablist"
-                  aria-label="Debrid service"
-                >
-                  {SERVICES.map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={svc === id}
-                      onClick={() => setSvc(id)}
-                      className={cn(
-                        "md-state harbor-tv-focus rounded-full min-h-9 px-3 py-1 text-xs font-semibold transition-colors",
-                        svc === id
-                          ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
-                          : "text-[var(--md-sys-color-on-secondary-container)]",
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <Input
-                  type="password"
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder={`${serviceName} API key`}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="md-field-outlined bg-transparent px-3 font-mono text-xs"
-                />
-                <Button
-                  onClick={() => void send(svc, key.trim())}
-                  disabled={!ready}
-                  className="md-btn-filled w-full !h-[52px]"
-                >
-                  {sending ? (
-                    <Loader2 className="md-btn-icon animate-spin" aria-hidden />
-                  ) : (
-                    <Send className="md-btn-icon" aria-hidden />
-                  )}
-                  {sending ? tr("pairSending") : tr("pairSend")}
-                </Button>
-              </div>
+              </>
             )}
 
             {err && (
@@ -609,7 +846,7 @@ function PairingReceiverDialog({
               </p>
             )}
 
-            <p className="flex items-start gap-1.5 text-[11px] text-ink-subtle/80">
+            <p className="flex items-start gap-1.5 text-xs text-ink-subtle/80">
               <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden />
               <RichBidi text={tr("pairSecurity")} />
             </p>

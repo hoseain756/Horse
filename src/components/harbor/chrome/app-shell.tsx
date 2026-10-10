@@ -13,7 +13,7 @@ import { useCloudSync, installCloudSyncListeners } from "@/lib/harbor/cloud-sync
 import { usePwa } from "@/lib/harbor/pwa";
 import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { ResetPasswordDialog } from "./reset-password-dialog";
-import { openPairingReceiver } from "./device-pairing";
+import { openPairingReceiver, PairingReceiverHost } from "./device-pairing";
 import { openQrApprove, QrApproveDialog } from "./qr-login";
 import { AddonTransferDialogs, openTransferReceiver } from "./addon-transfer";
 import { GlassDock } from "./glass-dock";
@@ -533,6 +533,9 @@ export function AppShell() {
       <CommandPalette />
       <ShortcutsOverlay />
       <ResetPasswordDialog />
+      {/* Debrid pairing receiver — mounted ONCE so the #pair= deep link opens
+          the phone-side dialog from ANY view (no Settings-mount race). */}
+      <PairingReceiverHost />
       <QrApproveDialog />
       <AddonTransferDialogs />
       {sharedTheme && (

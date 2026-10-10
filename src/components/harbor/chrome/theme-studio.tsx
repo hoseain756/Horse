@@ -368,7 +368,7 @@ export function ThemeStudio({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="md-dialog max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="md-dialog sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 md-title-medium font-display">
             <Palette className="w-5 h-5 text-accent" /> Theme Studio

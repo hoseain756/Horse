@@ -24,11 +24,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid code" }, { status: 400 });
   }
 
-  let row: { code: string; payloadEnc: string | null; claimedAt: Date | null; expiresAt: Date } | null = null;
+  let row: {
+    code: string;
+    payloadEnc: string | null;
+    pinnedService: string | null;
+    claimedAt: Date | null;
+    expiresAt: Date;
+  } | null = null;
   try {
     row = await db.pairingCode.findUnique({
       where: { code },
-      select: { code: true, payloadEnc: true, claimedAt: true, expiresAt: true },
+      select: { code: true, payloadEnc: true, pinnedService: true, claimedAt: true, expiresAt: true },
     });
   } catch {
     return NextResponse.json({ error: "pairing storage unavailable" }, { status: 502 });
@@ -39,6 +45,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   // Claimed → hand over the payload exactly once, then delete the row.
+  // peek=1 (phone-side pre-claim check) NEVER consumes the handover — only
+  // the waiting screen's own poll may relay the key.
+  if (req.nextUrl.searchParams.get("peek") === "1") {
+    if (row.claimedAt) {
+      return NextResponse.json({ status: "claimed" });
+    }
+    return NextResponse.json({
+      status: "waiting",
+      ...(row.pinnedService ? { service: row.pinnedService } : {}),
+      expiresAt: row.expiresAt.getTime(),
+    });
+  }
   if (row.claimedAt && row.payloadEnc) {
     const taken = await db.pairingCode.deleteMany({
       where: { code, claimedAt: row.claimedAt, payloadEnc: { not: null } },
@@ -67,5 +85,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ status: "missing" });
   }
 
-  return NextResponse.json({ status: "waiting", expiresAt: row.expiresAt.getTime() });
+  // The phone peeks this endpoint before claiming: pinnedService tells it
+  // WHICH debrid key to send (per-service QR linking). Null → legacy code,
+  // the phone is free to pick.
+  return NextResponse.json({
+    status: "waiting",
+    ...(row.pinnedService ? { service: row.pinnedService } : {}),
+    expiresAt: row.expiresAt.getTime(),
+  });
 }
