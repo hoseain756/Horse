@@ -1,4 +1,3 @@
-width	lang	theme	scale	result	note
 320	en	dark	1	PASS	ok
 320	en	dark	1.5	PASS	ok
 320	en	light	1	PASS	ok
@@ -102,4 +101,4 @@ width	lang	theme	scale	result	note
 2560	ar	dark	1	PASS	ok
 2560	ar	dark	1.5	PASS	ok
 2560	ar	light	1	PASS	ok
-2560	ar	light	1.5	FAIL	no-shell ["{\"shell\":false,\"ov\":-427}"]
+2560	ar	light	1.5	PASS	ok

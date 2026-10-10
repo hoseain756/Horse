@@ -12,7 +12,7 @@
 "use client";
 
 import { execSync } from "node:child_process";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 
 const AB = "agent-browser";
 const BASE = "http://localhost:3000";
@@ -25,7 +25,13 @@ const SCALES = [1, 1.5] as const;
 const args = process.argv.slice(2);
 const quick = args.includes("--quick");
 const shots = args.includes("--shots");
-const widths = quick ? WIDTHS_QUICK : WIDTHS_FULL;
+// --widths=320,768,1920 → run only these widths (chunked runs survive the
+// sandbox's background-process reaper; the TSV is rewritten per run).
+const widthsArg = args.find((a) => a.startsWith("--widths="));
+const allWidths = quick ? WIDTHS_QUICK : WIDTHS_FULL;
+const widths = widthsArg
+  ? allWidths.filter((w) => widthsArg.split("=")[1]!.split(",").map(Number).includes(w))
+  : allWidths;
 
 let failures = 0;
 let passes = 0;
@@ -144,7 +150,14 @@ async function main() {
       }
     }
   }
-  writeFileSync("qa-shots/audit-report.tsv", rows.join("\n") + "\n");
+  writeFileSync("qa-shots/audit-report-last.tsv", rows.join("\n") + "\n");
+  // Chunked runs (--widths=...) append into the cumulative report.
+  const append = args.some((a) => a.startsWith("--widths="));
+  if (append) {
+    appendFileSync("qa-shots/audit-report.tsv", rows.slice(1).join("\n") + "\n");
+  } else {
+    writeFileSync("qa-shots/audit-report.tsv", rows.join("\n") + "\n");
+  }
   console.log(`\n[audit] ${passes} PASS · ${failures} FAIL — report: qa-shots/audit-report.tsv`);
   ab("close", 15000);
   process.exit(failures === 0 ? 0 : 1);
