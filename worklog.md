@@ -2399,3 +2399,20 @@ Stage Summary:
 - PROD SCHEMA: fully current (all 4 migrations applied + recorded) — earlier "must backport migrations" assumption corrected; zero DDL needed.
 - PROD BLOCKER (now precise): Vercel env POSTGRES_URL has an outdated password → all prod DB calls fail with 28P01. Fix = update the two env vars in Vercel + redeploy. Sandbox confirmed the new password is valid (5432 session pooler, SELECT 1 OK, base tables reachable).
 - Verified-against-prod facts for next agents: probe pattern = `echo "<sql>" | bunx prisma db execute --url "<url>" --stdin` (exit 0 = ok); boolean probes via SELECT 1/(CASE WHEN EXISTS(...) THEN 1 ELSE 0 END). NEVER persist the prod URL/password in any repo file or log.
+
+---
+Task ID: 76
+Agent: Z.ai Code (main)
+Task: User directive (AR) — "install this skill fully into the project and always use it" (uploaded skills/frontend-design: SKILL.md + Apache-2.0 LICENSE.txt)
+
+Work Log:
+- Read the uploaded skill: `frontend-design` — distinctive, production-grade UI; anti-"AI slop" aesthetics; design-thinking-first (purpose/tone/constraints/differentiation); typography, color, motion, spatial composition, background/depth guidance; license = Apache 2.0 (LICENSE.txt shipped alongside).
+- Installed at skills/frontend-design/ (SKILL.md + LICENSE.txt, matching the project's skills/ convention).
+- ENFORCED permanent usage via three channels: (1) agent-ctx/AI-MEMORY.md hard rules — new FIRST rule: read + apply the skill before ANY UI work, WITHIN the established glass design language (no design-system swap; frozen bands untouched); (2) recreated the 15-min webDevReview cron (job 449470, replacing 449295) so every cron-driven session's first step is reading/apply the skill, plus a frontend-design-flavored polish mandate; (3) this worklog entry.
+- Reconciliation note for future agents: the skill's "bold aesthetics" directive is scoped by Horse's existing rules — keep glass tokens/design system, phone<600 + tablet 600-1023 frozen; express distinctiveness via typography, orchestrated motion, depth/atmosphere, and meticulous detail in laptop/TV bands and new surfaces.
+
+Stage Summary:
+- frontend-design skill is now a permanent, always-on mandate for every session (manual + cron): installed in-repo, wired into AI-MEMORY hard rules and the recurring webDevReview job. Prod env-var fix still awaiting the user (Task 75); full prod E2E remains the top queued item.
+
+Addendum (Task 76):
+- Discovered `skills/` is gitignored (platform convention) → the in-repo install was NOT tracked. Added a tracked mirror at agent-ctx/skills/frontend-design/ (SKILL.md + LICENSE.txt) committed to GitHub; AI-MEMORY documents the restore path if skills/ ever goes missing on a fresh clone. Active copy used by agents: skills/frontend-design/SKILL.md.

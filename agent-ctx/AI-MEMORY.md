@@ -139,6 +139,13 @@
 
 ## 5. Hard rules
 
+- **MANDATORY SKILL (permanent user directive, Task 76): `frontend-design`** — read
+  `skills/frontend-design/SKILL.md` and apply it BEFORE any UI/frontend work
+  (components, pages, views, styling, animations, polish passes). Apply it WITHIN the
+  project's established glass design language (do NOT swap the design system): commit
+  to intentional aesthetics — distinctive typography, atmosphere/depth in backgrounds,
+  orchestrated motion (staggered reveals, high-impact moments), meticulous spatial
+  detail; never generic "AI slop" patterns or timid palettes.
 - Phone (<600dp) and tablet (600–1023dp): DO NOT TOUCH. Laptop 1024–1599, TV ≥1600 free.
 - Fix root causes, verify by measurement, never blind-patch.
 - No "..." / TODO in delivered code; full files only.
