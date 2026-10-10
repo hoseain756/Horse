@@ -14,6 +14,8 @@ import { usePwa } from "@/lib/harbor/pwa";
 import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 import { openPairingReceiver } from "./device-pairing";
+import { openQrApprove, QrApproveDialog } from "./qr-login";
+import { AddonTransferDialogs, openTransferReceiver } from "./addon-transfer";
 import { GlassDock } from "./glass-dock";
 import { SideRail } from "./side-rail";
 import { ArabicTextLayer } from "./ar-text-layer";
@@ -414,6 +416,43 @@ export function AppShell() {
     return () => window.removeEventListener("hashchange", check);
   }, []);
 
+  // QR sign-in deep link: #qrlogin=XXXXXX — a phone scanned the code shown on
+  // a TV / laptop / tablet that isn't signed in. Open the approval dialog
+  // (a logged-in account on THIS device is required to approve; the dialog
+  // routes to sign-in otherwise). No view push — the dialog floats anywhere.
+  useEffect(() => {
+    const check = () => {
+      // Accept raw XXXXXX and display XXX-XXX (users paste what they see)
+      const m = window.location.hash.match(/^#qrlogin=([A-Za-z0-9](?:-?[A-Za-z0-9]){5})$/);
+      if (m) {
+        openQrApprove(m[1].replace(/-/g, "").toUpperCase());
+        // Strip the hash so reloads don't re-trigger
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
+
+  // Addon-transfer deep link: #transfer=XXXXXXXXX — a phone scanned the QR
+  // shown by another device's "Transfer addons" dialog. Open the receiver
+  // with the code pre-filled (it auto-claims once).
+  useEffect(() => {
+    const check = () => {
+      // Accept raw XXXXXXXXX and display XXX-XXX-XXX
+      const m = window.location.hash.match(/^#transfer=([A-Za-z0-9](?:-?[A-Za-z0-9]){8})$/);
+      if (m) {
+        openTransferReceiver(m[1].replace(/-/g, "").toUpperCase());
+        // Strip the hash so reloads don't re-trigger
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
+
   // Scroll to top on frame change
   useEffect(() => {
     if (!playerActive) window.scrollTo({ top: 0 });
@@ -494,6 +533,8 @@ export function AppShell() {
       <CommandPalette />
       <ShortcutsOverlay />
       <ResetPasswordDialog />
+      <QrApproveDialog />
+      <AddonTransferDialogs />
       {sharedTheme && (
         <SharedThemeBanner
           theme={sharedTheme}

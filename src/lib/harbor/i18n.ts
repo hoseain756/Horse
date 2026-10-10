@@ -552,6 +552,100 @@ export const APP_STRINGS = {
     en: "Codes are single-use and expire in 10 minutes. The key travels encrypted and is never logged — the relay deletes it the moment the screen receives it.",
     ar: "الكود للاستخدام مرة واحدة وتنتهي صلاحيته بعد 10 دقائق. ينتقل المفتاح مشفراً ولا يُسجَّل أبداً — يحذفه الوسيط لحظة استلام الشاشة له.",
   },
+  // ---- QR sign-in (big screen ↔ logged-in phone) ----
+  // A TV/laptop/tablet that isn't signed in shows XXX-XXX + QR (#qrlogin=CODE);
+  // the signed-in phone approves, the screen's next status poll carries the
+  // session cookie, then the SAME merge-strategy handoff as password login runs.
+  qrTabTitle: { en: "Sign in with phone", ar: "الدخول عبر الجوال" },
+  qrLoginHint: {
+    en: "Scan this code with your logged-in phone — approving there signs this screen in automatically.",
+    ar: "امسح الرمز بجوالك المسجَّل فيه — عند الموافقة من الجوال يسجّل هذا الجهاز الدخول تلقائياً.",
+  },
+  qrLoginStep1: { en: "Open Horse on your phone", ar: "افتح Horse على جوالك" },
+  qrLoginStep2: { en: "Scan the QR or enter the code", ar: "امسح رمز QR أو أدخل الرمز" },
+  qrLoginStep3: { en: "Approve the sign-in", ar: "وافق على تسجيل الدخول" },
+  qrCodeLabel: { en: "Sign-in code", ar: "رمز الدخول" },
+  qrWaiting: { en: "Waiting for approval from your phone…", ar: "بانتظار الموافقة من جوالك…" },
+  qrApproved: { en: "Signed in!", ar: "تم تسجيل الدخول!" },
+  qrDenied: { en: "The sign-in was declined on the phone.", ar: "تم رفض تسجيل الدخول من الجوال." },
+  qrExpired: { en: "The code expired — generate a new one.", ar: "انتهت صلاحية الرمز — أنشئ رمزاً جديداً." },
+  qrTryAgain: { en: "Try again", ar: "حاول مجدداً" },
+  qrNewCode: { en: "New code", ar: "رمز جديد" },
+  qrCreateFailed: {
+    en: "Could not generate a code — check your connection and try again.",
+    ar: "تعذّر إنشاء رمز — تحقق من الاتصال وحاول مجدداً.",
+  },
+  qrCodeCopied: { en: "Code copied", ar: "تم نسخ الرمز" },
+  qrApproveTitle: { en: "Approve sign-in?", ar: "الموافقة على تسجيل الدخول؟" },
+  qrApproveEnterCode: { en: "Or enter the code", ar: "أو أدخل الرمز" },
+  qrApproveDesc: {
+    en: "A device is asking to sign in to your HORSE account:",
+    ar: "يطلب جهازٌ تسجيل الدخول إلى حسابك في Horse:",
+  },
+  qrApproveConfirm: { en: "Approve", ar: "موافقة" },
+  qrApproveDeny: { en: "Deny", ar: "رفض" },
+  qrApproveNeedLogin: { en: "Sign in on this phone first", ar: "سجِّل الدخول في هذا الجوال أولاً" },
+  qrApproveNeedLoginDesc: {
+    en: "Approving a sign-in request needs a signed-in HORSE account on this device.",
+    ar: "الموافقة على طلب تسجيل الدخول تتطلب حساب Horse مسجَّلاً على هذا الجهاز.",
+  },
+  qrApproveGoLogin: { en: "Go to sign in", ar: "الانتقال إلى تسجيل الدخول" },
+  qrApproveCheck: { en: "Check code", ar: "تحقق من الرمز" },
+  qrApproveChecking: { en: "Checking…", ar: "جارٍ التحقق…" },
+  qrApproveSuccess: {
+    en: "Approved — the other screen is signing in.",
+    ar: "تمت الموافقة — الشاشة الأخرى تسجّل الدخول الآن.",
+  },
+  qrApproveInvalid: {
+    en: "Wrong or expired code — check the screen and try again.",
+    ar: "رمز خاطئ أو منتهي الصلاحية — تحقق من الشاشة وحاول مجدداً.",
+  },
+  qrApproveUsed: { en: "This code was already used.", ar: "هذا الرمز مستخدم بالفعل." },
+  qrApproveFailed: { en: "Something went wrong — try again.", ar: "حدث خطأ ما — حاول مجدداً." },
+  qrApproveOpenRow: { en: "Approve a sign-in code", ar: "الموافقة على رمز دخول" },
+  // ---- addon transfer codes (device ↔ device, 6-minute single-use code) ----
+  transferAction: { en: "Transfer addons", ar: "نقل الإضافات" },
+  transferSendTitle: { en: "Transfer your addons", ar: "نقل إضافاتك" },
+  transferSendDesc: {
+    en: "Scan the QR with the other device, or enter the code there — every addon on this device moves over. The code is single-use and valid for 6 minutes.",
+    ar: "امسح رمز QR بالجهاز الآخر أو أدخل الرمز هناك — ستُنقل كل إضافات هذا الجهاز. الرمز للاستخدام مرة واحدة وصالح لمدة ٦ دقائق.",
+  },
+  transferSendCount: {
+    en: "{n} addons on this device will move over.",
+    ar: "ستنتقل {n} من إضافات هذا الجهاز.",
+  },
+  transferReceiverTitle: { en: "Receive addons", ar: "استلام الإضافات" },
+  transferReceiverDesc: {
+    en: "Enter the code shown on the other device — its addons are copied here. Addons you already have stay untouched.",
+    ar: "أدخل الرمز الظاهر على الجهاز الآخر — تُنسخ إضافاته إلى هنا. الإضافات الموجودة لديك تبقى كما هي.",
+  },
+  transferEnterCode: { en: "Transfer code", ar: "رمز النقل" },
+  transferWaiting: { en: "Waiting for the other device…", ar: "بانتظار الجهاز الآخر…" },
+  transferClaimBtn: { en: "Transfer here", ar: "انقلها إلى هنا" },
+  transferClaiming: { en: "Receiving…", ar: "جارٍ الاستلام…" },
+  transferSuccess: {
+    en: "{count} addon(s) transferred to this device.",
+    ar: "تم نقل إضافة واحدة إلى هذا الجهاز.",
+    arOther: "تم نقل {count} من الإضافات إلى هذا الجهاز.",
+  },
+  transferPartial: {
+    en: "{added} added · {skipped} already present.",
+    ar: "أُضيف واحد · {skipped} موجودة مسبقاً.",
+    arOther: "{added} أُضيفت · {skipped} موجودة مسبقاً.",
+  },
+  transferInvalid: { en: "Wrong or expired code.", ar: "رمز خاطئ أو منتهي الصلاحية." },
+  transferAlready: { en: "This code was already used.", ar: "هذا الرمز مستخدم بالفعل." },
+  transferCopied: { en: "Code copied", ar: "تم نسخ الرمز" },
+  transferCancel: { en: "Cancel transfer", ar: "إلغاء النقل" },
+  transferCreateFailed: {
+    en: "Could not generate a code — check your connection and try again.",
+    ar: "تعذّر إنشاء رمز — تحقق من الاتصال وحاول مجدداً.",
+  },
+  transferFailed: { en: "Something went wrong — try again.", ar: "حدث خطأ ما — حاول مجدداً." },
+  transferEmpty: {
+    en: "No addons to transfer yet — install one first.",
+    ar: "لا توجد إضافات لنقلها بعد — ثبّت إضافة أولاً.",
+  },
   noPlayableStream: {
     en: "No browser-playable stream found. Open the stream picker to choose manually — torrent streams unlock with debrid, or play via the P2P engine when available.",
     ar: "لم يُعثر على بث قابل للتشغيل في المتصفح. افتح منتقي البثوث للاختيار يدوياً — تُفتح التورنتات عبر debrid، أو تُشغَّل عبر محرك P2P عند توافره.",

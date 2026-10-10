@@ -290,7 +290,11 @@ export const useAddons = create<AddonsState>((set, get) => ({
   },
 }));
 
-function persistAddons(addons: AddonRecord[]) {
+/** Persist the addon set to localStorage — THE canonical writer for
+ *  "harbor-web.installed-addons" (order normalized to array index,
+ *  descriptions slimmed). Exported for the addon-transfer receiver so the
+ *  cross-device merge uses the exact same persistence path as the store. */
+export function persistAddons(addons: AddonRecord[]) {
   if (typeof window === "undefined") return;
   try {
     const slim = addons.map((a, i) => ({

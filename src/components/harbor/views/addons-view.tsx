@@ -15,13 +15,14 @@
 // button stacked below on compact / inline on md+, disabled until a plausible
 // URL. Health pill fully translated (no "checked 5/5").
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Puzzle, Plus, Trash2, ExternalLink, Check, Eye, EyeOff, Activity, Loader2, RefreshCw } from "lucide-react";
+import { Puzzle, Plus, Trash2, ExternalLink, Check, Eye, EyeOff, Activity, Loader2, RefreshCw, ArrowLeftRight, QrCode } from "lucide-react";
 import { useAddons, useNav } from "@/lib/harbor/store";
 import { useHorseAccount } from "@/lib/harbor/horse-account";
 import { UserPlus, X } from "lucide-react";
 import { fetchManifest } from "@/lib/harbor/api";
 import { describeProbe, probeAddon, type StoredProbe } from "@/lib/harbor/addon-probe";
 import { PageHeader } from "../chrome/page-header";
+import { openTransferSender, openTransferReceiver } from "../chrome/addon-transfer";
 import type { Addon, Manifest } from "@/lib/harbor/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,6 +209,30 @@ export function AddonsView() {
             {busy ? tr("installing") : tr("install")}
           </Button>
         </div>
+      </div>
+
+      {/* Cross-device: move every installed addon to another device via a
+          6-minute single-use code (sender), or open the receiver to claim a
+          code from elsewhere. Heights match the install bar exactly. */}
+      <div className="-mt-6 mb-10 flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          disabled={addons.length === 0}
+          title={addons.length === 0 ? tr("transferEmpty") : undefined}
+          onClick={openTransferSender}
+          className="md-btn-outlined md:!h-14 md:px-8 !h-12 gap-2"
+        >
+          <ArrowLeftRight className="w-4 h-4" aria-hidden />
+          {tr("transferAction")}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => openTransferReceiver()}
+          className="md-btn-outlined md:!h-14 md:px-8 !h-12 gap-2"
+        >
+          <QrCode className="w-4 h-4" aria-hidden />
+          {tr("transferReceiverTitle")}
+        </Button>
       </div>
 
       {/* Installed */}

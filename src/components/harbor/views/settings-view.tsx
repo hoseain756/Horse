@@ -14,7 +14,7 @@ import {
   Baby, Brush, Captions, Check, ChevronDown, ChevronUp, CircleAlert, CloudOff, CloudUpload,
   Compass, DatabaseBackup, Download, DownloadCloud, ExternalLink, Eye, EyeOff, Globe2, History,
   Images, Info, KeyRound, Languages, ListVideo, Loader2, Lock, LogOut, MailCheck, MailWarning,
-  MonitorSmartphone, Network, Palette, Play, Plug, Puzzle, RefreshCw, Rocket, RotateCcw, Server,
+  MonitorSmartphone, Network, Palette, Play, Plug, Puzzle, QrCode, RefreshCw, Rocket, RotateCcw, Server,
   Shield, ShieldCheck, SlidersHorizontal, Square, Trash2, TvMinimalPlay, Type, Unplug, Upload,
   UploadCloud, UserPlus, UserRound, X, Zap,
 } from "lucide-react";
@@ -23,7 +23,7 @@ import { useT } from "@/hooks/use-t";
 import { homeT } from "@/lib/harbor/i18n";
 import { RichBidi } from "../common/bidi";
 import { DEFAULT_SETTINGS } from "@/lib/harbor/settings";
-import { useCloudSync, deviceIdShort, lastSyncFromStorage } from "@/lib/harbor/cloud-sync";
+import { useCloudSync, deviceIdShort, lastSyncFromStorage, mergeAccountSnapshotIntoLocal } from "@/lib/harbor/cloud-sync";
 import { useHorseAccount, fetchDevices, revokeDevice, exportAccountData, type DeviceRow } from "@/lib/harbor/horse-account";
 import type { MergeStrategy } from "@/lib/harbor/cloud-sync";
 import { usePwa } from "@/lib/harbor/pwa";
@@ -48,6 +48,7 @@ import { hasParentPin, verifyParentPin, setParentPin, clearParentPin, isValidPin
 import { TmdbCard, TmdbAttribution } from "../chrome/tmdb-card";
 import { LinkAccountFlow } from "../chrome/link-account-flow";
 import { DevicePairingCard } from "../chrome/device-pairing";
+import { QrLoginPanel, openQrApprove } from "../chrome/qr-login";
 import { RatingsSettingsCard } from "../chrome/ratings-row";
 import { useLinking } from "@/lib/harbor/linking";
 import { useToast } from "@/hooks/use-toast";
@@ -1333,7 +1334,7 @@ function HorseAccountCard() {
   const pullAccountNow = useHorseAccount((s) => s.pullAccountNow);
   const changePasswordAction = useHorseAccount((s) => s.changePassword);
   const { toast } = useToast();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "qr">("login");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -1347,6 +1348,9 @@ function HorseAccountCard() {
   const [mergeChoice, setMergeChoice] = useState<MergeChoice>("merge");
   const [mergeOverwrite, setMergeOverwrite] = useState(false);
   const [pendingCreds, setPendingCreds] = useState<{ email: string; password: string } | null>(null);
+  // QR sign-in approved → the SAME merge-strategy dialog runs for the
+  // account handoff (session cookie was already minted by the status poll).
+  const [qrMergePending, setQrMergePending] = useState(false);
 
   // devices / dialogs (signed-in)
   const [devicesOpen, setDevicesOpen] = useState(false);
@@ -1392,6 +1396,48 @@ function HorseAccountCard() {
       setPendingCreds(null);
       setError(res.error ?? t("accountErrSignIn"));
     }
+  };
+
+  // QR sign-in handoff — the SAME merge-strategy sequence as password login,
+  // minus the credential POST: the session cookie was already minted by the
+  // status poll, so this only runs strategy → merge → push-back.
+  const runQrMerge = async (strategy: MergeStrategy) => {
+    setMergeOpen(false);
+    setMergeOverwrite(false);
+    setQrMergePending(false);
+    const em = useHorseAccount.getState().user?.email ?? "";
+    try {
+      let pulled = 0;
+      if (strategy === "local") {
+        // Keep this device's data and overwrite the account with it.
+        await useCloudSync.getState().pushNow(true);
+      } else {
+        pulled = await mergeAccountSnapshotIntoLocal(strategy);
+        await useCloudSync.getState().pushNow(true);
+      }
+      toast({
+        title: t("accountToastSignedIn", { name: em }),
+        description: pulled > 0 ? t("accountToastPulled", { n: pulled }) : t("accountToastUpToDate"),
+      });
+    } catch {
+      toast({
+        title: t("accountToastSignedIn", { name: em }),
+        description: t("accountToastUpToDate"),
+      });
+    }
+  };
+
+  // QrLoginPanel calls this after the account store reloads with the minted
+  // session. Matches password-login UX exactly: ask for a strategy when this
+  // device already has local data, silently merge when it doesn't.
+  const handleQrApproved = () => {
+    if (hasLocalData()) {
+      setMergeChoice("merge");
+      setQrMergePending(true);
+      setMergeOpen(true);
+      return;
+    }
+    void runQrMerge("merge");
   };
 
   const submit = async () => {
@@ -1594,6 +1640,16 @@ function HorseAccountCard() {
               <Download className="w-4 h-4 text-ink-subtle" />
               {t("exportBtn")}
             </button>
+            {/* Approve a sign-in request coming from another device (QR login
+                manual path — the deep-link #qrlogin= opens the same dialog). */}
+            <button
+              type="button"
+              onClick={() => openQrApprove()}
+              className="md-state flex min-h-11 items-center gap-2 rounded-[var(--md-sys-shape-corner-small)] border border-edge-soft bg-raised px-3 md-body-small text-ink hover:text-accent"
+            >
+              <QrCode className="w-4 h-4 text-ink-subtle" />
+              {t("qrApproveOpenRow")}
+            </button>
           </div>
 
           {devicesOpen && (
@@ -1657,7 +1713,7 @@ function HorseAccountCard() {
                 {t("accountLoggedOutDesc")}
               </p>
             </div>
-            <div className="flex rounded-[var(--md-sys-shape-corner-full)] border border-edge-soft bg-raised p-1 shrink-0" role="tablist" aria-label={t("accountModeLabel")}>
+            <div className="flex flex-wrap rounded-[var(--md-sys-shape-corner-full)] border border-edge-soft bg-raised p-1 shrink-0" role="tablist" aria-label={t("accountModeLabel")}>
               <button
                 type="button"
                 role="tab"
@@ -1682,9 +1738,26 @@ function HorseAccountCard() {
               >
                 {t("accountTabCreate")}
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "qr"}
+                onClick={() => { setMode("qr"); setError(null); }}
+                className={cn(
+                  "min-h-9 px-4 rounded-full md-label-medium transition-colors inline-flex items-center gap-1.5",
+                  mode === "qr" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                <QrCode className="w-3.5 h-3.5" aria-hidden />
+                {t("qrTabTitle")}
+              </button>
             </div>
           </div>
 
+          {mode === "qr" ? (
+            <QrLoginPanel onApproved={handleQrApproved} />
+          ) : (
+            <>
           <div className="grid gap-2.5 sm:grid-cols-2 max-w-xl">
             <div className="sm:col-span-2">
               <label htmlFor="horse-email" className="md-label-medium text-ink-muted mb-1 block">{t("accountEmail")}</label>
@@ -1789,11 +1862,15 @@ function HorseAccountCard() {
               <ForgotPasswordLink onDone={(msg, bad) => bad ? toast({ title: msg, variant: "destructive" }) : toast({ title: msg })} />
             )}
           </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* Merge-strategy dialog (spec: one-time decision on first login with local data) */}
-      <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setPendingCreds(null); } }}>
+      {/* Merge-strategy dialog (spec: one-time decision on first login with local data).
+          Also serves the QR sign-in handoff via qrMergePending — same decision,
+          same strategies; only the credential POST is skipped. */}
+      <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setPendingCreds(null); setQrMergePending(false); } }}>
         <DialogContent className="md-dialog max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-start">
@@ -1828,10 +1905,18 @@ function HorseAccountCard() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="ghost" className="min-h-11" onClick={() => { setMergeOpen(false); setPendingCreds(null); }}>
+            <Button variant="ghost" className="min-h-11" onClick={() => { setMergeOpen(false); setPendingCreds(null); setQrMergePending(false); }}>
               {t("accountCancel")}
             </Button>
             <Button className="min-h-11 md-btn-filled" onClick={() => {
+              if (qrMergePending) {
+                if (mergeChoice === "local") {
+                  setMergeOverwrite(true);
+                  return;
+                }
+                void runQrMerge(mergeChoice);
+                return;
+              }
               if (!pendingCreds) return;
               if (mergeChoice === "local") {
                 setMergeOverwrite(true);
@@ -1858,6 +1943,10 @@ function HorseAccountCard() {
               className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
               onClick={() => {
                 setMergeOverwrite(false);
+                if (qrMergePending) {
+                  void runQrMerge("local");
+                  return;
+                }
                 if (pendingCreds) void runLogin(pendingCreds.email, pendingCreds.password, "local");
               }}
             >

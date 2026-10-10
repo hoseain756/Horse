@@ -255,6 +255,46 @@ model PairingCode {
   createdAt  DateTime  @default(now())
 }
 
+// QR login relay — a TV / laptop that is not signed in yet shows a short
+// XXX-XXX code (or QR); a phone that already HAS a session approves it
+// (POST /api/auth/qr/peek → approve/deny). The TV polls /api/auth/qr/status
+// with a poll token (stored HASHED in pollHash, like session tokens) and, on
+// approval, receives a real DB session cookie. Single-use: the row is deleted
+// the moment the session is handed over. 5-minute TTL, opportunistically
+// purged. No secrets beyond the code + poll token ever touch this table.
+model QrLogin {
+  code       String    @id // 6 chars, unambiguous alphabet (no 0/O/1/I)
+  pollHash   String // sha256 hex of the poll token (raw token never stored)
+  status     String    @default("waiting") // waiting | approved | denied
+  userId     String?
+  deviceHint String? // short TV UA description shown to the phone, e.g. "Chrome · Windows"
+  approvedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([pollHash])
+  @@index([expiresAt])
+}
+
+// Addon transfer codes — a user seals their installed-addons list
+// (transportUrl + manifest snapshot) into a XXX-XXX-XXX code with a 6-minute
+// TTL; anyone with the code claims it once (atomic updateMany guard) and the
+// row is DELETED on handover. The payload is AES-256-GCM encrypted at rest
+// (src/lib/harbor/vault.ts, AAD-bound to the code) because addon
+// transportUrls can embed debrid tokens. Single-shot: the receiver gets the
+// data, the code dies.
+model TransferCode {
+  code       String    @id // 9 chars, unambiguous alphabet (no 0/O/1/I)
+  payloadEnc String? // sealed addons JSON; null only transiently (claim is atomic via updateMany)
+  count      Int       @default(0)
+  senderHint String?
+  claimedAt  DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
 // Server-wide key/value config (survives .env resets in sandboxed deploys).
 // Used e.g. for TRAKT_CLIENT_ID fallback: env var wins, DB row is the backup.
 model ServerConfig {

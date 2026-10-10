@@ -16,7 +16,9 @@ import type { DebridService } from "@/lib/harbor/debrid";
 
 export const PAIRING_TTL_MS = 10 * 60_000;
 // 32-char alphabet without 0/O/1/I (never mistakable on a TV across the room).
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+// Exported so the QR-login + addon-transfer codes use the SAME unambiguous
+// format (no conflicting display conventions across features).
+export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export type PairingPayload = {
   service: DebridService;
