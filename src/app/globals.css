@@ -1469,8 +1469,17 @@ html[data-kids="on"] {
   z-index: var(--z-nav); /* content < hero overlays < nav < search (see --z-* map) */
   height: var(--nav-height);
   /* --nav-width per class, ALWAYS capped so it can never exceed the viewport
-     (notch safe-area insets included in the cap for landscape phones). */
-  width: min(var(--nav-width), var(--nav-max), calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)));
+     (notch safe-area insets included in the cap for landscape phones).
+     The `100%` term is the zoom-proof guard: vw units ignore root zoom, so
+     at browser zoom >1 the old cap could exceed the real viewport — % on a
+     fixed element resolves against the live ICB. At zoom 1 the two terms are
+     identical → zero change for the frozen phone band. */
+  width: min(
+    var(--nav-width),
+    var(--nav-max),
+    calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right)),
+    calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right))
+  );
   padding: var(--nav-padding);
   border-radius: var(--nav-radius);
   /* The bar owns its gestures: taps + press-and-drag scrubbing. Page scroll

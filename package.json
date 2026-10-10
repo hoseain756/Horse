@@ -13,7 +13,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "audit:ui": "node scripts/audit-ui.mjs"
+    "audit:ui": "bun scripts/audit-ui.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

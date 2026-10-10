@@ -601,9 +601,9 @@ export function SettingsShell({
       {cat === null || !activeDef ? (
         <>
           <div className="set-appbar">
-            <SettingsIcon className="h-6 w-6 text-accent" aria-hidden />
-            <h1 className="md-headline-small font-display font-bold text-ink">{tr("settingsTitle")}</h1>
-            <div className="ms-auto">
+            <SettingsIcon className="h-6 w-6 shrink-0 text-accent" aria-hidden />
+            <h1 className="md-headline-small min-w-0 truncate font-display font-bold text-ink">{tr("settingsTitle")}</h1>
+            <div className="ms-auto shrink-0">
               <UserChip variant="settings" />
             </div>
           </div>
