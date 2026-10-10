@@ -2381,3 +2381,21 @@ Stage Summary:
 - PUSH SYSTEM GREEN AGAIN (device flow #2): HEAD == origin/main == e0f927b; watcher armed; every future commit auto-pushes within ~60s. Post-restore smoke proves all QR-era tables/features intact after the third $HOME+/tmp wipe.
 - CURRENT STATUS OF THE USER QUEUE: ALL REQUESTED FEATURES DELIVERED & VERIFIED — (1) Integrations mobile popup overflow FIXED; (2) per-service Debrid QR linking (TorBox/Real-Debrid/AllDebrid, fully independent) DONE; (3) TMDB linking via QR/XXX-XXX DONE; (4) TV/laptop/tablet QR sign-in with phone approval DONE; (5) addon transfer code XXX-XXX-XXX + QR, 6-min TTL DONE; (6) sign-in carries ALL keys (cloud-sync snapshot handoff; Kids PIN never synced) DONE.
 - OPEN ITEMS (priority): (1) PROD Supabase schema backport — QrLogin + TransferCode tables and PairingCode.pinnedService column exist ONLY locally; needs migrate deploy / SQL editor with prod DATABASE_URL (sandbox has no prod creds — ASK USER); without it, horse-1.vercel.app QR/pairing/transfer endpoints will 500. (2) T3 dub E2E (needs a public multi-dub addon). (3) TorBox my-torrents view. (4) Orphan-key tombstones in sanitizeSettings. (5) F5 i18n literal-string sweep. (6) 14 pre-existing tsc errors. (7) "1 addon(s)" plural polish.
+
+---
+Task ID: 75
+Agent: Z.ai Code (main)
+Task: PROD DB — apply/verify QR-era schema on production Supabase with the user-provided credentials; diagnose prod health failure
+
+Work Log:
+- User supplied prod Supabase session-pooler URL (port 5432, user postgres.<ref>). Credentials kept OUT of repo/worklog/chat files; used only as inline shell vars.
+- Discovered this Prisma version's `db execute` supports only --file/--stdin (no --command); used the stdin form for all probes (silent success / stderr on error as the boolean signal).
+- PROD SCHEMA STATE (probed via db execute + conditional 1/division trick for _prisma_migrations lookups): base tables exist ("Addon", "PairingCode"); "QrLogin" EXISTS, "TransferCode" EXISTS, "PairingCode"."pinnedService" column EXISTS; "_prisma_migrations" EXISTS and records ALL FOUR migrations (init, add_pairing_codes, add_qr_login_and_transfer_codes, add_pairing_pinned_service) as applied. → A prior Vercel build already ran `prisma migrate deploy` successfully. PRIORITY-QUEUE ITEM "prod schema backport" = ALREADY RESOLVED; no SQL was executed against prod this round (nothing to change).
+- REAL PROD ISSUE FOUND: GET https://horse-1.vercel.app/api/health → {ok:false, host:aws-1-eu-central-1.pooler.supabase.com:6543, tables:0, error:"28P01 password authentication failed for user postgres"} — the RUNTIME credential in Vercel env (POSTGRES_URL) is stale/wrong. The user-provided password verified VALID on 5432 (session pooler) from the sandbox. 6543 is TCP-reachable from sandbox but Prisma-engine handshake vs pgbouncer hangs in CLI (known; irrelevant — runtime runs from Vercel, where the earlier auth error proves reachability).
+- No Vercel CLI auth in sandbox (~/.vercel absent, repo not linked) → env update must be done by the user in the Vercel dashboard; then a redeploy picks the new values up.
+- Instructed the user: set BOTH POSTGRES_URL (transaction pooler :6543 — runtime, pg adapter prepare:false) and POSTGRES_URL_NON_POOLING (session pooler :5432 — migrations only, directUrl) to the same new password, then Redeploy; after that I run the full prod E2E (health tables:17 + qr/create + pairing/create tmdb + transfer/create).
+
+Stage Summary:
+- PROD SCHEMA: fully current (all 4 migrations applied + recorded) — earlier "must backport migrations" assumption corrected; zero DDL needed.
+- PROD BLOCKER (now precise): Vercel env POSTGRES_URL has an outdated password → all prod DB calls fail with 28P01. Fix = update the two env vars in Vercel + redeploy. Sandbox confirmed the new password is valid (5432 session pooler, SELECT 1 OK, base tables reachable).
+- Verified-against-prod facts for next agents: probe pattern = `echo "<sql>" | bunx prisma db execute --url "<url>" --stdin` (exit 0 = ok); boolean probes via SELECT 1/(CASE WHEN EXISTS(...) THEN 1 ELSE 0 END). NEVER persist the prod URL/password in any repo file or log.
