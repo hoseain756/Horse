@@ -2505,3 +2505,18 @@ Work Log:
 Stage Summary:
 - Remote hoseain756/Horse main == local de7f023 (includes Task 79 Liquid Glass migration + Task 80 screenshot cleanup). Autopush watcher live again — every future commit auto-pushes within ~60s. Device flow ritual re-validated as the standard credential recovery path (6th container-restart cycle).
 - Project state at checkpoint: Liquid Glass design system fully migrated (Task 79); zero screenshots on disk outside public//skills; 14 pre-existing tsc errors + i18n warning backlog still open (documented, out of scope).
+
+---
+Task ID: 81
+Agent: main (orchestrator)
+Task: User pushed updates to GitHub (17e1754) — fetch, integrate, verify; restore sandbox DB connection
+
+Work Log:
+- User pushed 2 commits from elsewhere: 750bc78 (feat: unify app UI with liquid glass design system) + 17e1754 (fix: resolve settings and responsive layout defects). Fetched; local was strictly behind → clean ff-only pull to 17e1754. 34 files, +539/−198: globals.css +358 (LG design system expansion), settings/shell+design, views, chrome/, and ~24 shadcn/ui primitives (button/switch/toggle/toast/sheet/dialog…). No package.json/prisma changes → no install/db push needed. Lint: 0 errors (162 pre-existing warnings).
+- Restarted dev clean (pkill + rm -rf .next + setsid bun run dev) — Turbopack stale-CSS ritual after heavy globals.css edits.
+- POST /api/sync 500 discovered in dev.log: src/lib/db.ts:38 threw "POSTGRES_URL is not set" — PRE-EXISTING sandbox gap (db.ts untouched since 1a0dfc1; .env only held stale SQLite DATABASE_URL). Restored POSTGRES_URL + POSTGRES_URL_NON_POOLING (Supabase pooler 6543/5432) to .env — CONFIRMED gitignored (git check-ignore, untracked). Restarted dev.
+- Verified recovery: /api/sync 400 (validation, correct) instead of 500; live prisma:query DELETE FROM "CustomList" against Supabase; 0 db errors in dev.log.
+- Agent-browser visual QA: home hero + UP NEXT glass rail + setup banner render (screenshot); Settings reached via documented rail path (eval focus width-62 tab → Enter; click hits hidden dock tab width-0 — gotcha re-confirmed): glass settings pane + search + Quick Access grid all correct, rail reveals on focusin as designed. dev.log "uncaughtException: Error: aborted" ×2 = benign image-proxy aborts during navigation.
+
+Stage Summary:
+- Local main == origin/main == 17e1754 (user's Liquid Glass unification + settings/responsive fixes) fully integrated and verified in browser. Sandbox DB connection restored to production Supabase (Task 78 state) — sync feature live again. App icons/skill assets untouched; no functional regressions found.
