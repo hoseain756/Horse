@@ -3047,6 +3047,13 @@ html[lang^="ar"] {
 .harbor-fs-clear {
   padding-inline-end: 3.75rem;
 }
+/* FIX: Settings has its own search field, so hide the duplicate phone trigger
+   while its idle. Keep the floating search available when explicitly opened. */
+@media (max-width: 599px) {
+  .fs-wrap[data-settings-view="true"]:not([data-expanded="true"]) {
+    display: none;
+  }
+}
 @media (min-width: 768px) {
   .harbor-fs-clear {
     padding-inline-end: 0;

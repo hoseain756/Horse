@@ -90,6 +90,8 @@ function matchingDestinations(q: string, lang: string): HubEntry[] {
 export function FloatingSearch() {
   const push = useNav((s) => s.push);
   const stack = useNav((s) => s.stack);
+  const topFrame = stack[stack.length - 1];
+  const settingsActive = topFrame?.kind === "view" && topFrame.view === "settings";
   const uiLanguage = useSettings((s) => s.settings.uiLanguage);
   const tr = useT(); // B1/B3: localized, bidi-safe placeholder + labels
 
@@ -667,6 +669,8 @@ export function FloatingSearch() {
       ref={wrapRef}
       onFocusCapture={onWrapFocusCapture}
       onBlurCapture={onWrapBlurCapture}
+      data-settings-view={settingsActive ? "true" : undefined}
+      data-expanded={expanded ? "true" : undefined}
       className={cn(
         // Fixed top. PHONES (<600): 48×48 glass trigger at the top inline-END
         // corner (over the hero, safe-area offset) that expands THIS bar into
