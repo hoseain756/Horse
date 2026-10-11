@@ -375,7 +375,7 @@ export function ThemeStudio({ open, onClose }: { open: boolean; onClose: () => v
           </DialogTitle>
           <DialogDescription>
             Design your own theme with live preview. Save it to reuse, or export and share it. Your
-            accent color seeds the Material 3 palette.
+            accent color seeds the Liquid Glass palette.
           </DialogDescription>
         </DialogHeader>
 
@@ -439,7 +439,7 @@ export function ThemeStudio({ open, onClose }: { open: boolean; onClose: () => v
               {/* Colors */}
               <h3 className="md-label-large text-ink-muted uppercase tracking-wide mb-1">Palette</h3>
               <p className="md-body-small text-ink-subtle mb-2">
-                Your accent color seeds the Material 3 palette — tones, containers and surfaces are
+                Your accent color seeds the Liquid Glass palette — tones, containers and surfaces are
                 derived from it.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">

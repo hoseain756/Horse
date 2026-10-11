@@ -2341,7 +2341,7 @@ function ThemePanel() {
     <SectionCard title={tr("tabTheme")} icon={Palette} className="sm:p-4">
       <div className="space-y-6">
         {/* M3 scheme controls (appearance/contrast — consumed by applyTheme) */}
-        <SettingRow id="appearance" title={tr("rowAppearanceMode")} description="Light or dark Material 3 scheme of your current palette">
+        <SettingRow id="appearance" title={tr("rowAppearanceMode")} description="Light or dark Liquid Glass scheme of your current palette">
           <SegmentedControl
             label={tr("rowAppearanceMode")}
             value={settings.appearance}
@@ -2374,7 +2374,7 @@ function ThemePanel() {
               </h2>
               <p className="md-body-small text-ink-muted mt-0.5">
                 Build a fully custom palette, fonts and layout — with live preview. Your accent color
-                seeds the Material 3 palette.
+                seeds the Liquid Glass palette.
                 {settings.theme.preset === "custom" && settings.theme.customName && (
                   <span className="text-accent font-medium"> Active: {settings.theme.customName}</span>
                 )}
@@ -2435,7 +2435,7 @@ function ThemePanel() {
 
         <div id="set-theme-preset">
           <h2 className="md-label-large text-ink-muted uppercase tracking-wide mb-1">{tr("rowTheme")}</h2>
-          <p className="md-body-small text-ink-subtle mb-3">Your accent color seeds the Material 3 palette.</p>
+          <p className="md-body-small text-ink-subtle mb-3">Your accent color seeds the Liquid Glass palette.</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {THEME_PRESETS.map((p) => (
               <button

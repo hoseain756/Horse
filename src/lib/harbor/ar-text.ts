@@ -92,18 +92,18 @@ const AR_SUPPLEMENT: Record<string, string> = {
   "Close player": "إغلاق المشغّل",
   "Seek to %": "الانتقال إلى نسبة مئوية",
   "Appearance": "المظهر",
-  "Light or dark Material 3 scheme of your current palette":
-    "مخطط Material 3 الفاتح أو الداكن للوحة الحالية",
+  "Light or dark Liquid Glass scheme of your current palette":
+    "مخطط الزجاج السائل الفاتح أو الداكن للوحة الحالية",
   "Contrast": "التباين",
   "Scheme contrast level — higher for stronger legibility":
     "مستوى تباين المخطط — أعلى لوضوح أقوى",
   "Theme Studio": "استوديو المظهر",
-  "Build a fully custom palette, fonts and layout — with live preview. Your accent color seeds the Material 3 palette.":
-    "ابنِ لوحة ألوان وخطوط وتخطيطاً مخصصة بالكامل — مع معاينة حية. لون التمييز يولّد لوحة Material 3.",
+  "Build a fully custom palette, fonts and layout — with live preview. Your accent color seeds the Liquid Glass palette.":
+    "ابنِ لوحة ألوان وخطوط وتخطيطاً مخصصة بالكامل — مع معاينة حية. لون التمييز يولّد لوحة الزجاج السائل.",
   "Open Theme Studio": "افتح استوديو المظهر",
   "Your saved themes": "سماتك المحفوظة",
   "Theme presets": "أنماط المظهر الجاهزة",
-  "Your accent color seeds the Material 3 palette.": "لون التمييز لديك يولّد لوحة Material 3.",
+  "Your accent color seeds the Liquid Glass palette.": "لون التمييز لديك يولّد لوحة الزجاج السائل.",
   "Font pairing": "أزواج الخطوط",
   "Custom background": "خلفية مخصصة",
   "Upload image": "تحميل صورة",

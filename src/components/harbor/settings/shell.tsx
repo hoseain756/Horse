@@ -182,12 +182,12 @@ function PinDialog({
     >
       <div
         className={cn(
-          "w-full max-w-xs rounded-[var(--md-sys-shape-corner-extra-large)] border border-edge-soft bg-raised p-5 shadow-2xl transition-transform",
+          "glass-surface glass-panel w-full max-w-xs rounded-[var(--md-sys-shape-corner-extra-large)] p-5",
           bad && "animate-[harbor-shake_0.35s_ease]",
         )}
       >
         <div className="mb-3 flex items-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-edge-soft bg-accent-soft shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
             <Lock className="h-5 w-5 text-accent" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -210,8 +210,8 @@ function PinDialog({
           aria-label={tr("kidsPinEnter")}
           aria-invalid={bad}
           className={cn(
-            "h-14 w-full rounded-[var(--md-sys-shape-corner-large)] border bg-background text-center font-mono text-2xl tracking-[0.5em] text-ink outline-none",
-            bad ? "border-danger" : "border-edge-soft focus:border-accent",
+            "md-field-outlined h-14 w-full bg-background/60 text-center font-mono text-2xl tracking-[0.5em] text-ink",
+            bad && "border-danger text-danger focus:border-danger",
           )}
           placeholder="••••"
         />
@@ -465,7 +465,7 @@ export function SettingsShell({
         <div
           id="settings-search-results"
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+6px)] z-40 max-h-80 overflow-y-auto rounded-[var(--md-sys-shape-corner-large)] border border-edge-soft bg-raised/95 p-1.5 shadow-2xl backdrop-blur-xl"
+          className="glass-surface glass-panel absolute inset-x-0 top-[calc(100%+6px)] z-40 max-h-80 overflow-y-auto rounded-[var(--md-sys-shape-corner-large)] p-1.5"
         >
           {results.length === 0 ? (
             <p className="px-3 py-4 text-center md-body-small text-ink-muted">

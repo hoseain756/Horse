@@ -422,15 +422,22 @@ body {
   cursor: not-allowed;
 }
 
-/* Primary action: glass tinted with the theme accent (readable, clearly the
-   main action). Hover = the same tint raised a step, no heavy shadow. */
+/* Primary action: accent-tinted Liquid Glass — the specular top edge catches
+   light like every other glass surface; a faint accent bloom grounds it.
+   Hover = the same tint raised a step, no heavy shadow. */
 .md-btn-filled {
   background: var(--glass-accent-fill);
   border-color: var(--glass-accent-border);
   color: var(--md-sys-color-on-primary);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 2px 12px color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
 }
 .md-btn-filled:hover {
   background: color-mix(in srgb, var(--md-sys-color-primary) 94%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.32),
+    0 3px 16px color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent);
 }
 
 /* Secondary/tonal: neutral glass (translucent fill + light stroke); the
@@ -479,11 +486,15 @@ button.md-btn-text:not(.md-btn) {
   height: 2.25rem;
 }
 
-/* Destructive: clear error tint on the same glass recipe. */
+/* Destructive: clear error tint on the same glass recipe (specular edge +
+   faint danger bloom — severity reads from tint + label, never color alone). */
 .md-btn-danger {
   background: var(--glass-danger-fill);
   border-color: var(--glass-danger-border);
   color: var(--md-sys-color-on-error);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 2px 12px color-mix(in srgb, var(--md-sys-color-error) 18%, transparent);
 }
 .md-btn-danger:hover {
   background: color-mix(in srgb, var(--md-sys-color-error) 94%, transparent);
@@ -558,8 +569,8 @@ button.md-btn-text:not(.md-btn) {
   background: var(--glass-fill);
 }
 
-/* FAB (56dp, corner-large, accent-tinted glass) + extended FAB. The M3
-   elevation stays (FABs float over rich content); fill/border are glass. */
+/* FAB (56dp, corner-large, accent-tinted glass) + extended FAB. Liquid glass
+   depth: soft lift shadow + specular edge instead of the M3 stack. */
 .md-fab {
   display: inline-flex;
   align-items: center;
@@ -571,15 +582,20 @@ button.md-btn-text:not(.md-btn) {
   border-radius: var(--md-sys-shape-corner-large);
   background: var(--glass-fab-fill);
   color: var(--md-sys-color-on-primary-container);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--md-sys-elevation-3);
+  border: 1px solid var(--glass-accent-border);
+  box-shadow:
+    var(--glass-shadow-lift),
+    inset 0 1px 0 rgb(255 255 255 / 0.3);
   cursor: pointer;
   transition:
     transform 150ms var(--glass-ease),
     box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 .md-fab:hover {
-  box-shadow: var(--md-sys-elevation-4);
+  box-shadow:
+    var(--glass-shadow-lift),
+    0 16px 44px rgba(2, 8, 12, 0.38),
+    inset 0 1px 0 rgb(255 255 255 / 0.34);
 }
 .md-fab:active {
   transform: scale(var(--glass-press-scale));
@@ -594,7 +610,8 @@ button.md-btn-text:not(.md-btn) {
 }
 
 /* Chips (assist/filter/suggestion — 32dp pill, glass, label-large). Selected
-   state = the nav's active-pill fill + primary label (toggle/segmented). */
+   = filled glass with the specular top edge + an accent-leaning stroke, so
+   the indicator is a material state, not just a hue swap. */
 .md-chip {
   display: inline-flex;
   align-items: center;
@@ -613,7 +630,8 @@ button.md-btn-text:not(.md-btn) {
   transition:
     transform 150ms var(--glass-ease),
     background-color 150ms ease,
-    border-color 150ms ease;
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 .md-chip:active {
   transform: scale(var(--glass-press-scale));
@@ -629,45 +647,106 @@ button.md-btn-text:not(.md-btn) {
 .md-chip-selected {
   background: var(--glass-active-fill);
   color: var(--md-sys-color-primary);
-  border-color: var(--glass-border);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 42%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+    0 1px 6px rgba(2, 8, 12, 0.14);
 }
 
-/* Cards: filled / elevated / outlined (corner-medium) */
+/* Cards — tier 3 (content): near-solid surfaces, NO backdrop-blur (skill:
+   never blur behind body text). The glass DNA arrives as a hairline specular
+   top edge + refined border, keeping text contrast fully owned by the solid
+   base. Radius lifts one step (corner-large) for the glass family feel. */
 .md-card-filled {
-  border-radius: var(--md-sys-shape-corner-medium);
-  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--md-sys-shape-corner-large);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 94%, transparent);
   color: var(--md-sys-color-on-surface);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.14);
 }
 .md-card-elevated {
-  border-radius: var(--md-sys-shape-corner-medium);
+  border-radius: var(--md-sys-shape-corner-large);
   background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
-  box-shadow: var(--md-sys-elevation-1);
+  box-shadow:
+    var(--glass-shadow-rest),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.12);
 }
 .md-card-outlined {
-  border-radius: var(--md-sys-shape-corner-medium);
-  background: var(--md-sys-color-surface);
+  border-radius: var(--md-sys-shape-corner-large);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 92%, transparent);
   color: var(--md-sys-color-on-surface);
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid var(--color-edge-soft-var);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.1);
 }
 
-/* Dialogs / sheets / snackbars / tooltips per M3 shape+color spec */
+/* Dialogs / sheets — tier 2 (panels): the .glass-panel material (deep blur,
+   text-safe fill, lift shadow, specular edge). Sheen via ::before; radius per
+   shape spec. Focusable children stay above the sheen (isolation + z-index). */
+.md-dialog,
+.md-sheet {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / var(--glass-edge), transparent);
+  background: var(--glass-fallback-panel);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--glass-shadow-lift);
+}
 .md-dialog {
   border-radius: var(--md-sys-shape-corner-extra-large);
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
-  box-shadow: var(--md-sys-elevation-3);
 }
 .md-sheet {
   border-radius: var(--md-sys-shape-corner-extra-large) var(--md-sys-shape-corner-extra-large) 0 0;
-  background: var(--md-sys-color-surface-container-low);
-  color: var(--md-sys-color-on-surface);
 }
+.md-dialog::before,
+.md-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--glass-tint-rgb) / var(--glass-sheen)),
+    transparent 40%
+  );
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .md-dialog,
+  .md-sheet {
+    background:
+      linear-gradient(
+        150deg,
+        rgb(var(--glass-tint-rgb) / 0.1),
+        rgb(var(--glass-tint-rgb) / 0.04) 50%
+      );
+    background-color: rgb(var(--glass-backing-rgb) / 0.42);
+    -webkit-backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    box-shadow:
+      var(--glass-shadow-lift),
+      inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+      inset 0 -1px 0 rgb(0 0 0 / var(--glass-core-shadow));
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .md-dialog,
+  .md-sheet {
+    background: var(--glass-fallback-panel);
+    box-shadow: var(--glass-shadow-lift);
+  }
+  .md-dialog::before,
+  .md-sheet::before {
+    display: none;
+  }
+}
+/* Snackbar: notifications stay SOLID-leaning (skill) — severity text must
+   survive any backdrop; only the shadow softens. */
 .md-snackbar {
-  border-radius: var(--md-sys-shape-corner-small);
+  border-radius: var(--md-sys-shape-corner-large);
   background: var(--md-sys-color-inverse-surface);
   color: var(--md-sys-color-inverse-on-surface);
-  box-shadow: var(--md-sys-elevation-3);
+  box-shadow: var(--glass-shadow-lift);
 }
 .md-tooltip {
   border-radius: var(--md-sys-shape-corner-extra-small);
@@ -675,39 +754,49 @@ button.md-btn-text:not(.md-btn) {
   color: var(--md-sys-color-inverse-on-surface);
 }
 
-/* Text fields (outlined: 4dp corners, focus primary 2px; filled: top-rounded) */
+/* Text fields (Liquid Glass: glass wrapper, readable interior, accent focus
+   ring — 3:1 border at rest, glass DNA via the specular inset on focus) */
 .md-field-outlined {
-  border-radius: var(--md-sys-shape-corner-extra-small);
-  border: 1px solid var(--md-sys-color-outline);
-  background: transparent;
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline) 72%, transparent);
+  background: var(--glass-fill-soft);
   color: var(--md-sys-color-on-surface);
-  transition: border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+  transition:
+    border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
 }
 .md-field-outlined:focus-within,
 .md-field-outlined:focus {
   border-color: var(--md-sys-color-primary);
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+  background: var(--glass-fill);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 55%, transparent),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.3);
 }
 .md-field-filled {
-  border-radius: var(--md-sys-shape-corner-extra-small) var(--md-sys-shape-corner-extra-small) 0 0;
+  border-radius: var(--md-sys-shape-corner-medium) var(--md-sys-shape-corner-medium) 0 0;
   border: none;
   border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
-  background: var(--md-sys-color-surface-container-highest);
+  background: var(--glass-fill-soft);
   color: var(--md-sys-color-on-surface);
-  transition: border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+  transition: border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
 }
 .md-field-filled:focus-within,
 .md-field-filled:focus {
   border-bottom: 2px solid var(--md-sys-color-primary);
   outline: none;
+  background: var(--glass-fill);
 }
 
-/* Navigation active pill (M3 nav indicator: 56x32 rounded-full container) */
+/* Navigation active pill (Liquid Glass indicator: filled glass + specular) */
 .md-nav-pill {
   border-radius: var(--md-sys-shape-corner-full);
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
+  background: var(--glass-active-fill);
+  color: var(--md-sys-color-primary);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
 }
 .md-nav-item {
   border-radius: var(--md-sys-shape-corner-full);
@@ -843,9 +932,13 @@ html[data-theme-card="stremio"] .harbor-card {
 }
 html[data-theme-card="glass"] .harbor-card,
 html[data-theme-card="glass"] .harbor-panel {
-  background: color-mix(in oklab, var(--color-elevated-var) 65%, transparent);
-  backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(160deg, rgb(var(--glass-tint-rgb) / 0.12), rgb(var(--glass-tint-rgb) / 0.05) 55%),
+    color-mix(in oklab, var(--color-elevated-var) 65%, transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / var(--glass-edge), transparent);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
 }
 html[data-theme-card="crunch"] .harbor-card {
   border: 1px solid color-mix(in srgb, var(--color-accent-var) 25%, transparent);
@@ -1188,69 +1281,233 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
 }
 
 /* ============================================================
-   Shared glass design language (single source of truth)
-   Extracted verbatim from the floating glass dock (bottom nav):
-   translucent fill + 1px light stroke + background blur with a
-   saturation boost, stadium/pill shape, NO heavy shadow, opaque
-   fallback when backdrop-filter is unsupported.
-   The dock, the floating search bar and every button recipe
-   consume these tokens — tune them HERE and the whole app stays
-   consistent. Never hardcode these values in components.
-   (Pill shape: --md-sys-shape-corner-full / --nav-radius = 9999px.)
+   LIQUID GLASS design language (single source of truth)
+   Evolution of the round-22 "shared glass" block from ordinary
+   glassmorphism to the multi-layer Liquid Glass material:
+   tint gradient + blur/saturation + specular edge highlight +
+   soft depth shadow + top sheen — hue-matched to the harbor
+   backdrop (cool slate-cyan family, NOT pure white, which reads
+   as flat gray over the near-black canvas).
+   TIER HIERARCHY (skill rule: not everything is glass):
+     tier-1 chrome/controls  → --glass-fill-strong, chrome blur
+     tier-2 panels/dialogs   → --glass-panel-fill, overlay blur
+     tier-3 content          → solid surfaces, NO blur
+   The md-* class names are the app's component API (legacy M3
+   naming kept deliberately — 50+ files, zero visual meaning);
+   their definitions below paint Liquid Glass tiers.
+   --lg-* names are ALIASES onto these tokens (skill mapping
+   rule: never a parallel token system).
    ============================================================ */
 :root {
+  /* ---- material channels (RGB triplets for / alpha composition) ---- */
+  --glass-tint-rgb: 191 230 242; /* hue-matched light slate-cyan */
+  --glass-ink-rgb: 255 255 255;
+  /* backing behind the translucent panel fills — THEME-AWARE (a fixed dark
+     backing turns light-theme panels muddy gray; the skill's worst case) */
+  --glass-backing-rgb: 10 15 18;
+  /* ---- fills ---- */
   --glass-fill: rgba(255, 255, 255, 0.07);
   --glass-fill-soft: rgba(255, 255, 255, 0.05); /* text buttons, nested controls */
-  --glass-border: rgba(191, 230, 242, 0.35);
+  --glass-fill-strong: rgba(255, 255, 255, 0.14); /* tier-1 controls resting */
+  --glass-panel-fill: rgba(16, 24, 28, 0.62); /* tier-2 panels: text-safe */
   --glass-active-fill: rgba(255, 255, 255, 0.16); /* nav pill / selected toggle */
   --glass-accent-fill: color-mix(in srgb, var(--md-sys-color-primary) 88%, transparent);
   --glass-accent-border: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
   --glass-fab-fill: color-mix(in srgb, var(--md-sys-color-primary-container) 85%, transparent);
   --glass-danger-fill: color-mix(in srgb, var(--md-sys-color-error) 88%, transparent);
   --glass-danger-border: color-mix(in srgb, var(--md-sys-color-error) 45%, transparent);
-  --glass-blur: 12px;
+  /* ---- edges & light ---- */
+  --glass-border: rgba(191, 230, 242, 0.35);
+  --glass-edge: 0.28; /* tint border alpha (panels derive their own) */
+  --glass-highlight: 0.5; /* inset top specular edge alpha */
+  --glass-sheen: 0.16; /* ::before top gradient alpha */
+  --glass-core-shadow: 0.18; /* inset bottom core shadow alpha */
+  /* ---- optics ---- */
+  --glass-blur: 14px; /* chrome band (skill: 12–20px) */
+  --glass-blur-overlay: 24px; /* dialogs/sheets/palette (≤28 cap) */
   --glass-saturate: 1.35;
-  --glass-shadow: none;
+  /* ---- depth ---- */
+  --glass-shadow: none; /* floating nav spec: no drop shadow */
+  --glass-shadow-rest: 0 8px 24px rgba(2, 8, 12, 0.22);
+  --glass-shadow-lift: 0 12px 36px rgba(2, 8, 12, 0.3);
   --glass-fallback: var(--md-sys-color-surface-container-high);
+  --glass-fallback-panel: var(--md-sys-color-surface-container);
+  /* ---- motion & press ---- */
   --glass-press-scale: 0.96;
   --glass-ease: cubic-bezier(0.2, 0, 0, 1);
+  --glass-dur: 200ms;
+  /* ---- focus ---- */
+  --glass-focus-ring: 0 0 0 2px var(--md-sys-color-surface), 0 0 0 4px var(--md-sys-color-primary);
 }
-/* Light themes: derive fill/border from the theme so contrast stays
-   readable over bright posters (same shape and proportions as dark). */
+/* skill token aliases — canonical --lg-* names point AT the glass system */
+:root {
+  --lg-blur: var(--glass-blur);
+  --lg-saturate: var(--glass-saturate);
+  --lg-tint: var(--glass-tint-rgb);
+  --lg-fill: 0.1;
+  --lg-fill-strong: 0.2;
+  --lg-edge: var(--glass-edge);
+  --lg-highlight: var(--glass-highlight);
+  --lg-solid: var(--glass-fallback);
+  --lg-shadow: var(--glass-shadow-rest);
+  --lg-radius-sm: var(--md-sys-shape-corner-medium);
+  --lg-radius-md: var(--md-sys-shape-corner-large);
+  --lg-radius-lg: var(--md-sys-shape-corner-extra-large);
+  --lg-radius-pill: var(--md-sys-shape-corner-full);
+  --lg-text: var(--color-ink-var);
+  --lg-text-muted: var(--color-ink-muted-var);
+  --lg-ease: var(--glass-ease);
+  --lg-ease-spring: cubic-bezier(0.3, 1.25, 0.5, 1);
+  --lg-dur: var(--glass-dur);
+  --lg-focus-ring: var(--glass-focus-ring);
+}
+/* Light themes: warm-white glass with a faint cool tint so it survives
+   bright posters (same shape and proportions as dark). */
 html[data-appearance="light"] {
+  --glass-tint-rgb: 214 234 240;
+  --glass-backing-rgb: 250 247 242;
   --glass-fill: rgba(255, 255, 255, 0.6);
   --glass-fill-soft: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(9, 42, 54, 0.16);
+  --glass-fill-strong: rgba(255, 255, 255, 0.72);
+  --glass-panel-fill: rgba(252, 249, 244, 0.78);
   --glass-active-fill: rgba(9, 42, 54, 0.09);
+  --glass-border: rgba(9, 42, 54, 0.16);
+  --glass-highlight: 0.85;
+  --glass-sheen: 0.28;
+  --glass-core-shadow: 0.08;
+  --glass-shadow-rest: 0 8px 24px rgba(20, 40, 60, 0.12);
+  --glass-shadow-lift: 0 12px 36px rgba(20, 40, 60, 0.16);
+  --glass-fallback: var(--md-sys-color-surface-container-high);
+  --glass-fallback-panel: var(--md-sys-color-surface-container-low);
+  --glass-focus-ring: 0 0 0 2px var(--md-sys-color-surface), 0 0 0 4px var(--md-sys-color-primary);
 }
 /* Kids Mode: friendlier tonal glass (colors only; the ≤8% size bump is
    nav-scoped via --nav-kids in the dock section below). */
 html[data-kids="on"] {
+  --glass-tint-rgb: 255 214 235;
+  --glass-backing-rgb: 30 16 24;
   --glass-fill: rgba(255, 255, 255, 0.12);
   --glass-fill-soft: rgba(255, 255, 255, 0.09);
+  --glass-fill-strong: rgba(255, 255, 255, 0.2);
+  --glass-panel-fill: rgba(38, 20, 30, 0.6);
   --glass-active-fill: rgba(255, 255, 255, 0.24);
   --glass-border: rgba(255, 214, 235, 0.4);
 }
 html[data-kids="on"][data-appearance="light"] {
+  --glass-tint-rgb: 255 228 240;
+  --glass-backing-rgb: 255 241 247;
   --glass-fill: rgba(255, 255, 255, 0.78);
   --glass-fill-soft: rgba(255, 255, 255, 0.62);
+  --glass-fill-strong: rgba(255, 255, 255, 0.88);
+  --glass-panel-fill: rgba(255, 241, 247, 0.82);
   --glass-active-fill: rgba(244, 114, 182, 0.18);
   --glass-border: rgba(244, 114, 182, 0.35);
 }
 
-/* The one glass recipe. Composition: translucent fill + light stroke +
-   blur(+saturation). @supports fallback swaps in an opaque surface so text
-   contrast never depends on blur support. Containers set their own radius. */
+/* Universal a11y guards for the glass material (skill: mandatory) */
+@media (prefers-contrast: more) {
+  :root {
+    --glass-fill: var(--glass-fallback);
+    --glass-fill-strong: var(--glass-fallback);
+    --glass-panel-fill: var(--glass-fallback-panel);
+    --glass-blur: 0px;
+    --glass-blur-overlay: 0px;
+    --glass-highlight: 0;
+    --glass-sheen: 0;
+    --glass-border: var(--md-sys-color-outline);
+  }
+}
+@media (forced-colors: active) {
+  :root {
+    --glass-blur: 0px;
+    --glass-blur-overlay: 0px;
+  }
+}
+
+/* The one glass recipe — multi-layer Liquid Glass material.
+   Layers bottom→top: tint gradient fill → blur+saturation → 1px tint edge →
+   inset specular top edge + bottom core shadow → soft depth shadow → ::before
+   top sheen. Base rule is OPAQUE-LEADING (readable without blur support);
+   @supports layers the translucency on top. Containers set their own radius.
+   `isolation` keeps the sheen inside; `position:relative` anchors it. */
 .glass-surface {
-  background: var(--glass-fill);
+  position: relative;
+  isolation: isolate;
+  background: var(--glass-fallback);
   border: 1px solid var(--glass-border);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow-rest);
+}
+.glass-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--glass-tint-rgb) / var(--glass-sheen)),
+    transparent 42%
+  );
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-surface {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--glass-tint-rgb) / 0.14),
+      rgb(var(--glass-tint-rgb) / 0.06) 55%
+    );
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    box-shadow:
+      var(--glass-shadow-rest),
+      inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+      inset 0 -1px 0 rgb(0 0 0 / var(--glass-core-shadow));
+  }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-surface {
     background: var(--glass-fallback);
+    box-shadow: none;
   }
+  .glass-surface::before {
+    display: none;
+  }
+}
+/* Tier-2 panel modifier: higher fill (text-safe), deeper blur, lift shadow.
+   Dialogs, sheets, command palette, settings panes. */
+.glass-panel {
+  background: var(--glass-fallback-panel);
+  box-shadow: var(--glass-shadow-lift);
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-panel {
+    background: linear-gradient(
+      150deg,
+      rgb(var(--glass-tint-rgb) / 0.12),
+      rgb(var(--glass-tint-rgb) / 0.05) 50%
+    );
+    background-color: rgb(var(--glass-backing-rgb) / 0.35);
+    -webkit-backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    box-shadow:
+      var(--glass-shadow-lift),
+      inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+      inset 0 -1px 0 rgb(0 0 0 / var(--glass-core-shadow));
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-panel {
+    background: var(--glass-fallback-panel);
+    box-shadow: var(--glass-shadow-lift);
+  }
+}
+/* Tier-3 / nested modifier: fill+stroke+sheen ONLY — no backdrop-filter.
+   Repeated list rows, controls inside already-blurred surfaces, cards. */
+.glass-static {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none;
 }
 /* Hover step for standalone glass pills (CTAs): the nav's active fill. */
 .glass-hover:hover {
@@ -1266,16 +1523,30 @@ html[data-kids="on"][data-appearance="light"] {
   background: var(--glass-danger-fill) !important;
   border-color: var(--glass-danger-border) !important;
 }
-/* Perf guard (requirement: never stack blurred layers): inside an
-   already-blurred or opaque elevated surface the glass look degrades to
-   fill+border only — no second backdrop-filter, no wasted GPU work. */
+/* Perf guard (skill: ≤3 blurred layers): inside an already-blurred or opaque
+   elevated surface the glass look degrades to fill+border only — no second
+   backdrop-filter, no wasted GPU work. */
 .glass-dock .glass-surface,
 .md-dialog .glass-surface,
 .md-sheet .glass-surface,
 .md-snackbar .glass-surface,
-.glass-surface .glass-surface {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+.glass-surface .glass-surface,
+.glass-panel .glass-surface {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* …and their sheen degrades to a hairline highlight so the material reads
+   as the SAME glass, just nested (skill: reduce inner layer to tint only). */
+.md-dialog .glass-surface::before,
+.md-sheet .glass-surface::before,
+.md-snackbar .glass-surface::before,
+.glass-surface .glass-surface::before,
+.glass-panel .glass-surface::before {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--glass-tint-rgb) / calc(var(--glass-sheen) * 0.6)),
+    transparent 40%
+  );
 }
 
 /* Floating search results — ONE node, two faces (floating-search.tsx):
@@ -1286,14 +1557,20 @@ html[data-kids="on"][data-appearance="light"] {
 }
 @media (min-width: 600px) {
   .fs-results {
-    background: var(--glass-fill);
+    background:
+      linear-gradient(160deg, rgb(var(--glass-tint-rgb) / 0.1), rgb(var(--glass-tint-rgb) / 0.04) 55%),
+      var(--glass-fill);
     border: 1px solid var(--glass-border);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-overlay)) saturate(var(--glass-saturate));
+    box-shadow:
+      var(--glass-shadow-rest),
+      inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .fs-results {
       background: var(--glass-fallback);
+      box-shadow: none;
     }
   }
 }
@@ -1485,13 +1762,18 @@ html[data-kids="on"] {
   /* The bar owns its gestures: taps + press-and-drag scrubbing. Page scroll
      / pull-to-refresh must never steal the pointer mid-scrub. */
   touch-action: none;
-  /* Shared glass recipe (identical values the old --nav-glass-* tokens held):
-     single source in the "Shared glass design language" section. */
-  background: var(--glass-fill);
+  /* Shared glass recipe — full Liquid Glass material (tint gradient +
+     specular top edge). NO drop shadow (nav spec): --glass-shadow stays none. */
+  background:
+    linear-gradient(160deg, rgb(var(--glass-tint-rgb) / 0.12), rgb(var(--glass-tint-rgb) / 0.05) 60%),
+    var(--glass-fill);
   border: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+    inset 0 -1px 0 rgb(0 0 0 / 0.14);
   transition: transform 350ms var(--glass-ease), opacity 250ms var(--glass-ease);
 }
 /* Fallback: no backdrop-filter support → opaque surface-container, same shape */
@@ -2436,13 +2718,16 @@ html[lang^="ar"] {
   }
 }
 
-/* C: SegmentedControl — equal full-width segments in a stacked row, labels
-   never wrap; if they still cannot fit (320px or 150% font scale) the
-   component degrades to a dropdown (overflow check in settings-view). */
+/* C: SegmentedControl — Liquid Glass tray: translucent fill + hairline edge
+   (was solid secondary-container); equal full-width segments in a stacked
+   row, labels never wrap; if they still cannot fit (320px or 150% font
+   scale) the component degrades to a dropdown (overflow check in
+   settings-view). Selected segment styling flows from .md-chip-selected. */
 .harbor-segmented {
   display: inline-flex;
   border-radius: var(--md-sys-shape-corner-full);
-  background: var(--md-sys-color-secondary-container);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill-soft);
   padding: 0.25rem;
 }
 @container (max-width: 519px) {
@@ -2488,11 +2773,14 @@ html[lang^="ar"] {
   }
 }
 
-/* ---- B: M3 switch (logical, RTL-safe) -------------------------------------
+/* ---- B: Liquid Glass switch (logical, RTL-safe) ---------------------------
    Root = 48dp touch target (the button itself), visual track 52×32dp drawn by
    an inner span, thumb 16dp off / 24dp on positioned with logical inset
-   (inset-inline-start) so RTL mirrors without transforms. Focus ring visible,
-   disabled dimmed per M3 state spec. */
+   (inset-inline-start) so RTL mirrors without transforms. Track = glass
+   (translucent fill + hairline edge); checked = accent glass with a specular
+   top edge; thumb carries its own micro-highlight. 3:1 boundaries hold in
+   both states (outline edge off / accent edge on). Focus ring visible,
+   disabled dimmed per state spec. */
 .md-switch {
   position: relative;
   display: inline-block;
@@ -2509,17 +2797,23 @@ html[lang^="ar"] {
   inset-block: 8px; /* 32dp visual track centered in the 48dp target */
   inset-inline: 0;
   border-radius: var(--md-sys-shape-corner-full);
-  border: 2px solid var(--md-sys-color-outline);
-  background: var(--md-sys-color-surface-container-highest);
+  border: 2px solid color-mix(in srgb, var(--md-sys-color-outline) 85%, transparent);
+  background: var(--glass-fill);
   transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
-    border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+    border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 .md-switch[data-state="checked"] .md-switch-track {
-  background: var(--md-sys-color-primary);
-  border-color: var(--md-sys-color-primary);
+  background: var(--glass-accent-fill);
+  border-color: var(--glass-accent-border);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 1px 8px color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
 }
 .md-switch[data-state="checked"]:hover .md-switch-track {
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 0 0 8px color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
 }
 .md-switch[data-state="unchecked"]:hover .md-switch-track {
   box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
@@ -2541,16 +2835,21 @@ html[lang^="ar"] {
   height: 16px;
   border-radius: var(--md-sys-shape-corner-full);
   background: var(--md-sys-color-outline);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
   transform: translateY(-50%);
   transition: inset-inline-start var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
     width var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
-    background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+    background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 .md-switch[data-state="checked"] .md-switch-thumb {
   inset-inline-start: calc(100% - 28px);
   width: 24px;
   height: 24px;
   background: var(--md-sys-color-on-primary);
+  box-shadow:
+    inset 0 -1px 1px rgb(0 0 0 / 0.18),
+    0 1px 3px rgb(0 0 0 / 0.3);
 }
 .md-switch:disabled .md-switch-thumb {
   background: var(--md-sys-color-on-surface);
@@ -2797,11 +3096,16 @@ html[lang^="ar"] {
   width: var(--rail-width);
   padding: calc(8px * var(--nav-zoom));
   border-radius: 9999px; /* stadium — the dock's shape, rotated */
-  background: var(--glass-fill);
+  background:
+    linear-gradient(180deg, rgb(var(--glass-tint-rgb) / 0.12), rgb(var(--glass-tint-rgb) / 0.05) 60%),
+    var(--glass-fill);
   border: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+    inset 0 -1px 0 rgb(0 0 0 / 0.14);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2860,11 +3164,15 @@ html[lang^="ar"] {
   top: 0;
   padding: 6px 12px;
   border-radius: 12px;
-  background: var(--glass-fill);
+  background:
+    linear-gradient(180deg, rgb(var(--glass-tint-rgb) / 0.14), rgb(var(--glass-tint-rgb) / 0.06) 60%),
+    var(--glass-fill);
   border: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
   color: var(--nav-icon-active);
   font-size: 13px;
   font-weight: 600;
@@ -3447,11 +3755,18 @@ html[lang^="ar"] {
   --settings-tv-band: 1600px;
 }
 
-/* ---- Shell scaffolding --------------------------------------------------- */
+/* ---- Shell scaffolding ---------------------------------------------------
+   Ambient depth: a faint accent aurora lives INSIDE the shell (behind all
+   panes) so glass surfaces always have something to refract — the skill's
+   "glass needs something behind it" rule — even on the bare canvas with no
+   theme background image. z-index free: it's the shell's own background. */
 .set-shell {
   display: flex;
   flex-direction: column;
   min-height: 100%;
+  background:
+    radial-gradient(120% 60% at 12% -6%, color-mix(in srgb, var(--color-accent-var) 9%, transparent), transparent 55%),
+    radial-gradient(90% 50% at 100% 0%, rgb(var(--glass-tint-rgb) / 0.05), transparent 60%);
 }
 /* Two-pane ≥840: fixed list column + fluid detail column. */
 @media (min-width: 840px) {
@@ -3469,6 +3784,32 @@ html[lang^="ar"] {
     max-height: calc(100vh - 120px);
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* tier-2 glass panel around the navigation list */
+    padding: clamp(12px, 1.4vw, 18px);
+    border-radius: var(--lg-radius-lg);
+    background: var(--glass-fallback-panel);
+    border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / var(--glass-edge), transparent);
+    box-shadow: var(--glass-shadow-rest), inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
+  }
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .set-shell[data-layout="panes"] > .set-pane-list {
+      background:
+        linear-gradient(160deg, rgb(var(--glass-tint-rgb) / 0.1), rgb(var(--glass-tint-rgb) / 0.04) 55%);
+      background-color: rgb(var(--glass-backing-rgb) / 0.3);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .set-shell[data-layout="panes"] > .set-pane-list {
+      background: var(--glass-fallback-panel);
+      box-shadow: var(--glass-shadow-rest);
+    }
+  }
+  /* controls nested inside the glass panel never blur again (perf guard) */
+  .set-shell[data-layout="panes"] > .set-pane-list .set-cat-item[data-active="true"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .set-shell[data-layout="panes"] > .set-pane-detail {
     flex: 1 1 auto;
@@ -3477,7 +3818,10 @@ html[lang^="ar"] {
   }
 }
 
-/* ---- Category list rows -------------------------------------------------- */
+/* ---- Category list rows — Liquid Glass ------------------------------------
+   Rest = quiet glass row. Hover = fill rises. Active = accent-tinted glass
+   with the specular top edge + the inline-start light bar (RTL mirrors via
+   the [dir] override below) — the indicator is material, not just hue. */
 .set-cat-item {
   display: flex;
   align-items: center;
@@ -3488,16 +3832,42 @@ html[lang^="ar"] {
   border-radius: var(--md-sys-shape-corner-large);
   border: 1px solid transparent;
   text-align: start;
-  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms var(--glass-ease),
+    box-shadow 160ms ease;
 }
-.set-cat-item:hover { background: rgba(255, 255, 255, 0.05); }
+@media (hover: hover) {
+  .set-cat-item:hover {
+    background: var(--glass-fill);
+    border-color: color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.7), transparent);
+  }
+}
+.set-cat-item:active {
+  transform: scale(0.985);
+}
 .set-cat-item[data-active="true"] {
-  background: var(--glass, rgba(255, 255, 255, 0.07));
-  border-color: var(--edge-soft, rgba(255, 255, 255, 0.1));
-  box-shadow: inset 3px 0 0 0 var(--accent, currentColor);
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent), color-mix(in srgb, var(--md-sys-color-primary) 6%, transparent) 60%);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 38%, transparent);
+  box-shadow:
+    inset 3px 0 0 0 var(--accent, currentColor),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+    0 2px 10px color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent);
 }
 [dir="rtl"] .set-cat-item[data-active="true"] {
-  box-shadow: inset -3px 0 0 0 var(--accent, currentColor);
+  box-shadow:
+    inset -3px 0 0 0 var(--accent, currentColor),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight)),
+    0 2px 10px color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent);
+}
+/* high-contrast: the gradient dies, the indicator + border carry the state */
+@media (prefers-contrast: more) {
+  .set-cat-item[data-active="true"] {
+    background: var(--glass-fallback);
+    border-color: var(--md-sys-color-primary);
+  }
 }
 .set-cat-icon {
   display: flex;
@@ -3508,6 +3878,8 @@ html[lang^="ar"] {
   flex: 0 0 44px;
   border-radius: 14px;
   background: var(--accent-soft, rgba(255, 255, 255, 0.08));
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2);
 }
 /* Horizontal phone flavor: swipeable chips on the home surface (compact mode) */
 .set-cat-chip {
@@ -3518,12 +3890,18 @@ html[lang^="ar"] {
   min-width: 88px;
   padding: 12px 10px;
   border-radius: var(--md-sys-shape-corner-large);
-  border: 1px solid var(--edge-soft, rgba(255, 255, 255, 0.1));
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.8), transparent);
+  background: var(--glass-fill-soft);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / calc(var(--glass-highlight) * 0.5));
   text-align: center;
-  transition: background-color 160ms ease, transform 160ms ease;
+  transition: background-color 160ms ease, transform 160ms ease, border-color 160ms ease;
 }
-.set-cat-chip:hover { background: rgba(255, 255, 255, 0.08); }
+@media (hover: hover) {
+  .set-cat-chip:hover {
+    background: var(--glass-fill);
+    border-color: color-mix(in srgb, var(--glass-tint-rgb) / var(--glass-edge), transparent);
+  }
+}
 .set-cat-chip:active { transform: scale(0.97); }
 
 /* ---- Arrival highlight (deep link / search jump) ------------------------- */
@@ -3563,7 +3941,10 @@ html[lang^="ar"] {
   background: var(--edge-soft, rgba(255, 255, 255, 0.1));
 }
 
-/* ---- Detail app bar (drill-down) ---------------------------------------- */
+/* ---- Detail app bar (drill-down) — tier-1 floating chrome -----------------
+   True glass: blur+saturation with a tint edge; the bottom hairline fades
+   out (mask) so the bar dissolves into the page the way wet glass does.
+   Native backdrop layer still dims themed backgrounds behind it. */
 .set-appbar {
   position: sticky;
   top: 0;
@@ -3573,10 +3954,27 @@ html[lang^="ar"] {
   gap: 8px;
   margin: -8px -4px 12px;
   padding: 10px 4px;
-  background: linear-gradient(to bottom, var(--background) 78%, transparent);
+  background: var(--glass-fallback);
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .set-appbar {
+    background:
+      linear-gradient(180deg, rgb(var(--glass-tint-rgb) / 0.1), rgb(var(--glass-tint-rgb) / 0.03) 70%, transparent);
+    background-color: color-mix(in srgb, var(--color-canvas-var) 62%, transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.7), transparent);
+    -webkit-mask-image: linear-gradient(180deg, #000 82%, transparent);
+    mask-image: linear-gradient(180deg, #000 82%, transparent);
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .set-appbar {
+    background: linear-gradient(to bottom, var(--background) 78%, transparent);
+  }
 }
 
-/* ---- Glass search field (settings search) -------------------------------- */
+/* ---- Glass search field (settings search) — tier-1 pill -------------------- */
 .set-search {
   display: flex;
   align-items: center;
@@ -3584,15 +3982,29 @@ html[lang^="ar"] {
   min-height: 48px;
   padding: 0 14px;
   border-radius: var(--md-sys-shape-corner-full);
-  background: rgba(255, 255, 255, 0.07);
-  -webkit-backdrop-filter: blur(12px) saturate(1.35);
-  backdrop-filter: blur(12px) saturate(1.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: border-color 160ms ease, background-color 160ms ease;
+  background: var(--glass-fallback);
+  border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.9), transparent);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / calc(var(--glass-highlight) * 0.6));
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .set-search {
+    background: linear-gradient(135deg, rgb(var(--glass-tint-rgb) / 0.12), rgb(var(--glass-tint-rgb) / 0.05) 60%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .set-search {
+    background: var(--glass-fallback);
+  }
 }
 .set-search:focus-within {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 0 1px 0 rgb(var(--glass-tint-rgb) / calc(var(--glass-highlight) * 0.8)),
+    0 2px 14px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .set-search input {
   background: transparent;
@@ -3620,9 +4032,13 @@ html[lang^="ar"] {
   .set-shell .set-search input { font-size: 17px; }
 }
 
-/* ---- Phone polish -------------------------------------------------------- */
+/* ---- Phone polish — geometry frozen; material inherits the new glass ------ */
 @media (max-width: 599px) {
-  .set-cat-item { padding: 10px 12px; border-color: var(--edge-soft, rgba(255, 255, 255, 0.08)); background: rgba(255, 255, 255, 0.03); }
+  .set-cat-item {
+    padding: 10px 12px;
+    border-color: color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.55), transparent);
+    background: var(--glass-fill-soft);
+  }
 }
 
 /* hmr-poke: task 70-c poster scale verification */
