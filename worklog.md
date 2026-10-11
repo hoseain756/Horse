@@ -2445,3 +2445,23 @@ Addendum (Task 77 — prod creds saga, 2026-10-11):
 Addendum (Task 77 — prod creds, password #3):
 - User reset DB password to letters+digits-only value (my recommendation to avoid URL-encoding errors) and sent both pooler URLs. Verified from sandbox: 5432 SELECT 1 = OK AND "QrLogin" reachable = schema intact under new password. 6543 probe hangs in CLI again (known sandbox quirk, pgbouncer+engine handshake; TCP reachable; Vercel→6543 proven working earlier via clean auth error). Credentials are GOOD.
 - User now creating POSTGRES_URL (6543) + POSTGRES_URL_NON_POOLING (5432) MANUALLY in Vercel (Secret type, Production+Preview) after disconnecting the Supabase integration; then Redeploy. Next: on user "تم" → verify https://horse-1.vercel.app/api/health (expect ok:true tables:17) → then full prod E2E (qr/create, pairing/create tmdb, transfer/create).
+
+---
+Task ID: 78
+Agent: Z.ai Code (main)
+Task: Verify user's new prod DB password → discovered integration auto-recreated vars → full production E2E (API + agent-browser)
+
+Work Log:
+- User message: "لم انشها يدوي قام بانشاها تلقاي" (didn't create the env vars manually — the Vercel⇄Supabase integration re-created them automatically after the password reset). This explained why no manual step was needed.
+- Probed new password (letters+digits-only, password #3) on 5432 via `bunx prisma db execute --stdin` → 5432_OK (exit 0).
+- Probed https://horse-1.vercel.app/api/health → **{"ok":true,"mode":"postgres-pooler","host":"aws-1-eu-central-1.pooler.supabase.com:6543","tables":18,"rlsTables":15,"hasMigrationsUrl":true,"error":null}** — 28P01 SAGA OVER. Runtime pooler auth works; 18 = 17 app tables + _prisma_migrations.
+- Prod API E2E: POST /api/auth/qr/create → {"code":"R7CVXP","displayCode":"R7C-VXP","pollToken":…,"ttlMs":300000} ✅; POST /api/pairing/create {"service":"tmdb"} → {"code":"XG5JRB","displayCode":"XG5-JRB","ttlMs":600000} ✅.
+- Local env intact: dev server alive (health ok, embedded PG 127.0.0.1:5433, 17 tables), gh-autopush watcher alive.
+- agent-browser on production (horse-1.vercel.app): title renders; Home page fully populated with real TMDB content (Featured carousel autoplaying, Top 10 Today, Trending Movies); ZERO page errors.
+- AUTOMATION GOTCHA (diagnosed, not a product bug): `find role tab click --name "Settings"` did NOT navigate — eval showed TWO sets of [role=tab]: the bottom glass dock (hidden 0×0 at ≥1024px viewport) + the side rail (off-canvas by design, x=-79, per side-rail.tsx A1: hidden at inline-start edge, revealed by edge hot-zone hover / focusin / edge-handle tap). Synthetic clicks hit the invisible dock tab. REAL paths verified working: rail tab .focus() → focusin reveals rail → Enter → resetTo fired, Settings [selected], full settings page rendered (search combobox, Sign in, 9 categories, Quick Access). This doubles as an accessibility confirmation of the designed keyboard path.
+- Golden path continued: Settings → Integrations section renders Trakt.tv ("Link Trakt.tv with a code"), Simkl, TMDB metadata (switch checked, 8+ language options incl. العربية) — all client panels healthy against the fixed DB. Browser closed cleanly.
+
+Stage Summary:
+- PRODUCTION FULLY RESTORED: DB auth fixed (integration-owned vars now carry the reset password), health ok:true, QR + pairing APIs minting real codes, UI renders end-to-end with zero errors. No DDL was ever needed (schema was already current).
+- Prod E2E checklist from Task 75 queue: health ✅ / qr/create ✅ / pairing tmdb ✅ / UI render ✅ / Integrations panel ✅. Remaining optional: transfer/create with a real addon payload + signed-in flows (need a real Horse account on prod).
+- Automation lesson recorded: at ≥1024px the dock is 0×0 and the rail is off-canvas by design — browser agents must use the keyboard path (focus rail tab → Enter) or the edge handle, not role-tab click on the first match.
