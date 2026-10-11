@@ -2487,3 +2487,21 @@ Work Log:
 Stage Summary:
 - The app's visual language is now Liquid Glass end-to-end via ONE primitive + ONE token set, layered: chrome/controls (tier-1) blur 14px, panels/dialogs (tier-2) blur 24px text-safe, content (tier-3) near-solid no blur. M3 survives ONLY as (a) legacy md-* class NAMES (documented API, zero visual meaning) and (b) the runtime color engine (functional). Zero DDL/behavior changes; all handlers/ARIA/persistence intact.
 - Not verified: real iOS Safari/Firefox rendering (no devices); @supports fallbacks verified by code inspection + Chromium matrix only. Pre-existing 14 tsc errors + i18n warning backlog untouched (out of scope).
+
+---
+Task ID: 80
+Agent: main (orchestrator)
+Task: User requests — delete all screenshots; complete the GitHub push (device-flow recovery); checkpoint ("save up to this point")
+
+Work Log:
+- Deleted ALL QA screenshots (~380 files): root qa-*.png (21), qa-shots/*.png (39), download/ images (264), .zshots/ (3), upload/ pasted images (2). Kept: public/ app icons (4, required assets), skills/ design-template assets (45), qa-shots TSV contrast reports (not screenshots), download/README.md.
+- Committed cleanup as de7f023 (373 tracked PNGs removed from repo history going forward; 377→4 png count in git).
+- Push was blocked: container restart had wiped $HOME (~/.git-credentials + ~/.gh-autopush.sh gone; AI-MEMORY recovery ritual confirmed). No token existed anywhere in the container.
+- Executed documented GitHub OAuth DEVICE FLOW recovery: POST /login/device/code (public gh CLI client_id, scope=repo) → user_code 0404-36B6 shown to user → poller ~/ghflow/poll.sh (230×5s, slow_down-aware, token NEVER printed) armed via setsid.
+- User approved at 08:18:49 UTC → credential auto-stored to ~/.git-credentials (chmod 600, outside repo) → poller pushed 3b1f563..de7f023 → "PUSH OK".
+- Recreated + armed ~/.gh-autopush.sh watcher (60s loop, GIT_TERMINAL_PROMPT=0, state ~/.gh-autopush.state, no state update on failure → retries). Verified: remote main == local main (de7f023) via ls-remote.
+- Appended this checkpoint entry; committing + pushing it as the "save up to this point" marker.
+
+Stage Summary:
+- Remote hoseain756/Horse main == local de7f023 (includes Task 79 Liquid Glass migration + Task 80 screenshot cleanup). Autopush watcher live again — every future commit auto-pushes within ~60s. Device flow ritual re-validated as the standard credential recovery path (6th container-restart cycle).
+- Project state at checkpoint: Liquid Glass design system fully migrated (Task 79); zero screenshots on disk outside public//skills; 14 pre-existing tsc errors + i18n warning backlog still open (documented, out of scope).
