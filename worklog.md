@@ -2430,3 +2430,9 @@ Work Log:
 
 Stage Summary:
 - TWO permanent mandatory skills now govern all UI work: frontend-design (direction) + liquid-glass-ui (glass material execution). Installed active+tracked, wired into AI-MEMORY hard rules and the recurring cron. Prod env-var fix still awaiting user (Task 75); prod E2E remains top queued item.
+
+Addendum (Task 77 — 4th container restart, 2026-10-11 ~03:0x):
+- $HOME wiped AGAIN between turns (credentials, ghflow, watcher, credential.helper all gone; dev server down; /tmp/Postgres gone). Skill files themselves SAFE (skills/ + agent-ctx/ live in the persisted project dir) — Task 76/77 installs survived intact.
+- Recovery executed per ritual: credential.helper store re-set; local-pg.sh + prisma db push (17 tables green) + dev restarted; ~/.ghflow/poll.sh + ~/.gh-autopush.sh recreated from the documented behavior (poll.sh now reads device_code from ~/.ghflow/pending.json, slow_down-aware, 230-cycle window) and both armed (setsid).
+- NEW device flow issued: user code 74D1-BAA0 @ github.com/login/device (15-min window; device_code kept in $HOME only, never in repo/chat). Push of commits 601ef96 (Task 76) + 2956ef3 (Task 77) + this addendum happens automatically on authorization (poller pushes immediately, watcher keeps 60s duty after).
+- Lesson reinforced: EVERY long turn should end with `git push` verified, because turn boundaries are where restarts strike. Watcher death is silent — always pgrep + relaunch at turn start.
