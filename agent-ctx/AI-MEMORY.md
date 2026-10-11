@@ -139,13 +139,23 @@
 
 ## 5. Hard rules
 
-- **MANDATORY SKILL (permanent user directive, Task 76): `frontend-design`** — read
-  `skills/frontend-design/SKILL.md` and apply it BEFORE any UI/frontend work
-  (components, pages, views, styling, animations, polish passes). Apply it WITHIN the
-  project's established glass design language (do NOT swap the design system): commit
-  to intentional aesthetics — distinctive typography, atmosphere/depth in backgrounds,
-  orchestrated motion (staggered reveals, high-impact moments), meticulous spatial
-  detail; never generic "AI slop" patterns or timid palettes.
+- **MANDATORY SKILLS (permanent user directive, Tasks 76+77) — read BOTH before any
+  UI/frontend work and apply them on every component, page, view, styling, animation,
+  polish or glass-repair pass:**
+  1. `skills/frontend-design/SKILL.md` — distinctive, anti-generic aesthetics:
+     intentional typography, orchestrated motion, depth/atmosphere, meticulous detail.
+  2. `skills/liquid-glass-ui/SKILL.md` (+ references/{accessibility,components,
+     css-techniques,quality-checklist}.md + scripts/contrast.py) — THE glass
+     implementation authority for Horse: multi-layer material (tint/blur+saturation/
+     edge highlight/shadow), glass hierarchy (chrome/controls float, content stays
+     solid), per-background contrast verification, states, a11y, perf, repair playbook.
+     Map its `--lg-*` tokens ONTO existing harbor tokens in globals.css (alias, never
+     add a parallel token system); opaque `--lg-solid` fallback pattern is mandatory
+     for `@supports` guards.
+  - Both apply WITHIN the established glass design language (no design-system swap);
+    frozen bands (<600, 600–1023) untouched; express distinctiveness in laptop/TV
+    bands and new surfaces. If `skills/` is ever missing on a fresh clone, restore
+    both from the tracked mirrors in `agent-ctx/skills/`.
 - Phone (<600dp) and tablet (600–1023dp): DO NOT TOUCH. Laptop 1024–1599, TV ≥1600 free.
 - Fix root causes, verify by measurement, never blind-patch.
 - No "..." / TODO in delivered code; full files only.

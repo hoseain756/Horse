@@ -1,0 +1,26 @@
+{
+  "skill_name": "liquid-glass-ui",
+  "evals": [
+    {
+      "id": 1,
+      "name": "existing-site-redesign",
+      "prompt": "This is my Next.js + Tailwind marketing site. Redesign the navbar, the primary and secondary buttons, the search field, and the pricing side panel with a Liquid Glass look. Everything must keep working: routing, the search autocomplete, the mobile menu, and our existing tests.",
+      "expected_output": "Agent inspects repo and existing tokens first, plans, restyles via a shared glass primitive and tokens without rewriting component logic, keeps search input native with glass on the wrapper, handles mobile layout and safe areas, verifies contrast and keyboard behavior, runs build/tests, and reports what was and was not verified.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "new-responsive-site",
+      "prompt": "Build a new landing page for a meditation app with a coherent Liquid Glass design system that works on phone, tablet, and desktop. Include a floating nav, a hero, three feature cards, a pricing section, and a footer. Plain HTML/CSS/JS is fine.",
+      "expected_output": "Agent defines tokens, picks a background with depth, builds a single glass primitive with fallbacks, applies hierarchy (glass for nav and controls, solid for text-heavy content), designs mobile first with safe areas, supports reduced motion and high contrast, validates at the viewport matrix, and does not overuse glass cards.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "performance-accessibility-repair",
+      "prompt": "Our glass dashboard scrolls badly on phones, the text on the cards is hard to read over the photo background, and at 320px the sidebar overlaps the content. Blur is set to 60px on most surfaces and some panels animate their blur. Fix it without changing the look more than necessary.",
+      "expected_output": "Agent follows the repair playbook: baseline and reproduce, fix layout first, reduce blur and blurred area, remove animated blur, remove backdrop-filter from repeated or nested surfaces, measure and fix contrast with a scrim or higher fill, add fallbacks and preference handling, re-validate and report before/after numbers.",
+      "files": []
+    }
+  ]
+}

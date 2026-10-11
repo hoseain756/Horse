@@ -2416,3 +2416,17 @@ Stage Summary:
 
 Addendum (Task 76):
 - Discovered `skills/` is gitignored (platform convention) → the in-repo install was NOT tracked. Added a tracked mirror at agent-ctx/skills/frontend-design/ (SKILL.md + LICENSE.txt) committed to GitHub; AI-MEMORY documents the restore path if skills/ ever goes missing on a fresh clone. Active copy used by agents: skills/frontend-design/SKILL.md.
+
+---
+Task ID: 77
+Agent: Z.ai Code (main)
+Task: User directive (EN) — "Preserve this skill of mine in this project" (uploaded liquid-glass-ui.zip)
+
+Work Log:
+- Extracted liquid-glass-ui.zip (27KB, 11 files) → skills/liquid-glass-ui/: SKILL.md (292 lines — Liquid Glass design direction vs ordinary glassmorphism: multi-layer material = tint + blur/saturation + edge highlight + soft shadow; glass hierarchy (chrome/controls float, content stays solid); per-background tint/contrast verification; 5-phase workflow Inspect→Plan→Implement→Validate→Refine; --lg-* token block with light/dark themes + @supports opaque fallback; material recipe CSS), references/ (accessibility.md 108L, components.md 154L, css-techniques.md 121L incl. SVG-displacement lensing caveats, quality-checklist.md 88L incl. repair playbook), scripts/contrast.py (89L), evals/evals.json.
+- Installed same way as Task 76: active copy skills/liquid-glass-ui/ (skills/ is gitignored) + TRACKED mirror agent-ctx/skills/liquid-glass-ui/ committed to GitHub; AI-MEMORY hard rules upgraded to "MANDATORY SKILLS — read BOTH (frontend-design + liquid-glass-ui)" with mapping guidance: alias --lg-* onto existing harbor tokens in globals.css (never a parallel token system), opaque fallback pattern mandatory, frozen bands untouched, restore-from-mirror path documented.
+- Recreated the 15-min webDevReview cron (job 450713, replacing 449470): first step now mandates BOTH skills; adds a standing liquid-glass audit duty (contrast vs worst-case backdrop via scripts/contrast.py + rendered checks, state completeness, @supports fallbacks) scoped to laptop/TV bands.
+- Fit note: Horse is a glassmorphism app — this skill is the implementation authority for its core material; it complements frontend-design (aesthetics direction) without conflicting (both scoped by the project's hard rules).
+
+Stage Summary:
+- TWO permanent mandatory skills now govern all UI work: frontend-design (direction) + liquid-glass-ui (glass material execution). Installed active+tracked, wired into AI-MEMORY hard rules and the recurring cron. Prod env-var fix still awaiting user (Task 75); prod E2E remains top queued item.
