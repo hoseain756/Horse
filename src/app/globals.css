@@ -4968,6 +4968,11 @@ html[lang^="ar"] {
   .set-detail-heading { gap: 10px; margin-block-end: 18px; padding-block-end: 16px; }
 }
 
+@media (max-width: 599px) {
+  /* FIX: The phone search trigger is hidden on Settings, so the sticky bar can sit at the top. */
+  .set-appbar { top: 0; }
+}
+
 @media (max-width: 380px) {
   .set-directory-count { min-inline-size: 34px; }
   .set-category-list-directory .set-cat-item { min-block-size: 68px; }
