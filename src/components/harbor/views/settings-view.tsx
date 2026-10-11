@@ -124,8 +124,8 @@ function subColorHex(v: string, fallback: string): string {
 
 export function SettingsView() {
   return (
-    <div className="pt-20 md:pt-14 px-4 md:px-8 max-w-[1360px] mx-auto w-full">
-      <SettingsShell categories={CATEGORIES} groups={GROUPS} home={<QuickAccess />} />
+    <div className="settings-view-frame pt-20 md:pt-14 max-w-[1760px] mx-auto w-full">
+      <SettingsShell categories={CATEGORIES} groups={GROUPS} home={(query) => <QuickAccess searchQuery={query} />} />
     </div>
   );
 }

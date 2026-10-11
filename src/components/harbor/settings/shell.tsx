@@ -4,7 +4,7 @@
 //   < 600   phone    : single column, home surface → drill-down per category
 //   600–839 tablet   : same drill-down, content centered (≤720dp feel)
 //   840–1599         : TWO-PANE list-detail (list 280–320dp, detail ≤880dp)
-//   ≥ 1600 TV        : two-pane with ten-foot scale (72–80dp rows, big type)
+//   ≥ 1600 / large remote display : two-pane with ten-foot scale and focus targets
 // Deep links live in the page hash: `#settings/<category>` and
 // `#settings/<category>/<settingKey>` — arrival scrolls to the row and paints
 // a 2.4s highlight. The legacy `harbor:settings-section` event keeps working.
@@ -20,12 +20,17 @@ import {
   X,
 } from "lucide-react";
 import { useSettings } from "@/lib/harbor/store";
+import { useAddons } from "@/lib/harbor/store";
+import { useTrakt } from "@/lib/harbor/trakt";
+import { useSimkl } from "@/lib/harbor/simkl";
+import { useDebrid } from "@/lib/harbor/debrid";
 import { useT, type T as TFunc } from "@/hooks/use-t";
-import { isArabic } from "@/lib/harbor/i18n";
+import { APP_STRINGS, isArabic } from "@/lib/harbor/i18n";
 import type { AppStringKey } from "@/lib/harbor/i18n";
 import { hasParentPin, isParentUnlocked, verifyParentPin } from "@/lib/harbor/parent-pin";
 import { UserChip } from "../chrome/account";
 import { cn } from "@/lib/utils";
+import { SearchHighlight } from "./search-highlight";
 
 export type SettingsCatId =
   | "account" | "appearance" | "playback" | "subtitles"
@@ -244,13 +249,17 @@ export function SettingsShell({
 }: {
   categories: SettingsCategory[];
   groups: SettingsGroup[];
-  /** Home surface content (Quick Access + anything else) shown at the root. */
-  home?: React.ReactNode;
+  /** Root overview content receives the live query so its destinations can filter in place. */
+  home?: (query: string) => React.ReactNode;
 }) {
   const settings = useSettings((s) => s.settings);
+  const addons = useAddons((s) => s.addons);
+  const traktAuth = useTrakt((s) => s.auth);
+  const simklAuth = useSimkl((s) => s.auth);
+  const debridKey = useDebrid((s) => s.apiKey);
   const tr = useT();
   const wide = useMediaQuery("(min-width: 840px)");
-  const tv = useMediaQuery("(min-width: 1600px)");
+  const tv = useMediaQuery("(min-width: 1600px), (min-width: 1200px) and (hover: none)");
   const rtl = isArabic(settings.uiLanguage);
 
   // SSR-safe: the hash is applied client-side only (in the effect below) —
@@ -263,6 +272,28 @@ export function SettingsShell({
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const homeContent = home?.(query);
+  const categoryStatus = (id: SettingsCatId): string | null => {
+    const linked = [traktAuth && "Trakt", simklAuth && "Simkl", debridKey && "Debrid"].filter(Boolean) as string[];
+    switch (id) {
+      case "appearance":
+        return `${settings.appearance === "dark" ? tr("setModeDark") : tr("setModeLight")} · ${isArabic(settings.uiLanguage) ? tr("setLanguageArabic") : tr("setLanguageEnglish")}`;
+      case "playback":
+        return `${tr("setInstantPlay")} · ${settings.instantPlay ? tr("setValueOn") : tr("setValueOff")}`;
+      case "subtitles":
+        return `${tr("setSubtitlesAuto")} · ${settings.subtitlesOffByDefault ? tr("setValueOff") : tr("setValueOn")}`;
+      case "addons":
+        return tr(addons.length ? "setAddonsCount" : "setNoAddons", addons.length ? { n: tr.num(addons.length) } : undefined);
+      case "kids":
+        return `${tr("setKidsMode")} · ${settings.kidsMode ? tr("setValueOn") : tr("setValueOff")}`;
+      case "integrations":
+        return linked.length ? `${tr("setServicesLinked")} · ${linked.join(" · ")}` : tr("setNoConnections");
+      case "data":
+        return `${tr("setRegion")} · ${settings.region}`;
+      default:
+        return null;
+    }
+  };
 
   /* ---- deep links: hash + legacy event ---- */
   useEffect(() => {
@@ -407,6 +438,13 @@ export function SettingsShell({
     setCat((c) => (c === "kids" ? null : c));
   }, []);
 
+  const backToOverview = () => {
+    setCat(null);
+    setAnchorKey(null);
+    setQuery("");
+    setSearchOpen(false);
+  };
+
   /* ---- search across every row (ar + en + synonyms) ---- */
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -415,15 +453,28 @@ export function SettingsShell({
     for (const entry of ROW_INDEX) {
       const catDef = categories.find((c) => c.id === entry.cat);
       if (!catDef) continue;
-      const label = tr(entry.labelKey).toLowerCase();
+      const label = tr(entry.labelKey);
       const catLabel = tr(catDef.labelKey).toLowerCase();
       const kw = (entry.kw ?? "").toLowerCase();
-      const hay = `${label} ${catLabel} ${kw}`;
+      const hay = `${label.toLowerCase()} ${catLabel} ${kw}`;
       if (hay.includes(q)) out.push({ entry, hit: label });
       if (out.length >= 12) break;
     }
     return out;
   }, [query, categories, tr]);
+
+  const matchesCategory = (category: SettingsCategory) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const status = categoryStatus(category.id) ?? "";
+    const categoryText = [category.labelKey, category.summaryKey]
+      .flatMap((key) => [APP_STRINGS[key].en, APP_STRINGS[key].ar])
+      .join(" ");
+    const rows = ROW_INDEX.filter((entry) => entry.cat === category.id)
+      .flatMap((entry) => [APP_STRINGS[entry.labelKey].en, APP_STRINGS[entry.labelKey].ar, entry.kw ?? ""])
+      .join(" ");
+    return `${categoryText} ${rows} ${status}`.toLowerCase().includes(q);
+  };
 
   const SearchField = (
     <div ref={searchRef} className="relative">
@@ -447,7 +498,7 @@ export function SettingsShell({
           placeholder={tr("setSearch")}
           aria-label={tr("setSearch")}
           role="combobox"
-          aria-expanded={searchOpen && results.length > 0}
+          aria-expanded={searchOpen && query.trim().length >= 2}
           aria-controls="settings-search-results"
         />
         {query && (
@@ -482,12 +533,12 @@ export function SettingsShell({
                   role="option"
                   aria-selected={false}
                   onClick={() => go(entry.cat, entry.key)}
-                  className="md-state flex w-full items-center gap-2.5 rounded-[var(--md-sys-shape-corner-medium)] px-2.5 py-2.5 text-start hover:bg-raised"
+                  className="set-search-option harbor-tv-focus flex w-full items-center gap-2.5 rounded-[var(--md-sys-shape-corner-medium)] px-2.5 py-2.5 text-start"
                 >
                   <Icon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate md-body-medium text-ink">{hit}</span>
-                    <span className="block truncate md-body-small text-ink-muted">{tr(catDef.labelKey)}</span>
+                    <span className="block whitespace-normal break-words md-body-medium text-ink"><SearchHighlight text={hit} query={query} /></span>
+                    <span className="block whitespace-normal break-words md-body-small text-ink-muted"><SearchHighlight text={tr(catDef.labelKey)} query={query} /></span>
                   </span>
                   {rtl ? <ChevronLeft className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden />}
                 </button>
@@ -502,11 +553,12 @@ export function SettingsShell({
   /* ---- category list (shared by home surface + two-pane list) ---- */
   const renderCategoryButton = (c: SettingsCategory, active: boolean) => {
     const Icon = c.icon;
+    const status = categoryStatus(c.id);
     return (
       <button
         key={c.id}
         type="button"
-        className="set-cat-item md-state harbor-tv-focus"
+        className="set-cat-item harbor-tv-focus"
         data-active={active}
         onClick={() => go(c.id)}
         aria-current={active ? "page" : undefined}
@@ -515,8 +567,9 @@ export function SettingsShell({
           <Icon className="h-5 w-5 text-accent" aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block md-title-medium text-ink">{tr(c.labelKey)}</span>
-          <span className="block whitespace-normal break-words md-body-small text-ink-muted">{tr(c.summaryKey)}</span>
+          <span className="block md-title-medium text-ink"><SearchHighlight text={tr(c.labelKey)} query={query} /></span>
+          <span className="block whitespace-normal break-words md-body-small text-ink-muted"><SearchHighlight text={tr(c.summaryKey)} query={query} /></span>
+          {status && <span className="set-cat-value" dir="auto"><SearchHighlight text={status} query={query} /></span>}
         </span>
         {rtl ? (
           <ChevronLeft className="h-5 w-5 shrink-0 text-ink-subtle" aria-hidden />
@@ -527,21 +580,28 @@ export function SettingsShell({
     );
   };
 
-  const CategoryList = (
-    <nav aria-label={tr("setCategoryList")} className="space-y-4">
-      {groups.map((g) => (
-        <div key={g.id}>
-          <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-widest text-ink-subtle">
-            {tr(g.labelKey)}
-          </p>
-          <div className="space-y-1">
-            {g.ids
-              .map((id) => categories.find((c) => c.id === id))
-              .filter((c): c is SettingsCategory => !!c)
-              .map((c) => renderCategoryButton(c, cat === c.id))}
-          </div>
-        </div>
-      ))}
+  const renderCategoryList = (variant: "directory" | "navigation") => (
+    <nav
+      aria-label={tr("setCategoryList")}
+      className={`set-category-list set-category-list-${variant}`}
+    >
+      {groups.map((g) => {
+        const groupCategories = g.ids
+          .map((id) => categories.find((c) => c.id === id))
+          .filter((c): c is SettingsCategory => !!c && matchesCategory(c));
+        if (!groupCategories.length) return null;
+        return (
+          <section key={g.id} className="set-category-group" data-group={g.id} aria-label={tr(g.labelKey)}>
+            <h2 className="set-category-heading"><SearchHighlight text={tr(g.labelKey)} query={query} /></h2>
+            <div className="set-category-rows">
+              {groupCategories.map((c) => renderCategoryButton(c, cat === c.id))}
+            </div>
+          </section>
+        );
+      })}
+      {query.trim() && !categories.some(matchesCategory) && (
+        <p className="set-category-empty">{tr("setSearchEmpty", { q: query.trim() })}</p>
+      )}
     </nav>
   );
 
@@ -549,7 +609,7 @@ export function SettingsShell({
   const ActiveIcon = activeDef?.icon;
 
   const detailHeader = activeDef && (
-    <div className="mb-4 flex items-start gap-3">
+    <div className="set-detail-heading">
       {ActiveIcon && (
         <span className="set-cat-icon mt-0.5">
           <ActiveIcon className="h-5.5 w-5.5 text-accent" aria-hidden />
@@ -563,30 +623,67 @@ export function SettingsShell({
   );
 
   /* ============================== RENDER ============================== */
+  if (cat === null || !activeDef) {
+    return (
+      <div className="set-shell set-overview pb-16" data-layout="overview" data-size={tv ? "tv" : "standard"}>
+        <header className="set-overview-top">
+          <div className="set-overview-head">
+            <div className="set-home-title">
+              <span className="set-home-mark"><SettingsIcon aria-hidden /></span>
+              <div className="min-w-0">
+                <p className="set-overview-kicker">{tr("setOverview")}</p>
+                <h1 className="md-headline-small min-w-0 break-words font-display font-bold text-ink">{tr("settingsTitle")}</h1>
+                <p className="set-overview-description">{tr("setOverviewDesc")}</p>
+              </div>
+            </div>
+            <UserChip variant="settings" />
+          </div>
+          <div className="set-overview-search">{SearchField}</div>
+        </header>
+        {homeContent && <div className="set-overview-shortcuts">{homeContent}</div>}
+        <section className="set-directory" aria-labelledby="set-directory-title">
+          <div className="set-directory-heading">
+            <div>
+              <p className="set-overview-kicker">{tr("setAll")}</p>
+              <h2 id="set-directory-title" className="md-title-large font-bold text-ink">{tr("setCategoryList")}</h2>
+            </div>
+            <span className="set-directory-count" aria-hidden="true">
+              {tr.num(categories.length)}
+            </span>
+          </div>
+          {renderCategoryList("directory")}
+        </section>
+        {pendingProtected && (
+          <PinDialog tr={tr} onSubmit={tryUnlock} onClose={closeGate} />
+        )}
+      </div>
+    );
+  }
+
   if (wide) {
     /* ---- TWO-PANE (≥840) — list never re-mounts, scroll persists ---- */
     return (
       <div className="set-shell pb-16" data-layout="panes" data-size={tv ? "tv" : "standard"}>
-        <div className="set-pane-list flex flex-col gap-4 pe-1">
-          <div className="flex items-center gap-2.5 px-1">
-            <SettingsIcon className="h-5.5 w-5.5 text-accent" aria-hidden />
-            <h1 className="md-headline-small font-display font-bold text-ink">{tr("settingsTitle")}</h1>
-          </div>
-          {SearchField}
-          <div className="px-0.5">
+        <div className="set-pane-list">
+          <div className="set-pane-heading">
+            <div className="set-pane-title">
+              <span className="set-home-mark"><SettingsIcon aria-hidden /></span>
+              <h1 className="md-title-large font-bold text-ink">{tr("settingsTitle")}</h1>
+            </div>
             <UserChip variant="settings" />
           </div>
-          {CategoryList}
+          {SearchField}
+          <button type="button" onClick={backToOverview} className="set-overview-link harbor-tv-focus">
+            <SettingsIcon aria-hidden />
+            <span>{tr("setOverview")}</span>
+          </button>
+          {renderCategoryList("navigation")}
         </div>
-        <div className="set-pane-detail min-w-0 pt-1">
-          {cat === null || !activeDef ? (
-            home
-          ) : (
-            <div className="pt-20 md:pt-6">
-              {detailHeader}
-              {activeDef.content()}
-            </div>
-          )}
+        <div className="set-pane-detail">
+          <div className="set-detail-content">
+            {detailHeader}
+            {activeDef.content()}
+          </div>
         </div>
         {pendingProtected && (
           <PinDialog tr={tr} onSubmit={tryUnlock} onClose={closeGate} />
@@ -595,51 +692,34 @@ export function SettingsShell({
     );
   }
 
-  /* ---- DRILL-DOWN (<840) — home surface or one category ---- */
+  /* ---- DRILL-DOWN (<840) — one category at a time ---- */
   return (
     <div className="set-shell pb-16" data-layout="drill" data-size={tv ? "tv" : "standard"}>
-      {cat === null || !activeDef ? (
-        <>
-          <div className="set-appbar set-appbar-home">
-            <SettingsIcon className="h-6 w-6 shrink-0 text-accent" aria-hidden />
-            <h1 className="md-headline-small min-w-0 break-words font-display font-bold text-ink">{tr("settingsTitle")}</h1>
-            <div className="ms-auto shrink-0">
-              <UserChip variant="settings" />
-            </div>
-          </div>
-          <div className="mb-5">{SearchField}</div>
-          {home}
-          <div className="mt-6">{CategoryList}</div>
-        </>
-      ) : (
-        <>
-          <div className="set-appbar">
-            <button
-              type="button"
-              onClick={() => setCat(null)}
-              aria-label={tr("back")}
-              className="md-icon-btn harbor-tv-focus flex h-11 w-11 items-center justify-center rounded-full text-ink hover:bg-raised"
-            >
-              {rtl ? <ChevronRight className="h-5.5 w-5.5" aria-hidden /> : <ChevronLeft className="h-5.5 w-5.5" aria-hidden />}
-            </button>
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 md-title-medium">
-              <button type="button" onClick={() => setCat(null)} className="shrink-0 text-ink-muted hover:text-ink">
-                {tr("settingsTitle")}
-              </button>
-              <span aria-hidden className="text-ink-subtle">/</span>
-              <span className="min-w-0 whitespace-normal break-words font-bold text-ink">{tr(activeDef.labelKey)}</span>
-            </nav>
-            {activeDef.id === "kids" && hasParentPin() && (
-              <span className="ms-auto flex shrink-0 items-center gap-1 rounded-full border border-edge-soft px-2 py-1 text-[10px] font-semibold text-ink-muted">
-                <Lock className="h-3 w-3" aria-hidden />
-                {tr("kidsPinProtected")}
-              </span>
-            )}
-          </div>
-          {detailHeader}
-          {activeDef.content()}
-        </>
-      )}
+      <div className="set-appbar">
+        <button
+          type="button"
+          onClick={backToOverview}
+          aria-label={tr("back")}
+          className="md-icon-btn harbor-tv-focus flex h-11 w-11 items-center justify-center rounded-full text-ink hover:bg-raised"
+        >
+          {rtl ? <ChevronRight className="h-5.5 w-5.5" aria-hidden /> : <ChevronLeft className="h-5.5 w-5.5" aria-hidden />}
+        </button>
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 md-title-medium">
+          <button type="button" onClick={backToOverview} className="shrink-0 text-ink-muted hover:text-ink">
+            {tr("settingsTitle")}
+          </button>
+          <span aria-hidden className="text-ink-subtle">/</span>
+          <span className="min-w-0 whitespace-normal break-words font-bold text-ink">{tr(activeDef.labelKey)}</span>
+        </nav>
+        {activeDef.id === "kids" && hasParentPin() && (
+          <span className="ms-auto flex shrink-0 items-center gap-1 rounded-full border border-edge-soft px-2 py-1 text-[10px] font-semibold text-ink-muted">
+            <Lock className="h-3 w-3" aria-hidden />
+            {tr("kidsPinProtected")}
+          </span>
+        )}
+      </div>
+      {detailHeader}
+      {activeDef.content()}
       {pendingProtected && (
         <PinDialog tr={tr} onSubmit={tryUnlock} onClose={closeGate} />
       )}
