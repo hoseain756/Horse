@@ -306,7 +306,7 @@ export function AddonsView() {
                 toast({ title: tr("removedToast", { name: confirmTarget.manifest.name }) });
                 setConfirmId(null);
               }}
-              className="md-btn-danger"
+              className="harbor-button-danger"
             >
               {tr("uninstall")}
             </AlertDialogAction>

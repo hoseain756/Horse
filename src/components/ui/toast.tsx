@@ -16,7 +16,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      // Bottom-anchored on EVERY size (Material-3 convention, thumb reach) and
+      // Bottom-anchored on EVERY size (thumb reach) and
       // end-side (left in RTL, right in LTR). Extra bottom padding on phone /
       // tablet keeps toasts clear of the floating glass dock + safe-area inset;
       // ≥lg the dock swaps for the side rail → back to the plain p-4 margin.
@@ -29,11 +29,11 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md border p-4 pe-8 shadow-lg transition-all break-words data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full data-[state=closed]:sm:slide-out-to-right-full",
+  "harbor-toast group pointer-events-auto relative flex w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-2xl border p-4 pe-12 shadow-lg transition-all break-words data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full data-[state=closed]:sm:slide-out-to-right-full",
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        default: "border border-edge-soft bg-surface text-ink",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
       },
@@ -66,7 +66,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus:outline-none focus:ring-1 focus:ring-ring disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive",
+      "inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-edge-soft bg-[var(--glass-control-fill)] px-3 text-sm font-medium transition-colors hover:bg-[var(--glass-active-fill)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-60 group-[.destructive]:border-danger/50 group-[.destructive]:hover:border-danger group-[.destructive]:hover:bg-danger group-[.destructive]:hover:text-white",
       className
     )}
     {...props}
@@ -83,7 +83,7 @@ const ToastClose = React.forwardRef<
     className={cn(
       // end-1 = logical (left in RTL). Always visible on touch (no hover there);
       // hover-only reveal stays for pointer devices (sm+).
-      "absolute end-1 top-1 rounded-md p-1 text-foreground/50 opacity-70 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-1 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600 sm:opacity-0",
+      "absolute end-2 top-2 grid size-11 place-items-center rounded-full text-ink-muted opacity-80 transition-opacity hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100 group-[.destructive]:text-danger group-[.destructive]:hover:text-danger",
       className
     )}
     toast-close=""

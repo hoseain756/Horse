@@ -6,7 +6,7 @@
 // keyboard/D-pad accessible. Panels compose these; nothing else styles rows.
 
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import { AlertTriangle, Check, Minus, Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, Eye, EyeOff, Minus, Plus, RotateCcw } from "lucide-react";
 import { useT } from "@/hooks/use-t";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -40,6 +40,8 @@ export function SettingRow({
   danger,
   children,
   arrive,
+  descriptionDomId,
+  descriptionError = false,
 }: {
   id?: string;
   title: string;
@@ -48,15 +50,23 @@ export function SettingRow({
   danger?: boolean;
   children: React.ReactNode;
   arrive?: boolean;
+  descriptionDomId?: string;
+  descriptionError?: boolean;
 }) {
   const titleId = useId();
+  const localDescriptionId = useId();
+  const detailId = descriptionDomId ?? localDescriptionId;
   const control = Children.map(children, (child) => {
     if (isValidElement(child)) {
-      const props = child.props as { "aria-label"?: string; "aria-labelledby"?: string };
-      if (!props["aria-label"] && !props["aria-labelledby"]) {
-        return cloneElement(child as React.ReactElement<Record<string, unknown>>, {
-          "aria-labelledby": titleId,
-        });
+      const props = child.props as { "aria-label"?: string; "aria-labelledby"?: string; "aria-describedby"?: string; children?: React.ReactNode };
+      const nativeField = typeof child.type === "string" && ["input", "select", "textarea"].includes(child.type);
+      const additions: Record<string, string> = {};
+      if (!props["aria-label"] && !props["aria-labelledby"] && (nativeField || props.children == null)) {
+        additions["aria-labelledby"] = titleId;
+      }
+      if (description && !props["aria-describedby"]) additions["aria-describedby"] = detailId;
+      if (Object.keys(additions).length > 0) {
+        return cloneElement(child as React.ReactElement<Record<string, unknown>>, additions);
       }
     }
     return child;
@@ -71,7 +81,12 @@ export function SettingRow({
         <p id={titleId} className={cn("md-body-large text-ink", danger && "text-danger")}>
           {title}
         </p>
-        {description && <p className="md-body-small text-ink-muted mt-0.5">{description}</p>}
+        {description && (
+          <p id={detailId} role={descriptionError ? "alert" : undefined} className={cn("md-body-small mt-0.5", descriptionError ? "text-danger" : "text-ink-muted")}>
+            {descriptionError && <AlertTriangle className="me-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden />}
+            {description}
+          </p>
+        )}
       </div>
       <div className="harbor-setting-row-control flex items-center gap-2">
         {badge && (
@@ -204,7 +219,7 @@ export function SegmentedControl<T extends string>({
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="md-field-outlined h-11 min-h-11 w-full max-w-56 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container)] px-2.5 text-sm text-ink"
+        className="harbor-field h-11 min-h-11 w-full max-w-56 px-2.5 text-sm text-ink"
       >
         {options.map(([id, text]) => (
           <option key={id} value={id}>{text}</option>
@@ -224,10 +239,8 @@ export function SegmentedControl<T extends string>({
             aria-pressed={selected}
             onClick={() => onChange(id)}
             className={cn(
-              "md-state min-h-10 rounded-full px-4 py-1.5 md-label-large whitespace-nowrap transition-colors",
-              selected
-                ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
-                : "text-[var(--md-sys-color-on-secondary-container)]",
+              "harbor-segment-option md-state min-h-10 rounded-full px-4 py-1.5 md-label-large whitespace-nowrap transition-colors",
+              selected && "is-active",
             )}
           >
             {text}
@@ -370,7 +383,8 @@ export function SelectRow<T extends string>({
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
         dir="auto"
-        className="md-field-outlined h-11 min-h-11 max-w-56 rounded-[var(--md-sys-shape-corner-medium)] bg-[var(--md-sys-color-surface-container)] px-2.5 text-sm text-ink"
+        aria-label={title}
+        className="harbor-field h-11 min-h-11 max-w-56 px-2.5 text-sm text-ink"
       >
         {options.map(([v, label]) => (
           <option key={v} value={v}>{label}</option>
@@ -411,8 +425,9 @@ export function TextFieldRow({
   arrive?: boolean;
 }) {
   const [reveal, setReveal] = useState(false);
+  const descriptionId = useId();
   return (
-    <SettingRow id={id} title={title} description={error ?? description} badge={badge} danger={!!error} arrive={arrive}>
+    <SettingRow id={id} title={title} description={error ?? description} descriptionDomId={descriptionId} descriptionError={!!error} badge={badge} danger={!!error} arrive={arrive}>
       <div className="relative w-full max-w-56">
         <Input
           value={value}
@@ -423,16 +438,19 @@ export function TextFieldRow({
           maxLength={maxLength}
           autoComplete="off"
           spellCheck={false}
-          className={cn("h-11 min-h-11 pe-10 text-sm", error && "border-danger")}
+          aria-label={title}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error || description ? descriptionId : undefined}
+          className={cn("h-11 min-h-11 pe-12 text-sm", error && "border-danger")}
         />
         {secret && (
           <button
             type="button"
             onClick={() => setReveal((v) => !v)}
             aria-label={reveal ? "Hide" : "Show"}
-            className="absolute inset-y-0 end-1 my-auto flex h-9 w-9 items-center justify-center rounded-full text-ink-muted hover:text-ink"
+            className="absolute inset-y-0 end-1 my-auto flex h-11 w-11 items-center justify-center rounded-full text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <i className="text-[10px] font-bold" aria-hidden>{reveal ? "•••" : "ABC"}</i>
+            {reveal ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
           </button>
         )}
       </div>
@@ -559,7 +577,7 @@ export function DangerActionRow({
             <AlertDialogCancel>{tr("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirm}
-              className="bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger"
+              className="harbor-button-danger"
             >
               {confirmLabel}
             </AlertDialogAction>

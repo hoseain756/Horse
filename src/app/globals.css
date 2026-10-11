@@ -748,6 +748,17 @@ button.md-btn-text:not(.md-btn) {
   color: var(--md-sys-color-inverse-on-surface);
   box-shadow: var(--glass-shadow-lift);
 }
+.harbor-toast {
+  background: var(--glass-fallback-panel);
+  border-color: var(--color-edge-soft-var);
+  color: var(--color-ink-var);
+  box-shadow: var(--glass-shadow-rest), inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.18);
+}
+.harbor-toast.destructive {
+  background: var(--md-sys-color-error-container);
+  border-color: color-mix(in srgb, var(--md-sys-color-error) 44%, transparent);
+  color: var(--md-sys-color-on-error-container);
+}
 .md-tooltip {
   border-radius: var(--md-sys-shape-corner-extra-small);
   background: var(--md-sys-color-inverse-surface);
@@ -1310,6 +1321,9 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
   --glass-fill-soft: rgba(255, 255, 255, 0.05); /* text buttons, nested controls */
   --glass-fill-strong: rgba(255, 255, 255, 0.14); /* tier-1 controls resting */
   --glass-panel-fill: rgba(16, 24, 28, 0.62); /* tier-2 panels: text-safe */
+  --glass-control-fill: rgba(12, 19, 23, 0.84);
+  --glass-field-fill: rgba(8, 13, 17, 0.9);
+  --glass-menu-fill: rgba(12, 19, 23, 0.94);
   --glass-active-fill: rgba(255, 255, 255, 0.16); /* nav pill / selected toggle */
   --glass-accent-fill: color-mix(in srgb, var(--md-sys-color-primary) 88%, transparent);
   --glass-accent-border: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
@@ -1361,6 +1375,12 @@ html[data-tv="on"] .harbor-picker-row:focus-visible {
   --lg-dur: var(--glass-dur);
   --lg-focus-ring: var(--glass-focus-ring);
 }
+@media (max-width: 599px) {
+  :root {
+    --glass-blur: 12px;
+    --glass-blur-overlay: 18px;
+  }
+}
 /* Light themes: warm-white glass with a faint cool tint so it survives
    bright posters (same shape and proportions as dark). */
 html[data-appearance="light"] {
@@ -1370,6 +1390,9 @@ html[data-appearance="light"] {
   --glass-fill-soft: rgba(255, 255, 255, 0.45);
   --glass-fill-strong: rgba(255, 255, 255, 0.72);
   --glass-panel-fill: rgba(252, 249, 244, 0.78);
+  --glass-control-fill: rgba(250, 248, 244, 0.9);
+  --glass-field-fill: rgba(255, 255, 255, 0.94);
+  --glass-menu-fill: rgba(250, 248, 244, 0.96);
   --glass-active-fill: rgba(9, 42, 54, 0.09);
   --glass-border: rgba(9, 42, 54, 0.16);
   --glass-highlight: 0.85;
@@ -1390,6 +1413,9 @@ html[data-kids="on"] {
   --glass-fill-soft: rgba(255, 255, 255, 0.09);
   --glass-fill-strong: rgba(255, 255, 255, 0.2);
   --glass-panel-fill: rgba(38, 20, 30, 0.6);
+  --glass-control-fill: rgba(30, 16, 24, 0.84);
+  --glass-field-fill: rgba(22, 12, 18, 0.9);
+  --glass-menu-fill: rgba(30, 16, 24, 0.94);
   --glass-active-fill: rgba(255, 255, 255, 0.24);
   --glass-border: rgba(255, 214, 235, 0.4);
 }
@@ -1400,6 +1426,9 @@ html[data-kids="on"][data-appearance="light"] {
   --glass-fill-soft: rgba(255, 255, 255, 0.62);
   --glass-fill-strong: rgba(255, 255, 255, 0.88);
   --glass-panel-fill: rgba(255, 241, 247, 0.82);
+  --glass-control-fill: rgba(255, 246, 250, 0.92);
+  --glass-field-fill: rgba(255, 250, 252, 0.96);
+  --glass-menu-fill: rgba(255, 246, 250, 0.97);
   --glass-active-fill: rgba(244, 114, 182, 0.18);
   --glass-border: rgba(244, 114, 182, 0.35);
 }
@@ -1496,6 +1525,24 @@ html[data-kids="on"][data-appearance="light"] {
       inset 0 -1px 0 rgb(0 0 0 / var(--glass-core-shadow));
   }
 }
+/* Menus are compact tier-1 overlays: enough tint for legibility, with less
+   blur than full dialogs and sheets. */
+.glass-menu {
+  background: var(--glass-menu-fill);
+  box-shadow: var(--glass-shadow-rest), inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-menu {
+    background:
+      linear-gradient(150deg, rgb(var(--glass-tint-rgb) / 0.13), rgb(var(--glass-tint-rgb) / 0.04) 56%),
+      var(--glass-menu-fill);
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-menu { background: var(--glass-menu-fill); }
+}
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-panel {
     background: var(--glass-fallback-panel);
@@ -1522,6 +1569,238 @@ html[data-kids="on"][data-appearance="light"] {
 .glass-surface-danger {
   background: var(--glass-danger-fill) !important;
   border-color: var(--glass-danger-border) !important;
+}
+
+/* Shared shadcn/Radix controls use Harbor's material and state language too.
+   The controls stay readable over artwork; only the chrome that floats above
+   content receives backdrop blur. */
+.harbor-button {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: var(--lg-radius-pill);
+  font-weight: 600;
+  transition:
+    transform 150ms var(--glass-ease),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 180ms var(--glass-ease),
+    color 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.harbor-button:active:not(:disabled) { transform: scale(var(--glass-press-scale)); }
+.harbor-button:focus-visible {
+  outline: none;
+  box-shadow: var(--glass-focus-ring);
+}
+.harbor-button:disabled { opacity: 0.56; cursor: not-allowed; }
+.harbor-button-primary {
+  color: var(--md-sys-color-on-primary);
+  background: var(--glass-accent-fill);
+  border-color: var(--glass-accent-border);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), 0 4px 16px color-mix(in srgb, var(--color-accent-var) 16%, transparent);
+}
+.harbor-button-primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.34), 0 6px 20px color-mix(in srgb, var(--color-accent-var) 22%, transparent);
+}
+.harbor-button-secondary,
+.harbor-button-outline {
+  color: var(--color-ink-var);
+  background: var(--glass-control-fill);
+  border-color: var(--glass-border);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.22);
+}
+.harbor-button-secondary:hover:not(:disabled),
+.harbor-button-outline:hover:not(:disabled) {
+  background: var(--glass-active-fill);
+  border-color: color-mix(in srgb, var(--color-accent-var) 35%, var(--glass-border));
+}
+.harbor-button-ghost {
+  color: var(--color-ink-var);
+  background: transparent;
+  border-color: transparent;
+}
+.harbor-button-ghost:hover:not(:disabled) { background: var(--glass-fill-strong); }
+.harbor-button-danger {
+  color: var(--md-sys-color-on-error);
+  background: var(--glass-danger-fill);
+  border-color: var(--glass-danger-border);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.harbor-button-danger:hover:not(:disabled) { filter: brightness(1.05); }
+.harbor-button-link {
+  min-height: 44px;
+  color: var(--color-accent-var);
+  background: transparent;
+  text-underline-offset: 4px;
+}
+.harbor-button-link:hover:not(:disabled) { text-decoration: underline; }
+.harbor-button-icon {
+  min-width: 44px;
+  width: 44px;
+  padding-inline: 0;
+  color: var(--color-ink-var);
+  background: var(--glass-control-fill);
+  border-color: var(--glass-border);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.24);
+}
+
+.harbor-field {
+  min-height: 44px;
+  color: var(--color-ink-var);
+  background: var(--glass-field-fill);
+  border: 1px solid color-mix(in srgb, var(--color-ink-subtle-var) 76%, transparent);
+  border-radius: var(--lg-radius-sm);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.1);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+.harbor-field::placeholder { color: var(--color-ink-muted-var); opacity: 1; }
+.harbor-field[data-slot="textarea"] { min-height: 4rem; }
+.harbor-field:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-var);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-var) 32%, transparent), inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.2);
+}
+.harbor-field[aria-invalid="true"]:focus-visible {
+  border-color: var(--color-danger-var);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger-var) 34%, transparent);
+}
+.harbor-field:disabled { opacity: 0.66; cursor: not-allowed; }
+.harbor-field[aria-invalid="true"] { border-color: var(--color-danger-var); }
+
+.harbor-glass-overlay {
+  /* .glass-surface anchors its sheen with position:relative; overlays must
+     retain viewport positioning so dialogs and sheets stay in view. */
+  position: fixed;
+  max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem));
+  color: var(--color-ink-var);
+}
+.harbor-sheet {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.harbor-glass-overlay [data-slot="dialog-close"],
+.harbor-glass-overlay [data-slot="sheet-close"] {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--lg-radius-pill);
+  color: var(--color-ink-muted-var);
+  background: var(--glass-fill-strong);
+}
+.harbor-glass-overlay [data-slot="dialog-close"]:focus-visible,
+.harbor-glass-overlay [data-slot="sheet-close"]:focus-visible { outline: none; box-shadow: var(--glass-focus-ring); }
+[data-slot="dropdown-menu-item"],
+[data-slot="dropdown-menu-checkbox-item"],
+[data-slot="dropdown-menu-radio-item"],
+[data-slot="context-menu-item"],
+[data-slot="select-item"] { min-height: 44px; border-radius: var(--lg-radius-sm); }
+
+.harbor-check-control,
+.harbor-radio-control {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 1px solid color-mix(in srgb, var(--color-ink-subtle-var) 76%, transparent);
+  color: var(--md-sys-color-on-primary);
+  background: var(--glass-field-fill);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.16);
+}
+.harbor-check-control::before,
+.harbor-radio-control::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.harbor-check-control[data-state="checked"],
+.harbor-radio-control[data-state="checked"] {
+  background: var(--glass-accent-fill);
+  border-color: var(--glass-accent-border);
+}
+.harbor-check-control:focus-visible,
+.harbor-radio-control:focus-visible { outline: none; box-shadow: var(--glass-focus-ring); }
+
+.harbor-tabs-list [data-slot="tabs-trigger"] { min-height: 40px; }
+.harbor-tabs-list [data-slot="tabs-trigger"][data-state="active"] {
+  color: var(--color-ink-var);
+  background: var(--glass-active-fill);
+  border-color: color-mix(in srgb, var(--color-accent-var) 32%, var(--glass-border));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
+}
+.harbor-tabs-list [data-slot="tabs-trigger"]:focus-visible { box-shadow: var(--glass-focus-ring); }
+.harbor-segmented > .harbor-segment-option {
+  flex: 1 1 auto;
+  border: 1px solid transparent;
+  color: var(--color-ink-muted-var);
+}
+.harbor-segmented > .harbor-segment-option:hover { color: var(--color-ink-var); }
+.harbor-segmented > .harbor-segment-option[aria-pressed="true"] {
+  color: var(--color-accent-var);
+  background: var(--glass-active-fill);
+  border-color: color-mix(in srgb, var(--color-accent-var) 32%, var(--glass-border));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-tint-rgb) / var(--glass-highlight));
+}
+.harbor-segmented > .harbor-segment-option:focus-visible { outline: none; box-shadow: var(--glass-focus-ring); }
+
+[data-slot="slider-track"] {
+  background: color-mix(in srgb, var(--glass-tint-rgb) 18%, var(--color-surface-var));
+  border: 1px solid var(--glass-border);
+}
+[data-slot="slider-range"] { background: var(--glass-accent-fill); }
+[data-slot="slider-thumb"] {
+  width: 22px;
+  height: 22px;
+  background: var(--glass-control-fill);
+  border: 1px solid var(--glass-accent-border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(var(--glass-tint-rgb) / 0.36);
+}
+[data-slot="slider-thumb"]:focus-visible { outline: none; box-shadow: var(--glass-focus-ring); }
+
+@media (prefers-contrast: more) {
+  .harbor-button-secondary,
+  .harbor-button-outline,
+  .harbor-button-icon,
+  .harbor-field,
+  .harbor-check-control,
+  .harbor-radio-control {
+    background: var(--glass-fallback);
+    border-color: currentColor;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .glass-menu { background: var(--glass-fallback-panel); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .harbor-button-secondary,
+  .harbor-button-outline,
+  .harbor-button-icon,
+  .harbor-field,
+  .harbor-check-control,
+  .harbor-radio-control,
+  .glass-menu { background: var(--glass-fallback); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  .harbor-button,
+  .harbor-field,
+  .harbor-check-control,
+  .harbor-radio-control,
+  .glass-menu {
+    forced-color-adjust: auto;
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid CanvasText;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .harbor-button:focus-visible,
+  .harbor-field:focus-visible,
+  .harbor-check-control:focus-visible,
+  .harbor-radio-control:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  .harbor-check-control[data-state="checked"],
+  .harbor-radio-control[data-state="checked"] { background: Highlight; color: HighlightText; border-color: Highlight; }
 }
 /* Perf guard (skill: ≤3 blurred layers): inside an already-blurred or opaque
    elevated surface the glass look degrades to fill+border only — no second
@@ -2781,7 +3060,7 @@ html[lang^="ar"] {
    top edge; thumb carries its own micro-highlight. 3:1 boundaries hold in
    both states (outline edge off / accent edge on). Focus ring visible,
    disabled dimmed per state spec. */
-.md-switch {
+.harbor-switch {
   position: relative;
   display: inline-block;
   width: 52px;
@@ -2792,7 +3071,7 @@ html[lang^="ar"] {
   padding: 0;
   cursor: pointer;
 }
-.md-switch .md-switch-track {
+.harbor-switch .harbor-switch-track {
   position: absolute;
   inset-block: 8px; /* 32dp visual track centered in the 48dp target */
   inset-inline: 0;
@@ -2803,31 +3082,31 @@ html[lang^="ar"] {
     border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
     box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
-.md-switch[data-state="checked"] .md-switch-track {
+.harbor-switch[data-state="checked"] .harbor-switch-track {
   background: var(--glass-accent-fill);
   border-color: var(--glass-accent-border);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.3),
     0 1px 8px color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
 }
-.md-switch[data-state="checked"]:hover .md-switch-track {
+.harbor-switch[data-state="checked"]:hover .harbor-switch-track {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.3),
     0 0 0 8px color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
 }
-.md-switch[data-state="unchecked"]:hover .md-switch-track {
+.harbor-switch[data-state="unchecked"]:hover .harbor-switch-track {
   box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
 }
-.md-switch:focus-visible {
+.harbor-switch:focus-visible {
   outline: none;
   border-radius: var(--md-sys-shape-corner-full);
   box-shadow: 0 0 0 2px var(--md-sys-color-canvas, #000), 0 0 0 5px var(--md-sys-color-primary);
 }
-.md-switch:disabled {
+.harbor-switch:disabled {
   opacity: 0.38;
   cursor: not-allowed;
 }
-.md-switch .md-switch-thumb {
+.harbor-switch .harbor-switch-thumb {
   position: absolute;
   top: 50%;
   inset-inline-start: 4px;
@@ -2842,7 +3121,7 @@ html[lang^="ar"] {
     background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
     box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
-.md-switch[data-state="checked"] .md-switch-thumb {
+.harbor-switch[data-state="checked"] .harbor-switch-thumb {
   inset-inline-start: calc(100% - 28px);
   width: 24px;
   height: 24px;
@@ -2851,10 +3130,10 @@ html[lang^="ar"] {
     inset 0 -1px 1px rgb(0 0 0 / 0.18),
     0 1px 3px rgb(0 0 0 / 0.3);
 }
-.md-switch:disabled .md-switch-thumb {
+.harbor-switch:disabled .harbor-switch-thumb {
   background: var(--md-sys-color-on-surface);
 }
-.md-switch[data-state="checked"]:disabled .md-switch-thumb {
+.harbor-switch[data-state="checked"]:disabled .harbor-switch-thumb {
   background: var(--md-sys-color-surface);
 }
 

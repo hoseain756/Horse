@@ -1940,7 +1940,7 @@ function HorseAccountCard() {
           <AlertDialogFooter>
             <AlertDialogCancel className="min-h-11">{t("accountCancel")}</AlertDialogCancel>
             <AlertDialogAction
-              className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+              className="min-h-11 harbor-button-danger"
               onClick={() => {
                 setMergeOverwrite(false);
                 if (qrMergePending) {
@@ -2025,7 +2025,7 @@ function HorseAccountCard() {
           <AlertDialogFooter>
             <AlertDialogCancel className="min-h-11">{t("accountCancel")}</AlertDialogCancel>
             <AlertDialogAction
-              className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+              className="min-h-11 harbor-button-danger"
               onClick={() => void removeAccount()}
             >
               <Trash2 className="w-4 h-4" />
@@ -3140,7 +3140,7 @@ function DebridCard() {
               <AlertDialogFooter>
                 <AlertDialogCancel className="min-h-11">{tr("cancel")}</AlertDialogCancel>
                 <AlertDialogAction
-                  className="min-h-11 bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40"
+                  className="min-h-11 harbor-button-danger"
                   onClick={() => {
                     disconnect();
                     setKey("");
