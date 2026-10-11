@@ -2520,3 +2520,17 @@ Work Log:
 
 Stage Summary:
 - Local main == origin/main == 17e1754 (user's Liquid Glass unification + settings/responsive fixes) fully integrated and verified in browser. Sandbox DB connection restored to production Supabase (Task 78 state) — sync feature live again. App icons/skill assets untouched; no functional regressions found.
+
+---
+Task ID: 82
+Agent: main (orchestrator)
+Task: User pushed 4 more commits (9a22afb) — fetch, integrate, mobile-focused QA; container-restart credential recovery round 2
+
+Work Log:
+- Container restarted AGAIN mid-session (~8min uptime detected) → ~/.git-credentials + ghflow + autopush wiped (7th wipe). Re-ran device flow (user_code FB26-4341) → user approved → poller pushed pending 44b51e9 + cron artifact commit (9073269) at 16:17 UTC, "PUSH OK".
+- Fetched user's 4 new commits (remote 9073269→9a22afb): 677aa3e feat: redesign responsive settings experience; 76b462c fix: hide mobile search trigger in settings; c693137 fix: remove excess mobile settings top space; 9a22afb fix: keep setting toggles inline on mobile. 9 files +1068/−294; new src/components/harbor/settings/search-highlight.tsx; quick-access.tsx grid→chips refactor; i18n +15 keys. Clean ff-only pull.
+- Clean dev restart (pkill + rm -rf .next). agent-browser QA at 375×812: mobile home (hero + floating search + dock visible), mobile Settings overview (Sign-in pill, search field, Quick-access chips, Categories badge 9 — top-space + hidden-search fixes confirmed), Appearance category (Theme/Contrast segmented, Theme Studio, language chips, toggles INLINE label-left/switch-right — 9a22afb confirmed). Desktop 1440: two-pane glass settings + Theme Presets grid render correctly (state deep-link preserved on reload).
+- dev.log: 6× "uncaughtException: Error: aborted" = benign /api/img client-abort noise (pre-existing, not hydration).
+
+Stage Summary:
+- Local main == origin/main == 9a22afb. All 4 user fixes verified visually on mobile + desktop. Settings mobile experience: compact, inline toggles, chips quick-access, no overflow. Device-flow recovery ritual now battle-tested twice in one session — consider adding a pre-push credential check to the cron job context.
