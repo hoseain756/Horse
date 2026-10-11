@@ -305,7 +305,10 @@ export function CalendarView() {
         <span className="ms-1 text-sm text-ink-subtle tabular-nums">{weekLabel}</span>
         {week.loading && (
           <span className="inline-flex items-center gap-1.5 text-xs text-ink-subtle">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading episodes…
+            <span className="grid h-5 w-5 shrink-0 place-items-center">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            </span>
+            Loading episodes…
           </span>
         )}
       </div>

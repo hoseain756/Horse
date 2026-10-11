@@ -516,7 +516,7 @@ export function SettingsShell({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block md-title-medium text-ink">{tr(c.labelKey)}</span>
-          <span className="block truncate md-body-small text-ink-muted">{tr(c.summaryKey)}</span>
+          <span className="block whitespace-normal break-words md-body-small text-ink-muted">{tr(c.summaryKey)}</span>
         </span>
         {rtl ? (
           <ChevronLeft className="h-5 w-5 shrink-0 text-ink-subtle" aria-hidden />
@@ -600,9 +600,9 @@ export function SettingsShell({
     <div className="set-shell pb-16" data-layout="drill" data-size={tv ? "tv" : "standard"}>
       {cat === null || !activeDef ? (
         <>
-          <div className="set-appbar">
+          <div className="set-appbar set-appbar-home">
             <SettingsIcon className="h-6 w-6 shrink-0 text-accent" aria-hidden />
-            <h1 className="md-headline-small min-w-0 truncate font-display font-bold text-ink">{tr("settingsTitle")}</h1>
+            <h1 className="md-headline-small min-w-0 break-words font-display font-bold text-ink">{tr("settingsTitle")}</h1>
             <div className="ms-auto shrink-0">
               <UserChip variant="settings" />
             </div>
@@ -627,7 +627,7 @@ export function SettingsShell({
                 {tr("settingsTitle")}
               </button>
               <span aria-hidden className="text-ink-subtle">/</span>
-              <span className="truncate font-bold text-ink">{tr(activeDef.labelKey)}</span>
+              <span className="min-w-0 whitespace-normal break-words font-bold text-ink">{tr(activeDef.labelKey)}</span>
             </nav>
             {activeDef.id === "kids" && hasParentPin() && (
               <span className="ms-auto flex shrink-0 items-center gap-1 rounded-full border border-edge-soft px-2 py-1 text-[10px] font-semibold text-ink-muted">

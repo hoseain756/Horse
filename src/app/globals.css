@@ -994,7 +994,8 @@ html[data-kids="on"] .harbor-kids-blob {
   outline-offset: -1px;
 }
 .harbor-poster:hover {
-  transform: translateY(-4px) scale(1.03);
+  /* FIX: Preserve the hover lift and glow without enlarging posters beyond their grid slot. */
+  transform: translateY(-4px);
   box-shadow:
     var(--md-sys-elevation-3),
     0 0 0 1px color-mix(in oklab, var(--color-accent-var) 55%, transparent),
@@ -2045,7 +2046,7 @@ html[data-kids="on"] {
      specular top edge). NO drop shadow (nav spec): --glass-shadow stays none. */
   background:
     linear-gradient(160deg, rgb(var(--glass-tint-rgb) / 0.12), rgb(var(--glass-tint-rgb) / 0.05) 60%),
-    var(--glass-fill);
+    color-mix(in srgb, var(--glass-panel-fill) 70%, transparent);
   border: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -2433,9 +2434,8 @@ html[data-appearance="light"] .home-void {
     object-position: center top;
   }
   .home-hero-lqip img {
-    /* slight upscale by design — it is a 24px thumb blown up as a placeholder */
+    /* FIX: Keep the placeholder image inside its picture bounds while retaining the soft underlay. */
     filter: blur(1px);
-    transform: scale(1.02);
   }
   .home-hero-art img {
     opacity: 0;
@@ -4042,10 +4042,15 @@ html[lang^="ar"] {
 .set-shell {
   display: flex;
   flex-direction: column;
+  min-inline-size: 0;
   min-height: 100%;
+  overflow-wrap: anywhere;
   background:
     radial-gradient(120% 60% at 12% -6%, color-mix(in srgb, var(--color-accent-var) 9%, transparent), transparent 55%),
     radial-gradient(90% 50% at 100% 0%, rgb(var(--glass-tint-rgb) / 0.05), transparent 60%);
+}
+.set-shell > * {
+  min-inline-size: 0;
 }
 /* Two-pane ≥840: fixed list column + fluid detail column. */
 @media (min-width: 840px) {
@@ -4231,21 +4236,61 @@ html[lang^="ar"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: -8px -4px 12px;
-  padding: 10px 4px;
+  /* FIX: Keep the sticky band inside its shell and preserve the shared rounded surface at every viewport. */
+  margin-block: -8px 12px;
+  margin-inline: 0;
+  padding-block: 10px;
+  padding-inline: 8px;
+  border-radius: var(--lg-radius-lg);
   background: var(--glass-fallback);
+}
+@media (max-width: 599px) {
+  .set-appbar-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .set-appbar-home > :is(svg, h1, div) { min-inline-size: 0; }
+  .set-appbar-home > svg { grid-column: 1; grid-row: 1; }
+  .set-appbar-home > div { grid-column: 2; grid-row: 1; }
+  .set-appbar-home > h1 {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .set-appbar {
     background:
       linear-gradient(180deg, rgb(var(--glass-tint-rgb) / 0.1), rgb(var(--glass-tint-rgb) / 0.03) 70%, transparent);
     background-color: color-mix(in srgb, var(--color-canvas-var) 62%, transparent);
+    border: 1px solid color-mix(in srgb, var(--glass-tint-rgb) / var(--glass-edge), transparent);
+    border-radius: var(--lg-radius-lg);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--glass-tint-rgb) / calc(var(--glass-edge) * 0.7), transparent);
     -webkit-mask-image: linear-gradient(180deg, #000 82%, transparent);
     mask-image: linear-gradient(180deg, #000 82%, transparent);
   }
+}
+
+/* FIX: Settings controls and their descriptions must remain usable at touch sizes and text wrap must not force page width. */
+@media (pointer: coarse) {
+  .set-shell button,
+  .set-shell select,
+  .set-shell input:not([type="checkbox"]):not([type="radio"]),
+  .set-shell [role="button"] {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+}
+
+.set-shell :lang(ar) {
+  line-height: 1.6;
+}
+
+.set-shell .md-body-small {
+  line-height: 1.45;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .set-appbar {

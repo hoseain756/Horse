@@ -206,7 +206,7 @@ function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void 
           <div key={m.id} className="shrink-0 flex items-end group/top10">
             <span
               aria-hidden
-              className="font-display font-black leading-none select-none -mr-3 md:-mr-4 mb-1 text-transparent"
+              className="font-display font-black leading-none select-none -me-3 md:-me-4 mb-7 text-transparent"
               style={{
                 fontSize: "clamp(64px, 7vw, 110px)",
                 WebkitTextStroke: "2.5px rgba(255,255,255,0.35)",

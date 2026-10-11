@@ -155,7 +155,7 @@ function HubCard({
             {!editing && entry.id === "addons" && <Badge entry={entry} badges={badges} lang={lang} />}
             {!editing && entry.id === "library" && <Badge entry={entry} badges={badges} lang={lang} />}
           </span>
-          <span className="md-body-small text-ink-muted mt-0.5 line-clamp-2">{hubDesc(entry, lang)}</span>
+          <span className="md-body-small mt-0.5 whitespace-normal break-words text-ink-muted">{hubDesc(entry, lang)}</span>
         </span>
       </button>
       {!editing && (entry.badge === "trakt" || entry.badge === "simkl") && (
@@ -198,8 +198,8 @@ export function QuickAccess() {
 
   return (
     <section className="mb-8" aria-labelledby="quick-access-title">
-      <div className="flex items-center justify-between gap-3 mb-3.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex flex-col items-start gap-3 mb-3.5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between">
+        <div className="flex items-center gap-2.5 min-w-0 w-full min-[640px]:w-auto">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
             <Puzzle className="h-4.5 w-4.5 text-accent" aria-hidden />
           </span>
@@ -207,7 +207,7 @@ export function QuickAccess() {
             <h2 id="quick-access-title" className="md-title-medium font-display font-bold text-ink">
               {ar ? "الوصول السريع" : "Quick Access"}
             </h2>
-            <p className="md-body-small text-ink-muted truncate">
+            <p className="md-body-small whitespace-normal break-words text-ink-muted">
               {ar ? "كل الصفحات التي كانت في القائمة الجانبية" : "Everything that used to live in the sidebar"}
             </p>
           </div>
@@ -226,7 +226,7 @@ export function QuickAccess() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
         {visible.map((entry, i) => (
           <HubCard
             key={entry.id}

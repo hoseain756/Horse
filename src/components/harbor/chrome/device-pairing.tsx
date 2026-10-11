@@ -307,8 +307,9 @@ function PairingSenderCard({ service }: { service: PairableService }) {
 
   const name = pairNameOf(service);
 
+  // FIX: Pairing is a grouped section of the surrounding settings card, not another bordered card.
   return (
-    <div className="rounded-[var(--md-sys-shape-corner-medium)] border border-edge-soft p-4">
+    <div className="min-w-0">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
           <MonitorSmartphone className="h-4.5 w-4.5 text-accent" aria-hidden />
@@ -324,8 +325,8 @@ function PairingSenderCard({ service }: { service: PairableService }) {
       </div>
 
       {phase === "idle" || phase === "creating" ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button onClick={() => void start()} disabled={phase === "creating"} className="md-btn-filled">
+        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 min-[600px]:flex min-[600px]:flex-wrap">
+          <Button onClick={() => void start()} disabled={phase === "creating"} className="md-btn-filled h-auto min-h-11 w-full min-w-0 whitespace-normal break-words px-3 text-center leading-tight min-[600px]:w-auto">
             {phase === "creating" ? (
               <Loader2 className="w-4 h-4 me-1.5 animate-spin" aria-hidden />
             ) : (
@@ -333,7 +334,7 @@ function PairingSenderCard({ service }: { service: PairableService }) {
             )}
             {phase === "creating" ? tr("pairStarting") : tr("pairQrStart", { name })}
           </Button>
-          <Button variant="outline" onClick={() => openPairingReceiver("")} className="md-btn-outlined">
+          <Button variant="outline" onClick={() => openPairingReceiver("")} className="md-btn-outlined h-auto min-h-11 w-full min-w-0 whitespace-normal break-words px-3 text-center leading-tight min-[600px]:w-auto">
             <Send className="w-4 h-4 me-1.5" aria-hidden />
             {tr("pairReceiveOpen")}
           </Button>

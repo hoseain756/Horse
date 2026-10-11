@@ -177,7 +177,7 @@ export function LinkAccountFlow({ service }: { service: ServiceId }) {
   // waiting
   const [visitHead, visitTail] = splitTemplate(tr("visitEnterCode", { url: "" }), "url");
   return (
-    <div className="mt-4 md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-4">
+    <div className="mt-4 border-t border-edge-soft pt-4">
       <p className="md-body-small text-ink-muted">
         {visitHead}
         <a
@@ -306,10 +306,13 @@ export function LinkedCard({
 }) {
   const meta = SERVICE_META[service];
   const tr = useT();
+  const formattedSync = lastSync ? new Date(lastSync).toLocaleString(tr.lang) : null;
+  const syncPlaceholder = "__SYNC_DATE__";
+  const [syncBefore, syncAfter] = tr("lastSync", { d: syncPlaceholder }).split(syncPlaceholder);
   return (
-    <div className="mt-4 space-y-3">
-      {/* Linked = success state (M3 tertiary-container) */}
-      <div className="flex items-center gap-3 rounded-[var(--md-sys-shape-corner-large)] border border-[var(--md-sys-color-tertiary)] bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)] px-3.5 py-2.5">
+    <div className="mt-4 flex min-w-0 flex-col gap-3">
+      {/* FIX: Keep linked account details within the provider card surface and wrap actions on narrow screens. */}
+      <div className="flex min-w-0 items-center gap-3">
         <span className="relative shrink-0">
           {account.avatar ? (
 
@@ -319,37 +322,41 @@ export function LinkedCard({
               {(account.username ?? "?").slice(0, 1).toUpperCase()}
             </span>
           )}
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 border-2 border-canvas" aria-hidden>
+          <span className="absolute bottom-0 end-0 flex h-4 w-4 items-center justify-center rounded-full border-2 border-canvas bg-emerald-500" aria-hidden>
             <Check className="h-2.5 w-2.5 text-black" />
           </span>
         </span>
-        <div className="min-w-0">
-          <p className="md-body-medium font-semibold truncate">
-            {account.username ? <Bdi>@{account.username}</Bdi> : tr("connectedTitle", { name: meta.name })}
+        <div className="min-w-0 flex-1">
+          <p className="md-body-medium break-words font-semibold [overflow-wrap:anywhere]">
+            {account.username ? <Bdi>@{account.username}</Bdi> : <RichBidi text={tr("connectedTitle", { name: meta.name })} />}
           </p>
-          <p className="md-body-small">
-            {lastSync
-              ? tr("lastSync", { d: new Date(lastSync).toLocaleString(tr.lang) })
-              : new Date(account.linkedAt).toLocaleDateString(tr.lang)}
+          <p className="md-body-small break-words text-ink-muted [overflow-wrap:anywhere]">
+            {formattedSync ? (
+              <>
+                {syncBefore}<bdi dir="auto">{formattedSync}</bdi>{syncAfter}
+              </>
+            ) : (
+              <bdi dir="auto">{new Date(account.linkedAt).toLocaleDateString(tr.lang)}</bdi>
+            )}
           </p>
         </div>
-        <div className="ms-auto flex items-center gap-2">
+      </div>
+      <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           <button
             type="button"
             onClick={onSync}
             disabled={syncing}
-            className="md-btn-tonal harbor-tv-focus !h-9 px-3 text-xs disabled:opacity-60"
+            className="md-btn-tonal harbor-tv-focus h-auto min-h-11 min-w-0 justify-center whitespace-normal px-2 text-center text-xs leading-tight disabled:opacity-60 sm:px-3"
           >
             {syncing ? <Loader2 className="md-btn-icon animate-spin" aria-hidden /> : <CloudDownload className="md-btn-icon" aria-hidden />} {tr("syncNow")}
           </button>
           <button
             type="button"
             onClick={onUnlink}
-            className="md-btn-text harbor-tv-focus !h-9 text-xs hover:!text-danger"
+            className="md-btn-text harbor-tv-focus h-auto min-h-11 min-w-0 justify-center whitespace-normal px-2 text-center text-xs leading-tight hover:!text-danger sm:px-3"
           >
             <Unplug className="md-btn-icon" aria-hidden /> {tr("unlink")}
           </button>
-        </div>
       </div>
     </div>
   );

@@ -208,17 +208,17 @@ export function RatingsSettingsCard() {
         </label>
       </div>
 
-      <ul className="mt-3 space-y-1" aria-label="Ratings providers (order = display order)">
+      <ul className="mt-3 divide-y divide-edge-soft" aria-label="Ratings providers (order = display order)">
         {visible.map((p, i) => {
           const active = order.includes(p.id);
           return (
             <li
               key={p.id}
-              className="flex items-center gap-2.5 rounded-xl border border-edge-soft bg-raised/50 px-3 py-2"
+              className="flex min-w-0 items-center gap-2.5 py-3"
             >
-              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", p.color)}>{p.label}</span>
+              <span dir="ltr" className={cn("max-w-full rounded-full px-2 py-0.5 text-[10px] font-black", p.color)}>{p.label}</span>
               {!active && <span className="text-[10px] text-ink-subtle">default position</span>}
-              {p.needsKey && <span className="text-[10px] text-ink-subtle hidden md:inline">needs {p.needsKey}</span>}
+              {p.needsKey && <span className="hidden text-[10px] text-ink-subtle md:inline">needs <bdi dir="ltr">{p.needsKey}</bdi></span>}
               <span className="ms-auto flex items-center gap-1">
                 {active && (
                   <>
@@ -226,7 +226,7 @@ export function RatingsSettingsCard() {
                       type="button"
                       onClick={() => move(p.id, -1)}
                       disabled={i === 0}
-                      className="harbor-tv-focus w-7 h-7 rounded-lg bg-raised text-ink-muted hover:text-ink disabled:opacity-40"
+                      className="harbor-tv-focus grid min-h-11 min-w-11 place-items-center rounded-lg bg-raised text-ink-muted hover:text-ink disabled:opacity-40"
                       aria-label={`Move ${p.label} up`}
                     >
                       ↑
@@ -235,7 +235,7 @@ export function RatingsSettingsCard() {
                       type="button"
                       onClick={() => move(p.id, 1)}
                       disabled={i === order.length - 1}
-                      className="harbor-tv-focus w-7 h-7 rounded-lg bg-raised text-ink-muted hover:text-ink disabled:opacity-40"
+                      className="harbor-tv-focus grid min-h-11 min-w-11 place-items-center rounded-lg bg-raised text-ink-muted hover:text-ink disabled:opacity-40"
                       aria-label={`Move ${p.label} down`}
                     >
                       ↓
@@ -247,7 +247,7 @@ export function RatingsSettingsCard() {
                   onClick={() => toggle(p.id)}
                   aria-pressed={active}
                   className={cn(
-                    "harbor-tv-focus rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                    "harbor-tv-focus min-h-11 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
                     active ? "bg-accent-soft text-accent" : "bg-raised text-ink-muted hover:text-ink",
                   )}
                 >

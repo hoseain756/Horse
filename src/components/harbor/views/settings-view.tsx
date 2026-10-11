@@ -584,7 +584,7 @@ function SubtitlesPanel() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted mb-2">
                 Priority order
               </p>
-              <div className="space-y-1.5" role="list" aria-label="Subtitle language priority">
+              <div className="divide-y divide-edge-soft" role="list" aria-label="Subtitle language priority">
                 {preferred.map((lang, i) => (
                   <div
                     key={lang}
@@ -605,30 +605,32 @@ function SubtitlesPanel() {
                       setOverIdx(null);
                     }}
                     className={cn(
-                      "harbor-card flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all",
+                      "grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1 py-2 transition-colors sm:flex sm:flex-wrap sm:gap-2.5",
                       dragIdx === i
-                        ? "border-accent/60 bg-accent-soft opacity-70"
+                        ? "bg-accent-soft opacity-70"
                         : overIdx === i && dragIdx !== null
-                          ? "border-accent/60 bg-accent-soft/40"
-                          : "border-edge-soft bg-raised/60",
+                          ? "bg-accent-soft/40"
+                          : "",
                     )}
                   >
                     <span
                       className={cn(
-                        "shrink-0 w-8 h-8 rounded-[var(--md-sys-shape-corner-small)] flex items-center justify-center text-xs font-bold tabular-nums cursor-grab active:cursor-grabbing",
+                        "row-span-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-corner-small)] text-xs font-bold tabular-nums cursor-grab active:cursor-grabbing sm:row-span-1",
                         i === 0 ? "bg-accent text-black" : "bg-raised text-ink-muted",
                       )}
                       title="Drag to reorder"
                     >
                       {i + 1}
                     </span>
-                    <span className="flex-1 text-sm text-ink harbor-clamp-1">{lang}</span>
-                    {i === 0 && (
-                      <span className="shrink-0 rounded-full bg-accent-soft text-accent px-2 py-0.5 text-[9px] font-bold tracking-wide">
-                        TOP PICK
-                      </span>
-                    )}
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="min-w-0 break-words text-sm text-ink">{lang}</span>
+                      {i === 0 && (
+                        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[9px] font-bold tracking-wide text-accent">
+                          TOP PICK
+                        </span>
+                      )}
+                    </div>
+                    <div className="col-start-2 flex min-w-0 items-center justify-self-end gap-0.5 sm:ms-auto">
                       <button
                         type="button"
                         onClick={() => move(i, i - 1)}
@@ -752,9 +754,8 @@ function IntegrationsPanel() {
     void checkEnv();
   }, [loadLinks, checkEnv]);
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="w-full min-w-0 max-w-3xl space-y-6">
       <div>
-        <h2 className="md-title-medium font-display font-bold text-ink mb-1">{tr("integrationsTitle")}</h2>
         <p className="md-body-medium text-ink-muted">
           <RichBidi text={tr("integrationsIntro")} />
         </p>
@@ -1713,14 +1714,14 @@ function HorseAccountCard() {
                 {t("accountLoggedOutDesc")}
               </p>
             </div>
-            <div className="flex flex-wrap rounded-[var(--md-sys-shape-corner-full)] border border-edge-soft bg-raised p-1 shrink-0" role="tablist" aria-label={t("accountModeLabel")}>
+            <div className="grid w-full min-w-0 max-w-full grid-cols-3 gap-1 sm:flex sm:w-fit sm:flex-wrap" role="tablist" aria-label={t("accountModeLabel")}>
               <button
                 type="button"
                 role="tab"
                 aria-selected={mode === "login"}
                 onClick={() => { setMode("login"); setError(null); }}
                 className={cn(
-                  "min-h-9 px-4 rounded-full md-label-medium transition-colors",
+                  "min-h-11 min-w-0 whitespace-normal break-words rounded-full px-2 text-center leading-tight md-label-medium transition-colors",
                   mode === "login" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
                 )}
               >
@@ -1732,7 +1733,7 @@ function HorseAccountCard() {
                 aria-selected={mode === "register"}
                 onClick={() => { setMode("register"); setError(null); }}
                 className={cn(
-                  "min-h-9 px-4 rounded-full md-label-medium transition-colors",
+                  "min-h-11 min-w-0 whitespace-normal break-words rounded-full px-2 text-center leading-tight md-label-medium transition-colors",
                   mode === "register" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
                 )}
               >
@@ -1744,7 +1745,7 @@ function HorseAccountCard() {
                 aria-selected={mode === "qr"}
                 onClick={() => { setMode("qr"); setError(null); }}
                 className={cn(
-                  "min-h-9 px-4 rounded-full md-label-medium transition-colors inline-flex items-center gap-1.5",
+                  "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 whitespace-normal break-words rounded-full px-2 text-center leading-tight md-label-medium transition-colors",
                   mode === "qr" ? "bg-accent text-black" : "text-ink-muted hover:text-ink",
                 )}
               >
@@ -2366,7 +2367,7 @@ function ThemePanel() {
         </SettingRow>
 
         {/* Theme Studio */}
-        <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
+        <div className="border-t border-edge-soft pt-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="min-w-0">
               <h2 className="md-title-medium font-display font-bold text-ink flex items-center gap-2">
@@ -2391,13 +2392,7 @@ function ThemePanel() {
                 {userThemes.map((t) => (
                   <div
                     key={t.id}
-                    className={cn(
-                      "md-card-outlined group relative p-2.5 cursor-pointer transition-all hover:scale-[1.02]",
-                      settings.theme.preset === "custom" && settings.theme.customName === t.name
-                        ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
-                        : "",
-                    )}
-                    style={{ background: t.colors.canvas }}
+                    className="group relative min-w-0 cursor-pointer p-2.5 transition-colors hover:bg-raised/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                     onClick={() => applyUserTheme(t)}
                     role="button"
                     tabIndex={0}
@@ -2422,10 +2417,10 @@ function ThemePanel() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <p className="text-xs font-semibold mt-1.5 truncate" style={{ color: t.colors.accent }}>
+                    <p className="mt-1.5 break-words text-xs font-semibold text-ink">
                       {t.name}
                     </p>
-                    <p className="text-[10px] text-white/50 capitalize">{t.layout} · {t.fontPair.split("-")[0]}</p>
+                    <p className="text-[10px] capitalize text-ink-subtle">{t.layout} · {t.fontPair.split("-")[0]}</p>
                   </div>
                 ))}
               </div>
@@ -2443,12 +2438,11 @@ function ThemePanel() {
                 type="button"
                 onClick={() => setPreset(p.id)}
                 className={cn(
-                  "md-card-outlined harbor-tv-focus p-3 text-start transition-all hover:scale-[1.02]",
+                  "harbor-tv-focus min-w-0 rounded-lg p-3 text-start transition-colors hover:bg-raised/40 focus-visible:ring-2 focus-visible:ring-accent",
                   settings.theme.preset === p.id
-                    ? "ring-2 ring-[var(--md-sys-color-primary)] border-transparent"
+                    ? "bg-accent-soft"
                     : "",
                 )}
-                style={{ background: p.canvas }}
                 aria-pressed={settings.theme.preset === p.id}
               >
                 <div className="flex items-center justify-between mb-2.5">
@@ -2463,10 +2457,10 @@ function ThemePanel() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-semibold" style={{ color: p.accent }}>
+                <p className="break-words text-sm font-semibold text-ink">
                   {p.name}
                 </p>
-                <p className="text-[11px] text-white/50 capitalize">{p.layout} layout</p>
+                <p className="text-[11px] capitalize text-ink-subtle">{p.layout} layout</p>
               </button>
             ))}
           </div>
@@ -2668,16 +2662,16 @@ function TraktCard() {
   if (!loaded) return null;
 
   return (
-    <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
+    <div className="md-card-outlined min-w-0 rounded-[var(--md-sys-shape-corner-large)] p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
-        <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
             <Plug className="w-5 h-5 text-accent" />
           </span>
-          <div>
-            <h3 className="text-sm font-bold text-ink">Trakt.tv</h3>
-            <p className="text-xs text-ink-subtle">
-              {auth ? (auth.username ? tr("connectedAs", { name: auth.username }) : tr("connectedTitle", { name: "Trakt.tv" })) : tr("importTraktWatchlist")}
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-ink" dir="auto">Trakt.tv</h3>
+            <p className="break-words text-xs text-ink-subtle">
+              <RichBidi text={auth ? (auth.username ? tr("connectedAs", { name: auth.username }) : tr("connectedTitle", { name: "Trakt.tv" })) : tr("importTraktWatchlist")} />
             </p>
           </div>
         </div>
@@ -2893,16 +2887,16 @@ function SimklCard() {
   if (!loaded) return null;
 
   return (
-    <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
+    <div className="md-card-outlined min-w-0 rounded-[var(--md-sys-shape-corner-large)] p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
-        <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
             <TvMinimalPlay className="w-5 h-5 text-accent" />
           </span>
-          <div>
-            <h3 className="text-sm font-bold text-ink">Simkl</h3>
-            <p className="text-xs text-ink-subtle">
-              {auth ? (auth.username ? tr("connectedAs", { name: auth.username }) : tr("connectedTitle", { name: "Simkl" })) : tr("importSimklWatchlist")}
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-ink" dir="auto">Simkl</h3>
+            <p className="break-words text-xs text-ink-subtle">
+              <RichBidi text={auth ? (auth.username ? tr("connectedAs", { name: auth.username }) : tr("connectedTitle", { name: "Simkl" })) : tr("importSimklWatchlist")} />
             </p>
           </div>
         </div>
@@ -3043,7 +3037,7 @@ function DebridCard() {
   if (!loaded) return null;
 
   return (
-    <div className="md-card-outlined rounded-[var(--md-sys-shape-corner-large)] p-5">
+    <div className="md-card-outlined min-w-0 rounded-[var(--md-sys-shape-corner-large)] p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
         <div className="flex items-center gap-3">
           <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center">
@@ -3072,7 +3066,7 @@ function DebridCard() {
 
       {/* Service segmented control (M3: secondary-container track, primary-container selected) */}
       <div
-        className="inline-flex rounded-full bg-[var(--md-sys-color-secondary-container)] p-1 w-fit mb-4"
+        className="mb-4 grid w-full grid-cols-3 rounded-full bg-[var(--md-sys-color-secondary-container)] p-1 sm:inline-flex sm:w-fit"
         role="tablist"
         aria-label="Debrid service"
       >
@@ -3090,7 +3084,7 @@ function DebridCard() {
             aria-selected={svc === id}
             onClick={() => setSvcOverride(id)}
             className={cn(
-              "md-state harbor-tv-focus rounded-full min-h-10 px-4 py-1.5 md-label-large transition-colors",
+              "md-state harbor-tv-focus min-h-11 min-w-0 whitespace-normal break-words rounded-full px-2 py-1.5 text-center md-label-large transition-colors sm:px-4",
               svc === id
                 ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
                 : "text-[var(--md-sys-color-on-secondary-container)]",

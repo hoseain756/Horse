@@ -762,13 +762,13 @@ function WrappedEmptyState({
         </p>
 
         <div
-          className="harbor-pop-in mt-6 flex flex-wrap items-center justify-center gap-2.5"
+          className="harbor-pop-in mt-6 grid w-full min-w-0 grid-cols-1 gap-2.5 sm:flex sm:flex-wrap sm:items-center sm:justify-center"
           style={{ animationDelay: "90ms" }}
         >
           <button
             type="button"
             onClick={() => onNavigate("movies")}
-            className="md-btn-filled harbor-tv-focus"
+            className="md-btn-filled harbor-tv-focus h-auto min-h-11 w-full min-w-0 max-w-full whitespace-normal break-words px-3 text-center leading-tight sm:w-auto"
           >
             <Film className="h-4 w-4" aria-hidden />
             Browse Movies
@@ -776,7 +776,7 @@ function WrappedEmptyState({
           <button
             type="button"
             onClick={() => onNavigate("shows")}
-            className="md-btn-outlined harbor-tv-focus"
+            className="md-btn-outlined harbor-tv-focus h-auto min-h-11 w-full min-w-0 max-w-full whitespace-normal break-words px-3 text-center leading-tight sm:w-auto"
           >
             <Tv className="h-4 w-4" aria-hidden />
             Top Shows
@@ -784,7 +784,7 @@ function WrappedEmptyState({
           <button
             type="button"
             onClick={() => onNavigate("live")}
-            className="md-btn-outlined harbor-tv-focus"
+            className="md-btn-outlined harbor-tv-focus h-auto min-h-11 w-full min-w-0 max-w-full whitespace-normal break-words px-3 text-center leading-tight sm:w-auto"
           >
             <RadioTower className="h-4 w-4" aria-hidden />
             Open Live TV
@@ -802,7 +802,7 @@ function WrappedEmptyState({
             >
               <span className="harbor-stat-chip">{p.icon}</span>
               <div className="mt-3 h-2.5 w-12 rounded-full bg-white/10" />
-              <p className="mt-1.5 text-[11px] font-medium text-ink-subtle">{p.label}</p>
+              <p className="mt-1.5 min-w-0 max-w-full break-words text-[11px] font-medium text-ink-subtle [overflow-wrap:anywhere]">{p.label}</p>
             </div>
           ))}
         </div>
