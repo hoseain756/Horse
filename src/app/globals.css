@@ -2962,10 +2962,9 @@ html[lang^="ar"] {
 
 /* ---- C: SettingRow container queries -------------------------------------
    The CARD is the inline-size container (@container queries ancestors, an
-   element cannot query itself). Narrower than 520px → rows STACK (title +
-   description full width, control below at full width); wider → label
-   flex:1 min-width:0, control capped at 45%. Never a column narrower than
-   ~14 characters per line. */
+   element cannot query itself). Narrower than 520px → wide controls stack
+   below the label, while switch rows stay inline; wider → label flex:1
+   min-width:0, control capped at 45%. */
 .harbor-cq {
   container-type: inline-size;
 }
@@ -2987,14 +2986,27 @@ html[lang^="ar"] {
 }
 /* 150% font scale: widths grow, containers don't — stack earlier too. */
 @container (max-width: 519px) {
-  .harbor-setting-row {
+  .harbor-setting-row:not([data-inline-control="true"]) {
     flex-direction: column;
     align-items: stretch;
     gap: 0.625rem;
   }
-  .harbor-setting-row > .harbor-setting-row-control {
+  .harbor-setting-row:not([data-inline-control="true"]) > .harbor-setting-row-control {
     max-width: none;
     width: 100%;
+  }
+  /* FIX: Keep compact switch controls beside their title and description on phones. */
+  .harbor-setting-row[data-inline-control="true"] {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .harbor-setting-row[data-inline-control="true"] > .harbor-setting-row-label {
+    flex: 1 1 0;
+  }
+  .harbor-setting-row[data-inline-control="true"] > .harbor-setting-row-control {
+    width: auto;
+    max-width: none;
   }
 }
 

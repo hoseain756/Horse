@@ -38,6 +38,7 @@ export function SettingRow({
   description,
   badge,
   danger,
+  inlineControl = false,
   children,
   arrive,
   descriptionDomId,
@@ -48,6 +49,7 @@ export function SettingRow({
   description?: string;
   badge?: string;
   danger?: boolean;
+  inlineControl?: boolean;
   children: React.ReactNode;
   arrive?: boolean;
   descriptionDomId?: string;
@@ -75,6 +77,7 @@ export function SettingRow({
     <div
       id={id ? `set-${id}` : undefined}
       data-arrive={arrive ? "true" : undefined}
+      data-inline-control={inlineControl ? "true" : undefined}
       className={cn("harbor-setting-row harbor-cq md-state px-4 py-3.5", arrive && "harbor-row-arrive")}
     >
       <div className="harbor-setting-row-label">
@@ -119,7 +122,7 @@ export function ToggleRow({
   arrive?: boolean;
 }) {
   return (
-    <SettingRow id={id} title={title} description={description} badge={badge} arrive={arrive}>
+    <SettingRow id={id} title={title} description={description} badge={badge} arrive={arrive} inlineControl>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </SettingRow>
   );
