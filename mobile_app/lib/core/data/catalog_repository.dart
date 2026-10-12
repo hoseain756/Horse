@@ -35,8 +35,9 @@ class CatalogRepository {
         final url = _resourceUrl(addon.baseUrl, 'meta', type, id, const {});
         final data = await api.proxyGet(url);
         final value = data['meta'];
-        if (value is Map)
+        if (value is Map) {
           return MediaItem.fromJson(Map<String, dynamic>.from(value));
+        }
       } catch (_) {
         // Try the next metadata provider before falling back to Cinemeta.
       }

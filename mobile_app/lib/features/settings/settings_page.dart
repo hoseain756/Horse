@@ -5,6 +5,7 @@ import '../../core/api/horse_api.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/horse_theme.dart';
 import 'addons_page.dart';
+import 'integrations_page.dart';
 import 'stats_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -54,6 +55,18 @@ class SettingsPage extends StatelessWidget {
                     : '${app.addons.length} مثبتة · كتالوجات وبث',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const AddonsPage()),
+                ),
+              ),
+              _SettingsTile(
+                icon: Icons.hub_outlined,
+                title: english ? 'Connected services' : 'الخدمات المرتبطة',
+                subtitle: english
+                    ? 'Trakt, Simkl, and Debrid playback'
+                    : 'Trakt وSimkl وتشغيل Debrid',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const IntegrationsPage(),
+                  ),
                 ),
               ),
               const SizedBox(height: 22),
@@ -160,16 +173,18 @@ class _AccountPanelState extends State<_AccountPanel> {
       } else {
         await app.loginHorse(_email.text.trim(), _password.text);
       }
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message =
               app.english ? 'Connected and synced.' : 'تم الاتصال والمزامنة.',
         );
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message = error.toString().replaceFirst('Exception: ', ''),
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -380,18 +395,20 @@ class _ServerPanelState extends State<_ServerPanel> {
     });
     try {
       await context.read<AppState>().setServer(_controller.text);
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message = context.read<AppState>().english
               ? 'Server connected.'
               : 'تم الاتصال بالخادم.',
         );
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               _message = error.toString().replaceFirst('FormatException: ', ''),
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -14,12 +14,16 @@ class HorseApi {
   );
   static const _serverKey = 'horse.mobile.server';
   static const _stremioKey = 'horse.mobile.stremio.auth';
+  static const _debridServiceKey = 'horse.mobile.debrid.service';
+  static const _debridSecretPrefix = 'horse.mobile.debrid.';
 
   final FlutterSecureStorage _secure = const FlutterSecureStorage();
   SharedPreferences? _preferences;
   late Dio _dio;
   String _baseUrl = defaultServer;
   String? stremioAuthKey;
+  String? debridService;
+  String? debridApiKey;
 
   String get baseUrl => _baseUrl;
   Dio get dio => _dio;
@@ -30,6 +34,13 @@ class HorseApi {
       _preferences!.getString(_serverKey) ?? defaultServer,
     );
     stremioAuthKey = await _secure.read(key: _stremioKey);
+    debridService = _preferences!.getString(_debridServiceKey);
+    if (debridService != null) {
+      debridApiKey = await _secure.read(
+        key: '$_debridSecretPrefix$debridService',
+      );
+      if (debridApiKey == null) debridService = null;
+    }
     _dio = Dio(
       BaseOptions(
         baseUrl: _baseUrl,
@@ -43,8 +54,9 @@ class HorseApi {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final cookie = await _secure.read(key: _sessionStorageKey);
-          if (cookie != null && cookie.isNotEmpty)
+          if (cookie != null && cookie.isNotEmpty) {
             options.headers['Cookie'] = cookie;
+          }
           handler.next(options);
         },
         onResponse: (response, handler) async {
@@ -91,8 +103,9 @@ class HorseApi {
     Map<String, dynamic>? query,
   }) async {
     final response = await _dio.get<dynamic>(path, queryParameters: query);
-    if (response.data is Map)
+    if (response.data is Map) {
       return Map<String, dynamic>.from(response.data as Map);
+    }
     throw const FormatException('استجابة غير صالحة من الخادم');
   }
 
@@ -101,8 +114,9 @@ class HorseApi {
     Map<String, dynamic> body,
   ) async {
     final response = await _dio.post<dynamic>(path, data: body);
-    if (response.data is Map)
+    if (response.data is Map) {
       return Map<String, dynamic>.from(response.data as Map);
+    }
     throw const FormatException('استجابة غير صالحة من الخادم');
   }
 
@@ -120,12 +134,13 @@ class HorseApi {
     String email,
     String password,
     String displayName,
-  ) => postJson('/api/auth/register', {
-    'email': email,
-    'password': password,
-    'displayName': displayName,
-    'lang': 'ar',
-  });
+  ) =>
+      postJson('/api/auth/register', {
+        'email': email,
+        'password': password,
+        'displayName': displayName,
+        'lang': 'ar',
+      });
 
   Future<Map<String, dynamic>> horseMe() => getJson('/api/auth/me');
 
@@ -143,8 +158,9 @@ class HorseApi {
       'password': password,
     });
     final key = result['authKey'];
-    if (key is! String || key.isEmpty)
+    if (key is! String || key.isEmpty) {
       throw const FormatException('لم يرجع Stremio مفتاح الدخول');
+    }
     stremioAuthKey = key;
     await _secure.write(key: _stremioKey, value: key);
     return Map<String, dynamic>.from(result['user'] as Map? ?? const {});
@@ -175,6 +191,118 @@ class HorseApi {
     });
   }
 
+  Future<Map<String, dynamic>> startLinkedService(String service) =>
+      postJson('/api/$service/link/start', const {});
+
+  Future<Map<String, dynamic>> pollLinkedService(
+    String service,
+    String pollId,
+  ) =>
+      postJson('/api/$service/link/poll', {'pollId': pollId});
+
+  Future<void> unlinkService(String service, String linkId) async {
+    await postJson('/api/$service/link/unlink', {'linkId': linkId});
+  }
+
+  Future<(List<dynamic>, List<dynamic>)> syncLinkedService(
+    String service,
+    String linkId,
+  ) async {
+    final body = {'linkId': linkId};
+    final results = await Future.wait([
+      postJson('/api/$service/watchlist', body),
+      postJson('/api/$service/history', body),
+    ]);
+    return (
+      results[0]['items'] as List? ?? const <dynamic>[],
+      results[1]['items'] as List? ?? const <dynamic>[],
+    );
+  }
+
+  Future<Map<String, dynamic>> verifyDebridKey(
+    String service,
+    String apiKey,
+  ) =>
+      postJson('/api/debrid/user', {'service': service, 'apiKey': apiKey});
+
+  Future<Map<String, dynamic>> saveDebridKey(
+    String service,
+    String apiKey,
+  ) async {
+    final user = await verifyDebridKey(service, apiKey);
+    final previous = debridService;
+    if (previous != null && previous != service) {
+      await _secure.delete(key: '$_debridSecretPrefix$previous');
+    }
+    await _secure.write(key: '$_debridSecretPrefix$service', value: apiKey);
+    await _preferences?.setString(_debridServiceKey, service);
+    debridService = service;
+    debridApiKey = apiKey;
+    return user;
+  }
+
+  Future<void> clearDebridKey() async {
+    final service = debridService;
+    if (service != null) {
+      await _secure.delete(key: '$_debridSecretPrefix$service');
+    }
+    await _preferences?.remove(_debridServiceKey);
+    debridService = null;
+    debridApiKey = null;
+  }
+
+  Future<String> resolveDebridTorrent(Map<String, dynamic> stream) async {
+    final service = debridService;
+    final apiKey = debridApiKey;
+    if (service == null || apiKey == null) {
+      throw const FormatException('اربط خدمة Debrid من الإعدادات أولًا.');
+    }
+    final infoHash = (stream['infoHash'] ?? '').toString().toLowerCase();
+    final hints = (stream['behaviorHints'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final filename = (hints['filename'] ?? stream['title'] ?? '').toString();
+    final result = await postJson('/api/debrid/resolve', {
+      'service': service,
+      'apiKey': apiKey,
+      'infoHash': infoHash,
+      if (filename.isNotEmpty) 'filename': filename,
+      if (stream['fileSize'] is num) 'filesize': stream['fileSize'],
+    });
+    final url = result['url'] as String?;
+    if (url == null || url.isEmpty) {
+      throw const FormatException('لم تُرجع خدمة Debrid رابط تشغيل.');
+    }
+    return signMediaUrl(
+      url,
+      filename: result['filename'] as String? ?? filename,
+    );
+  }
+
+  Future<void> scrobbleLinkedService({
+    required String service,
+    required String linkId,
+    required String action,
+    required double progress,
+    required String imdbId,
+    required String type,
+    int? season,
+    int? episode,
+  }) async {
+    try {
+      await postJson('/api/$service/scrobble', {
+        'linkId': linkId,
+        'action': action,
+        'progress': progress.clamp(0.0, 100.0).toDouble(),
+        'imdbId': imdbId,
+        'type': type,
+        if (season != null) 'season': season,
+        if (episode != null) 'episode': episode,
+      });
+    } catch (_) {
+      // Provider outages must never interrupt playback.
+    }
+  }
+
   Future<Map<String, dynamic>> loadSnapshot(String deviceId) =>
       getJson('/api/sync', query: {'device': deviceId});
 
@@ -196,8 +324,9 @@ class HorseApi {
       if (filename != null) 'filename': filename,
     });
     final signed = data['proxiedUrl'] as String?;
-    if (signed == null || signed.isEmpty)
+    if (signed == null || signed.isEmpty) {
       throw const FormatException('تعذر تجهيز رابط التشغيل');
+    }
     return Uri.parse(_baseUrl).resolve(signed).toString();
   }
 
@@ -213,8 +342,7 @@ class HorseApi {
         'لا يوجد محرك تورنت مربوط بالخادم. أضف إضافة توفّر رابط بث مباشر أو اربط محركًا بالخادم.',
       );
     }
-    final hints =
-        (stream['behaviorHints'] as Map?)?.cast<String, dynamic>() ??
+    final hints = (stream['behaviorHints'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final filename = (hints['filename'] ?? stream['title'] ?? '').toString();
     final fileIdx = (stream['fileIdx'] as num?)?.toInt();
@@ -248,13 +376,13 @@ class HorseApi {
       'mpg',
       'mpeg',
     }.contains(ext);
-    final path = useRemux
-        ? 'remux/$infoHash/$index'
-        : 'stream/$infoHash/$index';
+    final path =
+        useRemux ? 'remux/$infoHash/$index' : 'stream/$infoHash/$index';
     if (mode == 'external') {
       final engine = capabilities['enginePublicUrl'] as String?;
-      if (engine == null || engine.isEmpty)
+      if (engine == null || engine.isEmpty) {
         throw const FormatException('خادم التورنت غير متاح.');
+      }
       final tokenResponse = await getJson('/api/engine/token');
       final token = tokenResponse['available'] == true
           ? tokenResponse['token']?.toString()

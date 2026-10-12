@@ -40,6 +40,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Timer? _progressTimer;
   bool _controlsVisible = true;
   bool _failed = false;
+  bool _stopScrobbled = false;
+  bool _completionScrobbled = false;
   String? _error;
 
   @override
@@ -77,6 +79,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         );
       }
       await _controller.play();
+      _scrobble('start');
       if (mounted) setState(() {});
     } catch (error) {
       if (!mounted) return;
@@ -89,6 +92,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   void _onVideoChanged() {
     if (!mounted) return;
+    if (_controller.value.isCompleted && !_completionScrobbled) {
+      _completionScrobbled = true;
+      _stopScrobbled = true;
+      _scrobble('stop');
+    }
     if (_controller.value.hasError) {
       setState(() {
         _failed = true;
@@ -102,17 +110,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _controller.value.isPlaying)
+      if (mounted && _controller.value.isPlaying) {
         setState(() => _controlsVisible = false);
+      }
     });
   }
 
   void _toggleControls() {
     setState(() => _controlsVisible = !_controlsVisible);
-    if (_controlsVisible)
+    if (_controlsVisible) {
       _scheduleHide();
-    else
+    } else {
       _hideTimer?.cancel();
+    }
   }
 
   Future<void> _seek(Duration offset) async {
@@ -120,9 +130,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final target = _controller.value.position + offset;
     await _controller.seekTo(
       Duration(
-        milliseconds: target.inMilliseconds
-            .clamp(0, duration.inMilliseconds)
-            .toInt(),
+        milliseconds:
+            target.inMilliseconds.clamp(0, duration.inMilliseconds).toInt(),
       ),
     );
     _scheduleHide();
@@ -141,7 +150,36 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
+  void _scrobble(String action) {
+    final imdbId = widget.item.id;
+    if (!RegExp(r'^tt\d+$').hasMatch(imdbId)) return;
+    final value = _controller.value;
+    final duration = value.duration.inMilliseconds;
+    final progress =
+        duration <= 0 ? 0.0 : value.position.inMilliseconds / duration * 100;
+    final type = widget.item.type == 'series' ? 'episode' : 'movie';
+    for (final service in const ['trakt', 'simkl']) {
+      final link = _app.linkedServices[service];
+      final linkId = link?['linkId']?.toString();
+      if (linkId == null || linkId.isEmpty) continue;
+      unawaited(
+        _app.api.scrobbleLinkedService(
+          service: service,
+          linkId: linkId,
+          action: action,
+          progress: progress,
+          imdbId: imdbId,
+          type: type,
+          season: type == 'episode' ? widget.season : null,
+          episode: type == 'episode' ? widget.episode : null,
+        ),
+      );
+    }
+  }
+
   Future<void> _close() async {
+    _scrobble('stop');
+    _stopScrobbled = true;
     await _saveProgress();
     if (mounted) Navigator.of(context).pop();
   }
@@ -164,7 +202,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final value = _controller.value;
     return PopScope(
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) unawaited(_saveProgress());
+        if (didPop) {
+          if (!_stopScrobbled) _scrobble('stop');
+          _stopScrobbled = true;
+          unawaited(_saveProgress());
+        }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -173,10 +215,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           onTap: _toggleControls,
           onDoubleTapDown: (details) {
             final width = MediaQuery.sizeOf(context).width;
-            if (details.localPosition.dx < width * .34)
+            if (details.localPosition.dx < width * .34) {
               _seek(const Duration(seconds: -10));
-            if (details.localPosition.dx > width * .66)
+            }
+            if (details.localPosition.dx > width * .66) {
               _seek(const Duration(seconds: 10));
+            }
           },
           child: Stack(
             fit: StackFit.expand,
@@ -297,9 +341,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                               ),
                               child: IconButton(
                                 onPressed: () {
-                                  value.isPlaying
-                                      ? _controller.pause()
-                                      : _controller.play();
+                                  if (value.isPlaying) {
+                                    _controller.pause();
+                                    _scrobble('pause');
+                                  } else {
+                                    _controller.play();
+                                    _scrobble('start');
+                                  }
                                   _scheduleHide();
                                 },
                                 iconSize: 38,
@@ -345,8 +393,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   String _episodeLabel(bool english) {
-    if (widget.season == null || widget.episode == null)
+    if (widget.season == null || widget.episode == null) {
       return widget.streamName;
+    }
     return english
         ? 'Season ${widget.season} · Episode ${widget.episode}'
         : 'الموسم ${widget.season} · الحلقة ${widget.episode}';
@@ -384,8 +433,8 @@ class _Timeline extends StatelessWidget {
               onChanged: duration <= 0
                   ? null
                   : (value) => controller.seekTo(
-                      Duration(milliseconds: value.round()),
-                    ),
+                        Duration(milliseconds: value.round()),
+                      ),
             ),
           ),
         ),
@@ -418,41 +467,41 @@ class _PlaybackError extends StatelessWidget {
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 46,
-            color: Color(0xFFE88178),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 46,
+                color: Color(0xFFE88178),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                english
+                    ? 'This source could not be played'
+                    : 'تعذر تشغيل هذا المصدر',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              if (message != null)
+                Text(
+                  message!,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(english ? 'Try again' : 'إعادة المحاولة'),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          Text(
-            english
-                ? 'This source could not be played'
-                : 'تعذر تشغيل هذا المصدر',
-            style: Theme.of(context).textTheme.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          if (message != null)
-            Text(
-              message!,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(english ? 'Try again' : 'إعادة المحاولة'),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }

@@ -214,14 +214,13 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                     final direct = url != null && url.startsWith('http');
                     final torrent = !direct && stream['infoHash'] is String;
                     final playable = direct || torrent;
-                    final title =
-                        (stream['title'] ??
-                                stream['name'] ??
-                                stream['description'] ??
-                                (playable ? 'HTTP stream' : 'Torrent stream'))
-                            .toString()
-                            .split('\n')
-                            .first;
+                    final title = (stream['title'] ??
+                            stream['name'] ??
+                            stream['description'] ??
+                            (playable ? 'HTTP stream' : 'Torrent stream'))
+                        .toString()
+                        .split('\n')
+                        .first;
                     return ListTile(
                       enabled: playable,
                       leading: Icon(
@@ -260,9 +259,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       if (rawUrl != null && rawUrl.startsWith('http')) {
         final hints =
             (selected['behaviorHints'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-        final proxyHeaders = (hints['proxyHeaders'] as Map?)
-            ?.cast<String, dynamic>();
+                const <String, dynamic>{};
+        final proxyHeaders =
+            (hints['proxyHeaders'] as Map?)?.cast<String, dynamic>();
         final filename = (hints['filename'] ?? selected['title']) as String?;
         url = await app.api.signMediaUrl(
           rawUrl,
@@ -270,7 +269,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
           filename: filename,
         );
       } else {
-        url = await app.api.prepareTorrent(selected);
+        url = app.api.debridService != null
+            ? await app.api.resolveDebridTorrent(selected)
+            : await app.api.prepareTorrent(selected);
       }
       if (!mounted) return;
       setState(() => _loadingStreams = false);
@@ -293,10 +294,11 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       );
     } catch (error) {
       if (mounted) setState(() => _loadingStreams = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
     }
   }
 }
@@ -441,31 +443,31 @@ class _CompactInfo extends StatelessWidget {
   final bool english;
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        item.name,
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-      const SizedBox(height: 7),
-      Wrap(
-        spacing: 8,
-        runSpacing: 5,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (item.releaseInfo != null) _MetaBadge(item.releaseInfo!),
-          _MetaBadge(
-            item.type == 'series'
-                ? (english ? 'Series' : 'مسلسل')
-                : (english ? 'Movie' : 'فيلم'),
+          Text(
+            item.name,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
-          if (item.rating != null)
-            _MetaBadge('★ ${item.rating}', color: HorseTheme.gold),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 8,
+            runSpacing: 5,
+            children: [
+              if (item.releaseInfo != null) _MetaBadge(item.releaseInfo!),
+              _MetaBadge(
+                item.type == 'series'
+                    ? (english ? 'Series' : 'مسلسل')
+                    : (english ? 'Movie' : 'فيلم'),
+              ),
+              if (item.rating != null)
+                _MetaBadge('★ ${item.rating}', color: HorseTheme.gold),
+            ],
+          ),
         ],
-      ),
-    ],
-  );
+      );
 }
 
 class _MetaBadge extends StatelessWidget {
@@ -474,17 +476,18 @@ class _MetaBadge extends StatelessWidget {
   final Color color;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: HorseTheme.surface,
-      borderRadius: BorderRadius.circular(30),
-      border: Border.all(color: HorseTheme.line),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: HorseTheme.surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: HorseTheme.line),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+              fontSize: 11, color: color, fontWeight: FontWeight.w600),
+        ),
+      );
 }
 
 class _Poster extends StatelessWidget {
@@ -493,33 +496,33 @@ class _Poster extends StatelessWidget {
   final double width;
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(16),
-    child: SizedBox(
-      width: width,
-      child: AspectRatio(
-        aspectRatio: .68,
-        child: item.poster == null
-            ? const ColoredBox(
-                color: HorseTheme.raised,
-                child: Icon(
-                  Icons.movie_outlined,
-                  size: 38,
-                  color: HorseTheme.gold,
-                ),
-              )
-            : Image.network(
-                item.poster!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: HorseTheme.raised,
-                  child: Icon(
-                    Icons.movie_outlined,
-                    size: 38,
-                    color: HorseTheme.gold,
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: width,
+          child: AspectRatio(
+            aspectRatio: .68,
+            child: item.poster == null
+                ? const ColoredBox(
+                    color: HorseTheme.raised,
+                    child: Icon(
+                      Icons.movie_outlined,
+                      size: 38,
+                      color: HorseTheme.gold,
+                    ),
+                  )
+                : Image.network(
+                    item.poster!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const ColoredBox(
+                      color: HorseTheme.raised,
+                      child: Icon(
+                        Icons.movie_outlined,
+                        size: 38,
+                        color: HorseTheme.gold,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-      ),
-    ),
-  );
+          ),
+        ),
+      );
 }

@@ -51,11 +51,12 @@ class _AddonsPageState extends State<AddonsPage> {
         _messageError = false;
       });
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _message = error.toString().replaceFirst('Exception: ', '');
           _messageError = true;
         });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -337,7 +338,8 @@ class _AddonRow extends StatelessWidget {
         ],
       ),
     );
-    if (remove == true && context.mounted)
+    if (remove == true && context.mounted) {
       await context.read<AppState>().removeAddon(addon.id);
+    }
   }
 }
