@@ -231,7 +231,8 @@ export function AppShell() {
     }
     return false;
   }, [stack]);
-  const showChrome = !playerActive && !immersiveDetail;
+  const settingsActive = top?.kind === "view" && top.view === "settings";
+  const showChrome = !playerActive && !immersiveDetail && !settingsActive;
 
   // Apply theme + kids mode — env carries the M3 scheme knobs (appearance /
   // contrast / kids re-seed) so dynamic color responds to settings live
@@ -468,8 +469,7 @@ export function AppShell() {
       {/* Large screens (≥1024px) swap the bottom dock for the floating side
           rail. Both nodes mount; the window-class CSS shows exactly one
           (display:none removes the other from the a11y tree + tab order).
-          Same showChrome rules: neither renders in the player / immersive
-          detail. */}
+          Neither renders in Settings, the player, or immersive detail. */}
       {showChrome && <SideRail />}
       {/* NOTE: immersive detail renders its OWN back button (DetailView) so it
           also exists when a title is deep-linked as the root frame. */}
