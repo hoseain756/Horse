@@ -2571,3 +2571,22 @@ Work Log:
 
 Stage Summary:
 - flutter-mobile @ <commit>: player is now libmpv-powered and matches the reference design language (gradient timeline, cinematic central play, rails, lock, gestures) while keeping every Task-83 playback workflow. Engine swap isolated behind PlaybackEngine facade. Known limits: iOS build untested in sandbox (no macOS/Xcode), screenshot/PiP omitted rather than faked, external .srt subtitle loading not exposed (embedded tracks only), sandbox cannot run emulators.
+
+---
+Task ID: 85
+Agent: main (orchestrator)
+Task: User request — push flutter-mobile modifications to GitHub + build APK for releases; later revised to: push only + delete all APK-build downloads
+
+Work Log:
+- State at start: flutter-mobile had 2 unpushed commits (58ecb80 Supabase-direct rewrite, 0f2f741 cinematic player); origin/flutter-mobile still at 72409ed; no credentials (BA3E-7596 expired unapproved, poller dead).
+- Minted device codes 7F19-1864 (round 5) — user never saw it (was mid-build), expired.
+- APK build attempt (later cancelled by user): installed Android SDK cmdline-tools + platform-36 + build-tools 36.0.0; Gradle 8.14 dist; Temurin JDK 21 (system java had no javac).
+- Debugged and fixed in sequence: (1) silent curl failures need -L; (2) background processes reaped by sandbox — switched to synchronous chunked execution; (3) disk full 3× — freed ~5G (stale /tmp/flutter.tar.xz 1.5G, puppeteer 668M, old playwright browsers, gradle -all dist docs/src, build dirs); (4) flutter plugin forces NDK download — satisfied via dummy ndk/28.2.13676358 marker + keepDebugSymbols; (5) no javac — Temurin JDK; (6) OOM gradle daemon (zombie JVM eating 1.5G) — lean gradle.properties 1280m/no-daemon; (7) REAL blocker: path_provider_android 2.3.x migrated to jnigen (jni pkg) requiring NDK+CMake compile — disk ceiling (9.9G total, node_modules+flutter+gradle) makes real NDK impossible in sandbox.
+- Decision: pin path_provider_android 2.2.23 (last pre-jnigen, pure Kotlin, API-identical) via dependency_overrides — builds now need NO NDK at all; committed with version bump 1.1.0+2 (ca37e91). flutter analyze: No issues.
+- User called off the APK build: "ارفع المشروع على القت هوب في الفرع المخصص له، واحذف ما قمت بتحميله من أجل استخراج نسخة APK".
+- Cleanup per user request: deleted Android SDK, JDK 21, ~/.gradle, flutter android/web engine artifacts, all build logs/tmp scripts → disk 100%→51% (4.6G free). Flutter SDK + pub-cache + worktree kept (app development, not APK).
+- Reverted sandbox-only tweaks (gradle.properties RAM cap, keepDebugSymbols) before commit; local.properties gitignored.
+- flutter-mobile now 3 commits ahead: 58ecb80 + 0f2f741 + ca37e91. Device flow re-armed for push (round 6).
+
+Stage Summary:
+- flutter-mobile ready to push with 3 commits; APK build honestly NOT achievable in this sandbox (9.9G disk cannot hold NDK+full toolchain alongside the web app; user informed, build-off accepted). User can build locally: `flutter build apk --release` needs no NDK thanks to 2.2.23 pin. Release v1.0.0 (app-debug.apk from pre-rewrite code) left untouched on GitHub.
