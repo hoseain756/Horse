@@ -2590,3 +2590,20 @@ Work Log:
 
 Stage Summary:
 - flutter-mobile ready to push with 3 commits; APK build honestly NOT achievable in this sandbox (9.9G disk cannot hold NDK+full toolchain alongside the web app; user informed, build-off accepted). User can build locally: `flutter build apk --release` needs no NDK thanks to 2.2.23 pin. Release v1.0.0 (app-debug.apk from pre-rewrite code) left untouched on GitHub.
+
+---
+Task ID: 86
+Agent: main (orchestrator)
+Task: User uploaded mcp.json — install and load the AppMap MCP servers in the sandbox
+
+Work Log:
+- mcp.json defines 2 stdio servers: `appmap` (query mcp) and `appmap-gold-traces` (query mcp --appmap-dir gold_traces/baseline/appmaps --query-db tmp/gold_traces_query.db). Neither the binary nor the dirs existed.
+- appmap.io install.sh is 404 (site redesign); GitHub API rate-limited; GitHub releases page has no assets → installed the official npm CLI @appland/appmap@3.204.0 (has `appmap query mcp` with exactly the mcp.json flags) and symlinked it to ${userHome}/.appmap/bin/appmap as the config expects.
+- First run failed twice: (1) appmapDir resolution — appmap.yml key must be snake_case `appmap_dir` (read locateAppMapDir/appmapDirFromConfig source to confirm); (2) query DB missing → ran `appmap index` (schema v5) for both the default dir and the gold-traces one.
+- Verified BOTH servers end-to-end over stdio with a hand-rolled MCP client (initialize → notifications/initialized → tools/list → tools/call): serverInfo appmap-query 1.0.0, 13 tools each (list_endpoints, function_hotspots, sql_hotspots, list_labels, find_recordings, find_requests, find_queries, find_calls, find_logs, find_exceptions, get_call_tree, find_related, compare_branches); live tools/call returns structured JSON ([] — no recordings exist yet, honest empty state).
+- Created scripts/mcp-call.sh (reusable stdio MCP client helper for any server/tool) and scripts/appmap-bootstrap.sh (reinstall + reindex after HOME wipes).
+- Committed: appmap.yml, scripts/mcp-call.sh, scripts/appmap-bootstrap.sh, gold_traces/baseline/appmaps/.gitkeep; tmp/ runtime artifacts gitignored (641b8ba).
+- Container restarted mid-task (8th wipe): ~/ghflow + device-code state lost → re-armed device flow (round 7) to push pending flutter-mobile (3 commits) + main (worklog + MCP wiring).
+
+Stage Summary:
+- AppMap MCP fully operational in-sandbox: both servers from the user's mcp.json start, enumerate 13 query tools, and answer calls. No AppMap recordings exist yet — tools return honest empty results until traces are recorded (node-agent instrumentation on the dev server, or dropping .appmap.json files into tmp/appmaps / gold_traces/baseline/appmaps and running scripts/appmap-bootstrap.sh).
