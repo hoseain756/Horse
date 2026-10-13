@@ -67,3 +67,8 @@ upload/
 # agent-browser QA screenshots
 .ab-*.png
 .flutter-wt/
+
+# AppMap runtime artifacts (query DBs, recorded appmaps)
+tmp/appmaps/
+tmp/gold_traces_query.db
+gold_traces/**/query.db
