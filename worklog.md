@@ -2607,3 +2607,24 @@ Work Log:
 
 Stage Summary:
 - AppMap MCP fully operational in-sandbox: both servers from the user's mcp.json start, enumerate 13 query tools, and answer calls. No AppMap recordings exist yet — tools return honest empty results until traces are recorded (node-agent instrumentation on the dev server, or dropping .appmap.json files into tmp/appmaps / gold_traces/baseline/appmaps and running scripts/appmap-bootstrap.sh).
+
+---
+Task ID: 87
+Agent: main (orchestrator)
+Task: User uploaded 1.env with operator keys never configured before — "استخدمها في الموقع بكفاءة عالية جداً" (wire every key into the site at full efficiency)
+
+Work Log:
+- Read 1.env: POSTGRES_URL + POSTGRES_URL_NON_POOLING (Supabase pooler), TMDB_ACCESS_TOKEN (v4 JWT), TRAKT_CLIENT_ID (PKCE), SIMKL_CLIENT_ID + SIMKL_CLIENT_SECRET (secret NEW — confidential app), OMDB_API_KEY, MDBLIST_API_KEY. Sandbox .env had ONLY a stale SQLite DATABASE_URL (wipe #3 had struck) → Postgres-backed app was running with its DB layer down and every integration dark.
+- Wrote full .env (chmod 600, gitignored; DATABASE_URL kept as harmless legacy) and generated HORSE_TOKEN_SECRET (vault k0 / session signing). Flagged to operator: if Vercel already defines ENCRYPTION_KEY/HORSE_TOKEN_SECRET, production keeps ITS values.
+- Booted dev server; `prisma migrate status` against Supabase = "Database schema is up to date" (4 migrations). /api/health → postgres-pooler, 18 tables, RLS 15, error:null.
+- WIPE-RESILIENCE (the real "efficiency" play): new src/lib/harbor/env-hydrate.ts — memoized per-process hydration of integrations env vars FROM ServerConfig DB rows (env always wins; dotted + bare row names accepted); new src/instrumentation.ts register() hydrates at server boot; hydrateEnv() also awaited at top of integrations/status, ratings, tmdb, cron/maintenance routes (adapters' supports() read env synchronously). ServerConfig rows seeded into Supabase (6 rows: trakt.client_id, simkl.client_id, simkl.client_secret, tmdb.access_token, omdb.api_key, mdblist.api_key) via NEW reusable scripts/seed-server-config.ts (reads .env → upserts; re-runnable after any wipe).
+- MDBList adapter rewritten for the CHANGED v4 API (old GET /imdb/:id now answers "Method GET not allowed"): new GET /imdb/{movie|show}/{imdbId} returns aggregate score_average (0-100) + per-source ratings ("tomatoes", "metacritic", …). Chip now shows the MDBList aggregate %; RT/MC adapters gained the designed-but-unwired MDBList fallback (OMDb first, MDBList second) — Breaking Bad now gets Metacritic 87 from MDBList (OMDb lacks it). ratings-row needsKey labels updated to "OMDB_API_KEY / MDBLIST_API_KEY" for RT/MC.
+- Fixed latent bugs found by a full tsc pass (ignoreBuildErrors:true had hidden them): mail.ts used `db` with NO import (password-reset/verify flows would ReferenceError); horse-account.ts store missing busy init + `get` param (verifyEmail would crash); NavState lacked searchOpen/setSearchOpen read by the (orphaned) SearchOverlay — fields added to store. tsc src/ errors now 0.
+- Agent-browser QA: home hero renders real TMDB logos + backdrops; detail page (Spider-Man: Brand New Day) shows TMDB logo + Marvel emblem, PG-13 cert chip, full 6-provider ratings row (IMDb 8.0/328K · RT 90% · MC 66 · TMDB 8.5 · Trakt 8.6/35K · MDBList 80%); Settings→Integrations lists Trakt+Simkl link cards + TMDB card + ratings provider table; integrations strip correctly ABSENT (allOn → null by design). Console errors: 3× React duplicate-key (tt22084616) → root cause home-view hero pool didn't dedupe (a title in trending AND in-theaters); fixed with type:id heroSeen dedupe mirroring the Top-10 pattern → issues badge GONE. Mobile 390px hero/nav verified; footer pattern intact.
+- dev.log "Error: aborted" entries = agent-browser aborting in-flight streams (benign). Final health + integrations/status re-verified all-green post-commit.
+
+Stage Summary:
+- ALL SIX integrations live for the first time (tmdb/trakt/simkl/omdb/mdblist + trakt ratings): {"tmdb":true,"trakt":true,"simkl":true,"omdb":true,"mdblist":true}. Simkl linking can now COMPLETE token exchange (secret configured at last).
+- Keys survive sandbox .env wipes: env → ServerConfig rows → boot/request-time hydration; scripts/seed-server-config.ts re-seeds in one command.
+- Latent auth-flow crashes fixed (mail/account); React duplicate-key console errors fixed at the hero-pool source. tsc src/ clean; eslint clean (0 errors) on all touched files.
+- REMINDER for operator: keep Vercel's own ENCRYPTION_KEY/HORSE_TOKEN_SECRET if already set; run supabase/mobile-access.sql once for the mobile app if not yet done (flutter-mobile push still pending device-flow approval).
