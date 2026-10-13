@@ -66,3 +66,4 @@ upload/
 
 # agent-browser QA screenshots
 .ab-*.png
+.flutter-wt/
