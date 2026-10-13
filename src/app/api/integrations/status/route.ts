@@ -3,6 +3,7 @@
 // never echoes any secret value. No auth needed: the response leaks nothing
 // beyond "a key exists or not".
 import { NextResponse } from "next/server";
+import { hydrateEnv } from "@/lib/harbor/env-hydrate";
 import { resolveTraktClientId } from "@/lib/harbor/trakt-server";
 import { resolveSimklClientId } from "@/lib/harbor/simkl-server";
 
@@ -14,6 +15,8 @@ function has(...names: string[]): boolean {
 
 export async function GET() {
   // Trakt/Simkl: env var OR the DB-backed ServerConfig row (survives .env resets)
+  // TMDB/OMDb/MDBList: env var OR ServerConfig-hydrated env (same guarantee).
+  await hydrateEnv();
   const [traktId, simklId] = await Promise.all([resolveTraktClientId(), resolveSimklClientId()]);
   return NextResponse.json(
     {

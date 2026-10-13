@@ -114,6 +114,10 @@ type NavState = {
   stack: Frame[];
   backStack: Frame[];
   forwardStack: Frame[];
+  /** Global search overlay visibility (SearchOverlay chrome — palette hands
+   * off its query via the "harbor:prefill-search" event, then opens this). */
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
   push: (f: Frame) => void;
   pop: () => void;
   replace: (f: Frame) => void;
@@ -125,6 +129,8 @@ export const useNav = create<NavState>((set, get) => ({
   stack: [{ kind: "view", view: "home" }],
   backStack: [],
   forwardStack: [],
+  searchOpen: false,
+  setSearchOpen: (open) => set({ searchOpen: open }),
   push: (f) => {
     const { stack, backStack } = get();
     set({

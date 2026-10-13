@@ -4,6 +4,7 @@
 // user key passed via header "x-tmdb-user-key" — set by the validate route flow).
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
+import { hydrateEnv } from "@/lib/harbor/env-hydrate";
 import { parseUserKey, tmdbFetch } from "@/lib/harbor/tmdb-server";
 
 const PATH_RE = /^\/(search|movie|tv|trending|discover|find|genre|person|collection|watch|configuration)(\/[A-Za-z0-9_\-./{}]*)?$/;
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
   if (!rateLimit(`${ip}:tmdb`, 60, 60_000)) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }
+  await hydrateEnv(); // survive .env wipes: env may come from ServerConfig rows
   const path = req.nextUrl.searchParams.get("path") ?? "";
   if (!path.startsWith("/") || !PATH_RE.test(path)) {
     return NextResponse.json({ error: "invalid path" }, { status: 400 });

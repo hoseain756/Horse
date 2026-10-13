@@ -6,6 +6,7 @@
 // Params: type=movie|series, imdb=tt..., title=..., year=..., anime=1
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/harbor/proxy-core";
+import { hydrateEnv } from "@/lib/harbor/env-hydrate";
 import { RATING_ADAPTERS, type RatingContext, type RatingValue } from "@/lib/harbor/ratings/adapters";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!rateLimit(`${ip}:ratings`, 40, 60_000)) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }
+  await hydrateEnv(); // adapter `supports()` checks env synchronously — hydrate first
   const sp = req.nextUrl.searchParams;
   const type = sp.get("type") === "series" ? "series" : "movie";
   const imdb = sp.get("imdb") ?? undefined;

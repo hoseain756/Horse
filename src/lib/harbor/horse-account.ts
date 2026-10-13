@@ -84,9 +84,10 @@ function lang(): "en" | "ar" {
   }
 }
 
-export const useHorseAccount = create<HorseAccountState>((set) => ({
+export const useHorseAccount = create<HorseAccountState>((set, get) => ({
   user: null,
   loaded: false,
+  busy: false,
 
   load: async () => {
     try {

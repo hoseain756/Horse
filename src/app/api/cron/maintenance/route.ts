@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureDb } from "@/lib/ensure-db";
+import { hydrateEnv } from "@/lib/harbor/env-hydrate";
 import { decryptSecret, encryptSecret } from "@/lib/harbor/vault";
 
 export const runtime = "nodejs";
@@ -106,6 +107,7 @@ async function run(): Promise<NextResponse> {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
+    await hydrateEnv(); // token refresh needs TRAKT_CLIENT_ID even after a .env wipe
     return await run();
   } catch (e) {
     console.error("cron maintenance failed", e);

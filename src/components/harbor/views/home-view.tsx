@@ -68,10 +68,20 @@ export function HomeView() {
         fetchCinemetaCatalog("series", "trailer"),
       ]);
       if (!alive) return;
-      // Hero pool: interleave first 3 of first 3 rows (spec: 8 featured items)
+      // Hero pool: interleave first 3 of first 3 rows (spec: 8 featured items),
+      // deduped by type:id — a title can surface in two anchor rows (e.g.
+      // trending + in-theaters) and the hero must never feature it twice
+      // (React keys + the slideshow math assume unique ids).
       const pool: Meta[] = [];
+      const heroSeen = new Set<string>();
       for (const r of results.slice(0, 3)) {
-        if (r.status === "fulfilled") pool.push(...r.value.slice(0, 3));
+        if (r.status !== "fulfilled") continue;
+        for (const m of (r.value as Meta[]).slice(0, 3)) {
+          const k = `${m.type}:${m.id}`;
+          if (heroSeen.has(k)) continue;
+          heroSeen.add(k);
+          pool.push(m);
+        }
       }
       setHeroSlides(pool.slice(0, 8).map((m) => ({ meta: m })));
       setHeroLoading(false);

@@ -21,8 +21,8 @@ export type RatingChip = {
 /** Client-side view of the registry (id, label, chip color, key requirement). */
 export const RATING_PROVIDERS: { id: string; label: string; color: string; needsKey: string }[] = [
   { id: "imdb", label: "IMDb", color: "bg-amber-500/90 text-black", needsKey: "OMDB_API_KEY" },
-  { id: "rotten", label: "Rotten Tomatoes", color: "bg-red-600/90 text-white", needsKey: "OMDB_API_KEY" },
-  { id: "metacritic", label: "Metacritic", color: "bg-emerald-600/90 text-white", needsKey: "OMDB_API_KEY" },
+  { id: "rotten", label: "Rotten Tomatoes", color: "bg-red-600/90 text-white", needsKey: "OMDB_API_KEY / MDBLIST_API_KEY" },
+  { id: "metacritic", label: "Metacritic", color: "bg-emerald-600/90 text-white", needsKey: "OMDB_API_KEY / MDBLIST_API_KEY" },
   { id: "tmdb", label: "TMDB", color: "bg-sky-600/90 text-white", needsKey: "TMDB key" },
   { id: "trakt", label: "Trakt", color: "bg-red-500/90 text-white", needsKey: "TRAKT_CLIENT_ID" },
   { id: "mdblist", label: "MDBList", color: "bg-teal-600/90 text-white", needsKey: "MDBLIST_API_KEY" },

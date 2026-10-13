@@ -7,6 +7,7 @@
 //  - Not set + production      → provider reports unavailable; callers return
 //    honest, non-enumerating errors (the flow cannot work without email).
 import crypto from "crypto";
+import { db } from "@/lib/db";
 
 export type MailMessage = {
   to: string;

@@ -147,19 +147,41 @@ const rtAdapter: RatingAdapter = {
   id: "rotten",
   label: "Rotten Tomatoes",
   color: "bg-red-600/90 text-white",
-  supports: (ctx) => !!process.env.OMDB_API_KEY && /^tt\d+$/.test(ctx.imdbId ?? ""),
+  supports: (ctx) =>
+    (!!process.env.OMDB_API_KEY || !!process.env.MDBLIST_API_KEY) && /^tt\d+$/.test(ctx.imdbId ?? ""),
   fetch: (ctx) =>
     cached("rotten", ctx.imdbId ?? "", async () => {
-      await omdbRaw(ctx.imdbId!); // populates sideRt
-      const pct = parsePercent(sideRt.get(ctx.imdbId!) ?? null);
-      if (pct === null) return null;
-      return {
-        provider: "rotten",
-        score: pct / 10,
-        display: `${pct}%`,
-        originalScale: "%",
-        url: `https://www.rottentomatoes.com/search?search=${encodeURIComponent(ctx.title)}`,
-      };
+      // 1) OMDb (preferred when configured)
+      if (process.env.OMDB_API_KEY?.trim()) {
+        await omdbRaw(ctx.imdbId!); // populates sideRt
+        const pct = parsePercent(sideRt.get(ctx.imdbId!) ?? null);
+        if (pct !== null) {
+          return {
+            provider: "rotten",
+            score: pct / 10,
+            display: `${pct}%`,
+            originalScale: "%",
+            url: `https://www.rottentomatoes.com/search?search=${encodeURIComponent(ctx.title)}`,
+          };
+        }
+      }
+      // 2) MDBList fallback (its per-source "tomatoes" value)
+      if (process.env.MDBLIST_API_KEY?.trim()) {
+        const raw = await mdblistRaw(ctx.kind, ctx.imdbId!);
+        if (raw) {
+          const pct = mdbSideRt.get(ctx.imdbId!) ?? null;
+          if (pct !== null) {
+            return {
+              provider: "rotten",
+              score: pct / 10,
+              display: `${pct}%`,
+              originalScale: "%",
+              url: `https://www.rottentomatoes.com/search?search=${encodeURIComponent(ctx.title)}`,
+            };
+          }
+        }
+      }
+      return null;
     }),
 };
 
@@ -167,23 +189,80 @@ const mcAdapter: RatingAdapter = {
   id: "metacritic",
   label: "Metacritic",
   color: "bg-emerald-600/90 text-white",
-  supports: (ctx) => !!process.env.OMDB_API_KEY && /^tt\d+$/.test(ctx.imdbId ?? ""),
+  supports: (ctx) =>
+    (!!process.env.OMDB_API_KEY || !!process.env.MDBLIST_API_KEY) && /^tt\d+$/.test(ctx.imdbId ?? ""),
   fetch: (ctx) =>
     cached("metacritic", ctx.imdbId ?? "", async () => {
-      await omdbRaw(ctx.imdbId!); // populates sideMc
-      const raw = parseOutOf100(sideMc.get(ctx.imdbId!) ?? null);
-      if (raw === null) return null;
-      return {
-        provider: "metacritic",
-        score: raw / 10,
-        display: String(raw),
-        originalScale: "/100",
-        url: `https://www.metacritic.com/search/${encodeURIComponent(ctx.title)}/`,
-      };
+      // 1) OMDb (preferred when configured)
+      if (process.env.OMDB_API_KEY?.trim()) {
+        await omdbRaw(ctx.imdbId!); // populates sideMc
+        const raw = parseOutOf100(sideMc.get(ctx.imdbId!) ?? null);
+        if (raw !== null) {
+          return {
+            provider: "metacritic",
+            score: raw / 10,
+            display: String(raw),
+            originalScale: "/100",
+            url: `https://www.metacritic.com/search/${encodeURIComponent(ctx.title)}/`,
+          };
+        }
+      }
+      // 2) MDBList fallback (its per-source "metacritic" value, already /100)
+      if (process.env.MDBLIST_API_KEY?.trim()) {
+        const raw = await mdblistRaw(ctx.kind, ctx.imdbId!);
+        if (raw) {
+          const mc = mdbSideMc.get(ctx.imdbId!) ?? null;
+          if (mc !== null) {
+            return {
+              provider: "metacritic",
+              score: mc / 10,
+              display: String(mc),
+              originalScale: "/100",
+              url: `https://www.metacritic.com/search/${encodeURIComponent(ctx.title)}/`,
+            };
+          }
+        }
+      }
+      return null;
     }),
 };
 
-// ---------- MDBList (fallback for RT/MC when OMDb is absent) ----------
+// ---------- MDBList (v4 API: /imdb/{movie|show}/{imdbId}) ----------
+// One upstream call yields the MDBList aggregate score AND per-source values
+// ("tomatoes" = Rotten Tomatoes, "metacritic", …) — used as a redundant
+// RT/Metacritic source when OMDb is absent or silent (designed fallback,
+// now actually wired).
+
+type MdblistResponse = {
+  score?: number;
+  score_average?: number;
+  ratings?: { source: string; value: number | null }[];
+};
+
+const mdbRawCache = new Map<string, { body: MdblistResponse | null; at: number }>();
+const mdbSideRt = new Map<string, number | null>();
+const mdbSideMc = new Map<string, number | null>();
+
+async function mdblistRaw(kind: RatingKind, imdbId: string): Promise<MdblistResponse | null> {
+  const key = process.env.MDBLIST_API_KEY?.trim();
+  if (!key || !/^tt\d+$/.test(imdbId)) return null;
+  const hit = mdbRawCache.get(imdbId);
+  if (hit && Date.now() - hit.at < TTL) return hit.body;
+  // v4 contract: media_type is "movie" or "show" (a series is a "show")
+  const mediaType = kind === "series" ? "show" : "movie";
+  const body = (await getJson(
+    `https://api.mdblist.com/imdb/${mediaType}/${encodeURIComponent(imdbId)}?apikey=${encodeURIComponent(key)}`,
+  )) as MdblistResponse | null;
+  const usable = body && Array.isArray(body.ratings) ? body : null;
+  mdbRawCache.set(imdbId, { body: usable, at: Date.now() });
+  if (usable) {
+    const rt = usable.ratings!.find((r) => r.source === "tomatoes");
+    const mc = usable.ratings!.find((r) => r.source === "metacritic");
+    mdbSideRt.set(imdbId, rt && typeof rt.value === "number" && rt.value > 0 ? rt.value : null);
+    mdbSideMc.set(imdbId, mc && typeof mc.value === "number" && mc.value > 0 ? mc.value : null);
+  }
+  return usable;
+}
 
 const mdbAdapter: RatingAdapter = {
   id: "mdblist",
@@ -192,17 +271,26 @@ const mdbAdapter: RatingAdapter = {
   supports: (ctx) => !!process.env.MDBLIST_API_KEY && /^tt\d+$/.test(ctx.imdbId ?? ""),
   fetch: (ctx) =>
     cached("mdblist", ctx.imdbId ?? "", async () => {
-      const key = process.env.MDBLIST_API_KEY!.trim();
-      const data = (await getJson(`https://api.mdblist.com/imdb/${ctx.imdbId}?apikey=${encodeURIComponent(key)}`)) as {
-        ratings?: { source: string; value: number }[];
-      } | null;
-      if (!data?.ratings) return null;
-      const rt = data.ratings.find((r) => r.source.toLowerCase() === "rottentomatoes");
-      if (rt && rt.value > 0) {
+      const raw = await mdblistRaw(ctx.kind, ctx.imdbId!);
+      if (!raw) return null;
+      // primary: the MDBList aggregate across all sources (0..100)
+      const agg = raw.score_average ?? raw.score;
+      if (agg && agg > 0) {
         return {
           provider: "mdblist",
-          score: rt.value / 10,
-          display: `${rt.value}%`,
+          score: agg / 10,
+          display: `${Math.round(agg)}%`,
+          originalScale: "%",
+          url: `https://mdblist.com/?i=${ctx.imdbId}`,
+        };
+      }
+      // fallback: its Rotten Tomatoes value when no aggregate exists
+      const rt = mdbSideRt.get(ctx.imdbId!) ?? null;
+      if (rt) {
+        return {
+          provider: "mdblist",
+          score: rt / 10,
+          display: `${rt}%`,
           originalScale: "%",
           url: `https://mdblist.com/?i=${ctx.imdbId}`,
         };
