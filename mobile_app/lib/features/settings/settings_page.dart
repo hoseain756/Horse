@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api/horse_api.dart';
+import '../../core/config.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/horse_theme.dart';
 import 'addons_page.dart';
@@ -61,8 +61,8 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.hub_outlined,
                 title: english ? 'Connected services' : 'الخدمات المرتبطة',
                 subtitle: english
-                    ? 'Trakt, Simkl, and Debrid playback'
-                    : 'Trakt وSimkl وتشغيل Debrid',
+                    ? 'Trakt, Simkl, TMDB, and Debrid playback'
+                    : 'Trakt وSimkl وTMDB وتشغيل Debrid',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const IntegrationsPage(),
@@ -73,10 +73,8 @@ class SettingsPage extends StatelessWidget {
               _SectionTitle(
                 title: english ? 'Account and sync' : 'الحساب والمزامنة',
               ),
+              const _SupabasePanel(),
               _AccountPanel(),
-              const SizedBox(height: 22),
-              _SectionTitle(title: english ? 'Server' : 'الخادم'),
-              _ServerPanel(),
               const SizedBox(height: 22),
               _SectionTitle(title: english ? 'App' : 'التطبيق'),
               _SettingsTile(
@@ -117,7 +115,9 @@ class SettingsPage extends StatelessWidget {
               ),
               const SizedBox(height: 26),
               Text(
-                'HORSE  ·  ${HorseApi.defaultServer.replaceFirst('https://', '')}',
+                english
+                    ? 'HORSE  ·  catalogs stream straight from your add-ons'
+                    : 'HORSE  ·  الكتالوجات تُبَث مباشرة من إضافاتك',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.white30,
@@ -127,6 +127,186 @@ class SettingsPage extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Supabase coordinates panel — the app's only cloud backend. Hidden once
+/// configured via dart-define so end users never see plumbing they don't need.
+class _SupabasePanel extends StatefulWidget {
+  const _SupabasePanel();
+
+  @override
+  State<_SupabasePanel> createState() => _SupabasePanelState();
+}
+
+class _SupabasePanelState extends State<_SupabasePanel> {
+  late final TextEditingController _url;
+  late final TextEditingController _anon;
+  bool _busy = false;
+  String? _message;
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final app = context.read<AppState>();
+    _url = TextEditingController(text: app.supabase.baseUrl ?? '');
+    _anon = TextEditingController();
+    _expanded = app.supabase.baseUrl == null &&
+        AppConfig.buildUrl.isEmpty;
+  }
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _anon.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await context.read<AppState>().configureSupabase(
+            _url.text,
+            _anon.text,
+          );
+      if (mounted) {
+        setState(() {
+          _message = context.read<AppState>().english
+              ? 'Supabase connected. Sign in below to sync.'
+              : 'تم الاتصال بـ Supabase. سجّل الدخول بالأسفل للمزامنة.';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _message = error.toString().replaceFirst('FormatException: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final english = app.english;
+    final configured = app.supabase.isConfigured;
+    if (configured && !_expanded) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        decoration: BoxDecoration(
+          color: HorseTheme.surface,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: HorseTheme.line),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_done_outlined,
+                color: HorseTheme.gold, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${english ? 'Supabase' : 'Supabase'} · ${Uri.parse(app.supabase.baseUrl ?? '').host}',
+                style: Theme.of(context).textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              tooltip: english ? 'Edit' : 'تعديل',
+              onPressed: () => setState(() => _expanded = true),
+              icon: const Icon(Icons.edit_outlined,
+                  size: 18, color: HorseTheme.muted),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: HorseTheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: HorseTheme.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            english ? 'Supabase project' : 'مشروع Supabase',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            english
+                ? 'Accounts and library sync run through your own Supabase project. Catalogs and playback never touch any server of ours.'
+                : 'الحسابات ومزامنة المكتبة تعمل عبر مشروع Supabase الخاص بك. الكتالوجات والتشغيل لا تمر عبر أي خادم لنا.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 13),
+          TextField(
+            controller: _url,
+            keyboardType: TextInputType.url,
+            textDirection: TextDirection.ltr,
+            autocorrect: false,
+            decoration: InputDecoration(
+              labelText: english ? 'Project URL' : 'عنوان المشروع',
+              hintText: 'https://xxxx.supabase.co',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _anon,
+            textDirection: TextDirection.ltr,
+            autocorrect: false,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: english ? 'Anon public key' : 'المفتاح العام (anon)',
+              hintText: 'eyJhbGciOi…',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              FilledButton.tonal(
+                onPressed: _busy ? null : _save,
+                child: _busy
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(english ? 'Save' : 'حفظ'),
+              ),
+              if (configured) ...[
+                const SizedBox(width: 10),
+                TextButton(
+                  onPressed: () => setState(() => _expanded = false),
+                  child: Text(english ? 'Close' : 'إغلاق'),
+                ),
+              ],
+            ],
+          ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _message!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: HorseTheme.gold),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -142,10 +322,10 @@ class _AccountPanelState extends State<_AccountPanel> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _name = TextEditingController();
-  bool _stremio = false;
   bool _register = false;
   bool _busy = false;
   String? _message;
+  bool _messageError = false;
 
   @override
   void dispose() {
@@ -162,9 +342,7 @@ class _AccountPanelState extends State<_AccountPanel> {
     });
     final app = context.read<AppState>();
     try {
-      if (_stremio) {
-        await app.loginStremio(_email.text.trim(), _password.text);
-      } else if (_register) {
+      if (_register) {
         await app.registerHorse(
           _email.text.trim(),
           _password.text,
@@ -174,16 +352,17 @@ class _AccountPanelState extends State<_AccountPanel> {
         await app.loginHorse(_email.text.trim(), _password.text);
       }
       if (mounted) {
-        setState(
-          () => _message =
-              app.english ? 'Connected and synced.' : 'تم الاتصال والمزامنة.',
-        );
+        setState(() {
+          _message = app.english ? 'Connected and synced.' : 'تم الاتصال والمزامنة.';
+          _messageError = false;
+        });
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _message = error.toString().replaceFirst('Exception: ', ''),
-        );
+        setState(() {
+          _message = error.toString().replaceFirst(RegExp(r'^\w+Exception:\s*'), '');
+          _messageError = true;
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -194,7 +373,8 @@ class _AccountPanelState extends State<_AccountPanel> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final english = app.english;
-    final currentUser = _stremio ? app.stremioUser : app.horseUser;
+    final currentUser = app.horseUser;
+    final configured = app.supabase.isConfigured;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -205,28 +385,6 @@ class _AccountPanelState extends State<_AccountPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            children: [
-              ChoiceChip(
-                label: Text(english ? 'Horse account' : 'حساب Horse'),
-                selected: !_stremio,
-                onSelected: (_) => setState(() {
-                  _stremio = false;
-                  _message = null;
-                }),
-              ),
-              ChoiceChip(
-                label: const Text('Stremio'),
-                selected: _stremio,
-                onSelected: (_) => setState(() {
-                  _stremio = true;
-                  _message = null;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
           if (currentUser != null) ...[
             Row(
               children: [
@@ -242,43 +400,42 @@ class _AccountPanelState extends State<_AccountPanel> {
                 Expanded(
                   child: Text(
                     (currentUser['displayName'] ??
+                            currentUser['display_name'] ??
                             currentUser['email'] ??
-                            currentUser['fullname'] ??
                             'Connected')
                         .toString(),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
                 TextButton(
-                  onPressed: _stremio ? app.logoutStremio : app.logoutHorse,
+                  onPressed: app.logoutHorse,
                   child: Text(english ? 'Sign out' : 'خروج'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              _stremio
-                  ? (english
-                      ? 'Add-ons sync with your Stremio account.'
-                      : 'تتزامن الإضافات مع حساب Stremio.')
-                  : (english
-                      ? 'Your add-ons and library sync securely with Horse.'
-                      : 'تتزامن إضافاتك ومكتبتك بأمان مع Horse.'),
+              english
+                  ? 'Your add-ons and library sync securely through Supabase.'
+                  : 'تتزامن إضافاتك ومكتبتك بأمان عبر Supabase.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ] else if (!configured) ...[
+            Text(
+              english
+                  ? 'Configure your Supabase project above to enable accounts and cross-device sync. Everything else works offline.'
+                  : 'اضبط مشروع Supabase بالأعلى لتفعيل الحساب والمزامنة بين الأجهزة. كل شيء آخر يعمل دون اتصال.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ] else ...[
             Text(
-              _stremio
-                  ? (english
-                      ? 'Link Stremio to sync its add-on collection.'
-                      : 'اربط Stremio لمزامنة قائمة إضافاته.')
-                  : (english
-                      ? 'Sign in to sync add-ons and your library across devices.'
-                      : 'سجّل الدخول لمزامنة الإضافات ومكتبتك بين الأجهزة.'),
+              english
+                  ? 'Sign in to sync add-ons and your library across devices.'
+                  : 'سجّل الدخول لمزامنة الإضافات ومكتبتك بين الأجهزة.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 13),
-            if (!_stremio && _register) ...[
+            if (_register) ...[
               TextField(
                 controller: _name,
                 textInputAction: TextInputAction.next,
@@ -306,22 +463,21 @@ class _AccountPanelState extends State<_AccountPanel> {
                 labelText: english ? 'Password' : 'كلمة المرور',
               ),
             ),
-            if (!_stremio)
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton(
-                  onPressed: () => setState(() => _register = !_register),
-                  child: Text(
-                    _register
-                        ? (english
-                            ? 'Already have an account? Sign in'
-                            : 'لديك حساب؟ سجّل الدخول')
-                        : (english
-                            ? 'Create a Horse account'
-                            : 'إنشاء حساب Horse'),
-                  ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton(
+                onPressed: () => setState(() => _register = !_register),
+                child: Text(
+                  _register
+                      ? (english
+                          ? 'Already have an account? Sign in'
+                          : 'لديك حساب؟ سجّل الدخول')
+                      : (english
+                          ? 'Create a Horse account'
+                          : 'إنشاء حساب Horse'),
                 ),
               ),
+            ),
             const SizedBox(height: 4),
             SizedBox(
               width: double.infinity,
@@ -334,13 +490,11 @@ class _AccountPanelState extends State<_AccountPanel> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        _stremio
-                            ? (english ? 'Link Stremio' : 'ربط Stremio')
-                            : (_register
-                                ? (english ? 'Create account' : 'إنشاء الحساب')
-                                : (english
-                                    ? 'Sign in to Horse'
-                                    : 'تسجيل الدخول إلى Horse')),
+                        _register
+                            ? (english ? 'Create account' : 'إنشاء الحساب')
+                            : (english
+                                ? 'Sign in to Horse'
+                                : 'تسجيل الدخول إلى Horse'),
                       ),
               ),
             ),
@@ -350,125 +504,13 @@ class _AccountPanelState extends State<_AccountPanel> {
                 child: Text(
                   _message!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: _message!.contains('تم') ||
-                                _message!.contains('Connected')
-                            ? Colors.greenAccent
-                            : HorseTheme.gold,
+                        color: _messageError
+                            ? const Color(0xFFFF8178)
+                            : Colors.greenAccent,
                       ),
                 ),
               ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ServerPanel extends StatefulWidget {
-  const _ServerPanel();
-  @override
-  State<_ServerPanel> createState() => _ServerPanelState();
-}
-
-class _ServerPanelState extends State<_ServerPanel> {
-  late final TextEditingController _controller;
-  bool _busy = false;
-  String? _message;
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(
-      text: context.read<AppState>().api.baseUrl,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() {
-      _busy = true;
-      _message = null;
-    });
-    try {
-      await context.read<AppState>().setServer(_controller.text);
-      if (mounted) {
-        setState(
-          () => _message = context.read<AppState>().english
-              ? 'Server connected.'
-              : 'تم الاتصال بالخادم.',
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () =>
-              _message = error.toString().replaceFirst('FormatException: ', ''),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final english = context.watch<AppState>().english;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: HorseTheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: HorseTheme.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            english ? 'Horse server address' : 'عنوان خادم Horse',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            english
-                ? 'Your catalogs and account data use this server.'
-                : 'يستخدم التطبيق هذا الخادم للكتالوجات وبيانات الحساب.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 13),
-          TextField(
-            controller: _controller,
-            keyboardType: TextInputType.url,
-            textDirection: TextDirection.ltr,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              hintText: 'https://horse-silk.vercel.app',
-            ),
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: FilledButton.tonal(
-              onPressed: _busy ? null : _save,
-              child: _busy
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(english ? 'Save and test' : 'حفظ واختبار'),
-            ),
-          ),
-          if (_message != null)
-            Text(
-              _message!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: HorseTheme.gold),
-            ),
         ],
       ),
     );

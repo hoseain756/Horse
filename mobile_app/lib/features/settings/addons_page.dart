@@ -191,8 +191,18 @@ class _AddonsPageState extends State<AddonsPage> {
                 )
               else
                 for (final addon
-                    in app.addons..sort((a, b) => a.order.compareTo(b.order)))
-                  _AddonRow(addon: addon),
+                    in [...app.addons]..sort((a, b) => a.order.compareTo(b.order)))
+                  _AddonRow(
+                    addon: addon,
+                    isFirst: addon.order ==
+                        app.addons
+                            .map((e) => e.order)
+                            .reduce((a, b) => a < b ? a : b),
+                    isLast: addon.order ==
+                        app.addons
+                            .map((e) => e.order)
+                            .reduce((a, b) => a > b ? a : b),
+                  ),
               const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(14),
@@ -229,8 +239,15 @@ class _AddonsPageState extends State<AddonsPage> {
 }
 
 class _AddonRow extends StatelessWidget {
-  const _AddonRow({required this.addon});
+  const _AddonRow({
+    required this.addon,
+    this.isFirst = false,
+    this.isLast = false,
+  });
   final Addon addon;
+  final bool isFirst;
+  final bool isLast;
+
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
@@ -242,10 +259,11 @@ class _AddonRow extends StatelessWidget {
         )
         .where((value) => value.isNotEmpty)
         .toSet();
+    final version = addon.manifest['version']?.toString();
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: HorseTheme.surface,
+        color: addon.enabled ? HorseTheme.surface : HorseTheme.canvas,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: HorseTheme.line),
       ),
@@ -276,40 +294,56 @@ class _AddonRow extends StatelessWidget {
           addon.name,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: addon.enabled ? null : HorseTheme.muted,
+              ),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 5),
           child: Text(
-            resources.isEmpty
-                ? '${addon.catalogs.length} ${english ? 'catalogs' : 'كتالوج'}'
-                : resources.join(' · '),
+            [
+              resources.isEmpty
+                  ? '${addon.catalogs.length} ${english ? 'catalogs' : 'كتالوج'}'
+                  : resources.join(' · '),
+              if (version != null && version.isNotEmpty) 'v$version',
+            ].join('  ·  '),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        trailing: SizedBox(
-          width: 88,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Switch(
-                value: addon.enabled,
-                activeThumbColor: HorseTheme.gold,
-                onChanged: (value) => app.setAddonEnabled(addon.id, value),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: english ? 'Move up' : 'أعلى',
+              onPressed:
+                  isFirst ? null : () => app.moveAddon(addon.id, -1),
+              icon: const Icon(Icons.arrow_upward_rounded,
+                  size: 17, color: HorseTheme.muted),
+            ),
+            IconButton(
+              tooltip: english ? 'Move down' : 'أسفل',
+              onPressed:
+                  isLast ? null : () => app.moveAddon(addon.id, 1),
+              icon: const Icon(Icons.arrow_downward_rounded,
+                  size: 17, color: HorseTheme.muted),
+            ),
+            Switch(
+              value: addon.enabled,
+              activeThumbColor: HorseTheme.gold,
+              onChanged: (value) => app.setAddonEnabled(addon.id, value),
+            ),
+            IconButton(
+              tooltip: english ? 'Remove' : 'إزالة',
+              onPressed: () => _confirmRemove(context, addon),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: HorseTheme.muted,
+                size: 20,
               ),
-              IconButton(
-                tooltip: english ? 'Remove' : 'إزالة',
-                onPressed: () => _confirmRemove(context, addon),
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: HorseTheme.muted,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

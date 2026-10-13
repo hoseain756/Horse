@@ -1,32 +1,39 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../api/horse_api.dart';
+import '../api/providers_api.dart';
+import '../api/supabase_api.dart';
 import '../data/catalog_repository.dart';
 import '../models/addon.dart';
 import '../models/media_item.dart';
 
+/// Central app state. Offline-first: local storage is the source of truth,
+/// Supabase (when configured + signed in) mirrors the snapshot in the
+/// background. Catalogs and streams always come straight from the add-ons.
 class AppState extends ChangeNotifier {
-  AppState(this.api, this.catalogs);
+  AppState(this.catalogs, this.supabase, this.providers);
 
-  final HorseApi api;
   final CatalogRepository catalogs;
+  final SupabaseApi supabase;
+  final ProvidersApi providers;
+
   SharedPreferences? _preferences;
   bool initialized = false;
   bool syncing = false;
   bool _syncAgain = false;
   bool english = false;
   Map<String, dynamic>? horseUser;
-  Map<String, dynamic>? stremioUser;
   Map<String, Map<String, dynamic>> linkedServices = {};
   Map<String, dynamic>? debridUser;
   List<Addon> addons = [];
   List<MediaItem> watchlist = [];
   List<WatchHistoryEntry> history = [];
   final Map<String, Map<String, dynamic>> _continueWatching = {};
+
+  bool get syncEnabled => supabase.isConfigured && supabase.isSignedIn;
 
   bool contains(MediaItem item) =>
       watchlist.any((entry) => entry.id == item.id);
@@ -44,14 +51,15 @@ class AppState extends ChangeNotifier {
       history.fold<double>(0, (sum, entry) => sum + entry.positionMs) / 3600000;
 
   Future<void> initialize() async {
-    await api.initialize();
+    await providers.initialize();
+    await supabase.initialize();
     _preferences = await SharedPreferences.getInstance();
     english = _preferences!.getBool('horse.mobile.english') ?? false;
     linkedServices = _decodeMap(
       _preferences!.getString('horse.mobile.linked-services'),
     );
     final savedDebridUser = _preferences!.getString('horse.mobile.debrid.user');
-    if (savedDebridUser != null && api.debridService != null) {
+    if (savedDebridUser != null && providers.debridService != null) {
       try {
         debridUser =
             Map<String, dynamic>.from(jsonDecode(savedDebridUser) as Map);
@@ -59,7 +67,7 @@ class AppState extends ChangeNotifier {
         debridUser = null;
       }
     }
-    final device = _deviceId();
+    if (providers.debridUser != null) debridUser = providers.debridUser;
     addons = _decodeList(
       _preferences!.getString('horse.mobile.addons'),
       Addon.fromJson,
@@ -77,83 +85,20 @@ class AppState extends ChangeNotifier {
     );
     initialized = true;
     notifyListeners();
-    if (api.stremioAuthKey != null) {
-      stremioUser = {
-        'email':
-            _preferences!.getString('horse.mobile.stremio.email') ?? 'Stremio',
+
+    if (syncEnabled) {
+      horseUser = {
+        'id': supabase.accountId,
+        'email': supabase.accountEmail,
       };
-    }
-
-    try {
-      final me = await api.horseMe();
-      if (me['authenticated'] == true && me['user'] is Map) {
-        horseUser = Map<String, dynamic>.from(me['user'] as Map);
-      }
-    } catch (_) {
-      // Public browsing stays available if the account endpoint is offline.
-    }
-
-    try {
-      final result = await api.loadSnapshot(device);
-      final snapshot = Map<String, dynamic>.from(
-        result['snapshot'] as Map? ?? const {},
-      );
-      final remoteAddons = (snapshot['addons'] as List? ?? const [])
-          .whereType<Map>()
-          .map((e) => Addon.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      final remoteWatchlist = (snapshot['watchlist'] as List? ?? const [])
-          .whereType<Map>()
-          .map((e) => MediaItem.fromJson(Map<String, dynamic>.from(e)))
-          .where((e) => e.id.isNotEmpty)
-          .toList();
-      final remoteHistory = (snapshot['history'] as List? ?? const [])
-          .whereType<Map>()
-          .map((e) => WatchHistoryEntry.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      if (addons.isEmpty) addons = remoteAddons;
-      if (watchlist.isEmpty) watchlist = remoteWatchlist;
-      if (history.isEmpty) history = remoteHistory;
-      if (_continueWatching.isEmpty && snapshot['cw'] is Map) {
-        _continueWatching.addAll(
-          Map<String, dynamic>.from(snapshot['cw'] as Map).map(
-            (key, value) =>
-                MapEntry(key, Map<String, dynamic>.from(value as Map)),
-          ),
-        );
-      }
-    } catch (_) {
-      // Local data is the offline fallback.
-    }
-
-    if (api.stremioAuthKey != null) {
       try {
-        final remote = await api.loadStremioAddons();
-        final parsed = remote
-            .whereType<Map>()
-            .map((e) => Addon.fromJson(Map<String, dynamic>.from(e)))
-            .where((e) => e.id.isNotEmpty)
-            .toList();
-        if (parsed.isNotEmpty) addons = parsed;
+        await _pullSnapshot(merge: true);
       } catch (_) {
-        // Preserve the last local/server snapshot if Stremio is unavailable.
+        // Local data is the offline fallback.
       }
     }
     await _persist();
     notifyListeners();
-  }
-
-  String _deviceId() {
-    var value = _preferences?.getString('horse.mobile.device');
-    if (value == null || value.length < 8) {
-      const chars =
-          'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      final random = Random.secure();
-      value =
-          'horse_${List.generate(22, (_) => chars[random.nextInt(chars.length)]).join()}';
-      _preferences?.setString('horse.mobile.device', value);
-    }
-    return value;
   }
 
   Future<void> setLanguage(bool useEnglish) async {
@@ -162,64 +107,49 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setServer(String value) async {
-    await api.setServerUrl(value);
-    try {
-      final health = await api.getJson('/api/health');
-      if (health['ok'] != true) {
-        throw const FormatException('تعذر الاتصال بخادم Horse.');
-      }
-      final me = await api.horseMe();
-      horseUser = me['authenticated'] == true && me['user'] is Map
-          ? Map<String, dynamic>.from(me['user'] as Map)
-          : null;
-      await _pullSnapshot(merge: true);
-      notifyListeners();
-    } catch (_) {
-      rethrow;
-    }
-  }
+  // ── Account (Supabase) ──────────────────────────────────────────────────
 
   Future<void> loginHorse(String email, String password) async {
-    final data = await api.loginHorse(email, password);
-    horseUser = Map<String, dynamic>.from(data['user'] as Map? ?? const {});
-    await _pullSnapshot(merge: true);
+    final user = await supabase.signIn(email, password);
+    horseUser = user == null
+        ? null
+        : {
+            'id': supabase.accountId,
+            'email': supabase.accountEmail,
+            ...user,
+          };
+    if (syncEnabled) await _pullSnapshot(merge: true);
     notifyListeners();
   }
 
   Future<void> registerHorse(String email, String password, String name) async {
-    final data = await api.registerHorse(email, password, name);
-    horseUser = Map<String, dynamic>.from(data['user'] as Map? ?? const {});
-    await _pullSnapshot(merge: true);
+    final user = await supabase.signUp(email, password, name);
+    horseUser = user == null
+        ? null
+        : {
+            'id': supabase.accountId,
+            'email': supabase.accountEmail,
+            ...user,
+          };
+    if (syncEnabled) {
+      await _pushSnapshot();
+      await _pullSnapshot(merge: true);
+    }
     notifyListeners();
   }
 
   Future<void> logoutHorse() async {
-    await api.logoutHorse();
+    await supabase.signOut();
     horseUser = null;
     notifyListeners();
   }
 
-  Future<void> loginStremio(String email, String password) async {
-    stremioUser = await api.loginStremio(email, password);
-    await _preferences?.setString('horse.mobile.stremio.email', email.trim());
-    final remote = await api.loadStremioAddons();
-    final parsed = remote
-        .whereType<Map>()
-        .map((e) => Addon.fromJson(Map<String, dynamic>.from(e)))
-        .where((e) => e.id.isNotEmpty)
-        .toList();
-    if (parsed.isNotEmpty) addons = parsed;
-    await _persist();
+  Future<void> configureSupabase(String url, String anonKey) async {
+    await supabase.configure(url, anonKey);
     notifyListeners();
   }
 
-  Future<void> logoutStremio() async {
-    await api.logoutStremio();
-    await _preferences?.remove('horse.mobile.stremio.email');
-    stremioUser = null;
-    notifyListeners();
-  }
+  // ── Linked services (direct provider flows) ────────────────────────────
 
   Future<void> saveLinkedService(
     String service,
@@ -237,13 +167,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> unlinkService(String service) async {
-    final account = linkedServices[service];
-    if (account != null) {
-      try {
-        await api.unlinkService(service, account['linkId'].toString());
-      } catch (_) {
-        // Clear the local link even if the server has already removed it.
+    try {
+      if (service == 'trakt') {
+        await providers.traktUnlink();
+      } else if (service == 'simkl') {
+        await providers.simklUnlink();
       }
+    } catch (_) {
+      // Local unlink must always succeed.
     }
     linkedServices = {...linkedServices}..remove(service);
     await _preferences?.setString(
@@ -254,15 +185,18 @@ class AppState extends ChangeNotifier {
   }
 
   Future<(int, int)> syncLinkedService(String service) async {
-    final account = linkedServices[service];
-    if (account == null) return (0, 0);
-    final (watchlistItems, historyItems) = await api.syncLinkedService(
-      service,
-      account['linkId'].toString(),
-    );
+    final List<Map<String, dynamic>> watchlistItems;
+    final List<Map<String, dynamic>> historyItems;
+    if (service == 'trakt') {
+      watchlistItems = await providers.traktWatchlist();
+      historyItems = await providers.traktHistory();
+    } else if (service == 'simkl') {
+      watchlistItems = await providers.simklWatchlist();
+      historyItems = await providers.simklHistory();
+    } else {
+      return (0, 0);
+    }
     final importedWatchlist = watchlistItems
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
         .map(
           (entry) => MediaItem.fromJson({
             'id': entry['id'],
@@ -274,8 +208,6 @@ class AppState extends ChangeNotifier {
         .where((item) => item.id.isNotEmpty)
         .toList();
     final importedHistory = historyItems
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
         .map((entry) {
           final item = MediaItem.fromJson({
             'id': entry['id'],
@@ -284,7 +216,9 @@ class AppState extends ChangeNotifier {
           });
           return WatchHistoryEntry(
             item: item,
-            watchedAt: (entry['watchedAt'] as num?)?.toInt() ?? 0,
+            watchedAt: (entry['watchedAt'] as num?)?.toInt() ??
+                (entry['t'] as num?)?.toInt() ??
+                DateTime.now().millisecondsSinceEpoch,
             videoId: entry['videoId'] as String?,
             season: (entry['season'] as num?)?.toInt(),
             episode: (entry['episode'] as num?)?.toInt(),
@@ -307,8 +241,11 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  // ── Debrid (direct) ─────────────────────────────────────────────────────
+
   Future<void> configureDebrid(String service, String apiKey) async {
-    debridUser = await api.saveDebridKey(service, apiKey.trim());
+    await providers.saveDebridKey(service, apiKey.trim());
+    debridUser = providers.debridUser;
     await _preferences?.setString(
       'horse.mobile.debrid.user',
       _encode(debridUser),
@@ -317,11 +254,43 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> disconnectDebrid() async {
-    await api.clearDebridKey();
+    await providers.clearDebridKey();
     debridUser = null;
     await _preferences?.remove('horse.mobile.debrid.user');
     notifyListeners();
   }
+
+  Future<void> scrobble({
+    required String action,
+    required double progress,
+    required String imdbId,
+    required String type,
+    int? season,
+    int? episode,
+  }) async {
+    if (!RegExp(r'^tt\d+$').hasMatch(imdbId)) return;
+    unawaited(
+      providers.traktScrobble(
+        action: action,
+        progress: progress,
+        imdbId: imdbId,
+        type: type,
+        season: season,
+        episode: episode,
+      ),
+    );
+    unawaited(
+      providers.simklScrobble(
+        progress: progress,
+        imdbId: imdbId,
+        type: type,
+        season: season,
+        episode: episode,
+      ),
+    );
+  }
+
+  // ── Add-ons ─────────────────────────────────────────────────────────────
 
   Future<void> installAddon(String url) async {
     final manifest = await catalogs.manifest(url);
@@ -353,6 +322,22 @@ class AppState extends ChangeNotifier {
         .toList();
     await _saveAddons();
   }
+
+  Future<void> moveAddon(String id, int delta) async {
+    final index = addons.indexWhere((addon) => addon.id == id);
+    final target = index + delta;
+    if (index < 0 || target < 0 || target >= addons.length) return;
+    final reordered = [...addons];
+    final item = reordered.removeAt(index);
+    reordered.insert(target, item);
+    addons = [
+      for (var i = 0; i < reordered.length; i++)
+        reordered[i].copyWith(order: i),
+    ];
+    await _saveAddons();
+  }
+
+  // ── Watchlist / history ─────────────────────────────────────────────────
 
   Future<void> toggleWatchlist(MediaItem item) async {
     watchlist = contains(item)
@@ -408,13 +393,10 @@ class AppState extends ChangeNotifier {
     await _persistAndSync();
   }
 
+  // ── Persistence + Supabase mirror ───────────────────────────────────────
+
   Future<void> _saveAddons() async {
     await _persist();
-    if (api.stremioAuthKey != null) {
-      await api.saveStremioAddons(
-        addons.map((addon) => addon.toJson()).toList(),
-      );
-    }
     await _pushSnapshot();
     notifyListeners();
   }
@@ -445,6 +427,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _pushSnapshot() async {
+    if (!syncEnabled) return;
     if (syncing) {
       _syncAgain = true;
       return;
@@ -471,7 +454,7 @@ class AppState extends ChangeNotifier {
           'lists': <dynamic>[],
           'updatedAt': DateTime.now().toUtc().toIso8601String(),
         };
-        await api.saveSnapshot(_deviceId(), snapshot);
+        await supabase.pushSnapshot(snapshot);
       } while (_syncAgain);
     } catch (_) {
       // The local copy remains current and the next change retries the sync.
@@ -481,10 +464,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _pullSnapshot({required bool merge}) async {
-    final result = await api.loadSnapshot(_deviceId());
-    final snapshot = Map<String, dynamic>.from(
-      result['snapshot'] as Map? ?? const {},
-    );
+    final snapshot = await supabase.pullSnapshot();
+    if (snapshot == null) return;
     final remoteAddons = (snapshot['addons'] as List? ?? const [])
         .whereType<Map>()
         .map((e) => Addon.fromJson(Map<String, dynamic>.from(e)))
@@ -550,10 +531,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  dynamic _decode(String raw) {
-    // SharedPreferences JSON is decoded here to keep serialization in one place.
-    return jsonDecode(raw);
-  }
+  dynamic _decode(String raw) => jsonDecode(raw);
 
   String _encode(Object? value) => jsonEncode(value);
 

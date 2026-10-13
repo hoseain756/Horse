@@ -1,14 +1,33 @@
 import 'dart:async';
 
-import '../api/horse_api.dart';
+import 'package:dio/dio.dart';
+
 import '../models/addon.dart';
 import '../models/media_item.dart';
 
+/// Stremio add-on protocol access — always direct to the add-on's own host.
+/// The app has no middleman server; add-on endpoints are public HTTP+JSON.
 class CatalogRepository {
-  CatalogRepository(this.api);
+  CatalogRepository();
 
-  final HorseApi api;
   static const _cinemeta = 'https://v3-cinemeta.strem.io';
+
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      responseType: ResponseType.json,
+      validateStatus: (code) => code != null && code < 500,
+    ),
+  );
+
+  Future<Map<String, dynamic>> _getJson(String url) async {
+    final response = await _dio.get<dynamic>(url);
+    if (response.data is Map) {
+      return Map<String, dynamic>.from(response.data as Map);
+    }
+    throw const FormatException('استجابة غير صالحة من الإضافة.');
+  }
 
   Future<List<MediaItem>> catalog(
     String type,
@@ -18,7 +37,7 @@ class CatalogRepository {
   }) async {
     final base = addon?.baseUrl ?? _cinemeta;
     final url = _resourceUrl(base, 'catalog', type, id, extras);
-    final data = await api.proxyGet(url);
+    final data = await _getJson(url);
     final rows = (data['metas'] as List? ?? const [])
         .whereType<Map>()
         .map((e) => MediaItem.fromJson(Map<String, dynamic>.from(e)))
@@ -33,7 +52,7 @@ class CatalogRepository {
     )) {
       try {
         final url = _resourceUrl(addon.baseUrl, 'meta', type, id, const {});
-        final data = await api.proxyGet(url);
+        final data = await _getJson(url);
         final value = data['meta'];
         if (value is Map) {
           return MediaItem.fromJson(Map<String, dynamic>.from(value));
@@ -43,7 +62,7 @@ class CatalogRepository {
       }
     }
     try {
-      final data = await api.proxyGet(
+      final data = await _getJson(
         _resourceUrl(_cinemeta, 'meta', type, id, const {}),
       );
       final value = data['meta'];
@@ -142,7 +161,7 @@ class CatalogRepository {
     final results = await Future.wait(
       supported.map((addon) async {
         try {
-          final data = await api.proxyGet(
+          final data = await _getJson(
             _resourceUrl(addon.baseUrl, 'stream', type, id, const {}),
           );
           return (data['streams'] as List? ?? const [])
@@ -177,7 +196,7 @@ class CatalogRepository {
         .replaceFirst(RegExp(r'/configure/?$'), '')
         .replaceFirst(RegExp(r'/+$'), '');
     if (!url.endsWith('manifest.json')) url = '$url/manifest.json';
-    final data = await api.proxyGet(url);
+    final data = await _getJson(url);
     if (data['id'] is! String || data['name'] is! String) {
       throw const FormatException('رابط الإضافة لا يحتوي على manifest صالح.');
     }

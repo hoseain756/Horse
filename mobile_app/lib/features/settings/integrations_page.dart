@@ -33,8 +33,8 @@ class IntegrationsPage extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 english
-                    ? 'Trakt and Simkl sync through your Horse account. Debrid keys stay in secure device storage and are sent only when resolving a stream.'
-                    : 'تتصل Trakt وSimkl بحساب Horse. تُحفظ مفاتيح Debrid في التخزين الآمن للجهاز ولا تُرسل إلا عند تجهيز رابط التشغيل.',
+                    ? 'Trakt, Simkl, and TMDB connect directly from this device with your own application credentials — no middleman server. Debrid keys stay in secure device storage and are sent only to the provider itself when resolving a stream.'
+                    : 'تتصل Trakt وSimkl وTMDB مباشرة من هذا الجهاز عبر بيانات تطبيقك الخاص — بلا أي خادم وسيط. تُحفظ مفاتيح Debrid في التخزين الآمن ولا تُرسل إلا لمزوّدها عند تجهيز رابط التشغيل.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: HorseTheme.muted,
                     ),
@@ -57,6 +57,8 @@ class IntegrationsPage extends StatelessWidget {
                     : 'استيراد قائمتك وسجل المشاهدة ومزامنة تقدم التشغيل.',
                 icon: Icons.sync_rounded,
               ),
+              const SizedBox(height: 12),
+              const _TmdbCard(),
               const SizedBox(height: 12),
               const _DebridCard(),
             ],
@@ -91,22 +93,67 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
   bool _syncing = false;
   String? _message;
   bool _error = false;
+  bool _showCredentials = false;
+  final _clientId = TextEditingController();
+  final _clientSecret = TextEditingController();
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _clientId.dispose();
+    _clientSecret.dispose();
     super.dispose();
+  }
+
+  bool get _isTrakt => widget.service == 'trakt';
+
+  Future<void> _saveCredentials() async {
+    final app = context.read<AppState>();
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      if (_isTrakt) {
+        await app.providers.saveTraktCredentials(
+          _clientId.text,
+          _clientSecret.text,
+        );
+      } else {
+        await app.providers.saveSimklCredentials(
+          _clientId.text,
+          _clientSecret.text,
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _showCredentials = false;
+          _message = app.english
+              ? 'Credentials saved on this device.'
+              : 'حُفظت بيانات التطبيق على هذا الجهاز.';
+        });
+      }
+    } catch (error) {
+      _setMessage(_friendlyError(error), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _start() async {
     final app = context.read<AppState>();
-    if (app.horseUser == null) {
-      _setMessage(
-        app.english
-            ? 'Sign in to your Horse account first.'
-            : 'سجّل الدخول إلى حساب Horse أولًا.',
-        error: true,
-      );
+    final providers = app.providers;
+    final hasCredentials = _isTrakt
+        ? providers.traktClientId != null
+        : providers.simklClientId != null;
+    if (!hasCredentials) {
+      setState(() {
+        _showCredentials = true;
+        _message = app.english
+            ? 'Enter your application credentials first.'
+            : 'أدخل بيانات تطبيقك أولًا.';
+        _error = false;
+      });
       return;
     }
     _pollTimer?.cancel();
@@ -116,24 +163,36 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
       _message = null;
     });
     try {
-      final result = await app.api.startLinkedService(widget.service);
-      final pollId = result['pollId']?.toString() ?? '';
-      final code = result['userCode']?.toString() ?? '';
-      final verificationUrl = result['verificationUrl']?.toString() ?? '';
-      if (pollId.isEmpty || code.isEmpty || verificationUrl.isEmpty) {
+      final result = _isTrakt
+          ? await providers.traktStartDeviceLink()
+          : await providers.simklStartPinLink();
+      final deviceCode = result['device_code']?.toString() ?? '';
+      final code = result['user_code']?.toString() ?? '';
+      final verificationUrl =
+          (result['verification_url_full'] ?? result['verification_url'])
+                  ?.toString() ??
+              (_isTrakt ? 'https://trakt.tv/activate' : 'https://simkl.com/apps/enter/');
+      if (deviceCode.isEmpty || code.isEmpty) {
         throw const FormatException('تعذر إنشاء رمز الربط.');
       }
       if (!mounted) return;
       setState(() {
         _flow = {
-          'pollId': pollId,
-          'userCode': code,
-          'verificationUrl': verificationUrl,
-          'intervalSec': (result['intervalSec'] as num?)?.toInt() ?? 5,
-          'expiresAt': (result['expiresAt'] as num?)?.toInt() ??
-              DateTime.now()
-                  .add(const Duration(minutes: 10))
-                  .millisecondsSinceEpoch,
+          'device_code': deviceCode,
+          'user_code': code,
+          'verification_url': verificationUrl,
+          'intervalSec':
+              (result['interval'] as num?)?.toInt() ??
+                  (result['intervalSec'] as num?)?.toInt() ??
+                  5,
+          'expiresAt': DateTime.now()
+              .add(
+                Duration(
+                  seconds:
+                      (result['expires_in'] as num?)?.toInt() ?? 600,
+                ),
+              )
+              .millisecondsSinceEpoch,
           'status': 'waiting',
         };
       });
@@ -159,49 +218,58 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
   Future<void> _poll() async {
     final flow = _flow;
     if (flow == null || flow['status'] != 'waiting') return;
-    final pollId = flow['pollId']?.toString() ?? '';
+    final app = context.read<AppState>();
     try {
-      final result = await context.read<AppState>().api.pollLinkedService(
-            widget.service,
-            pollId,
-          );
+      final (status, account) = _isTrakt
+          ? await app.providers.traktPollDeviceLink(flow)
+          : await app.providers.simklPollPinLink(flow);
       if (!mounted) return;
-      final status = result['status']?.toString();
-      if (status == 'authorized' && result['linkId'] is String) {
-        await context.read<AppState>().saveLinkedService(widget.service, {
-          'linkId': result['linkId'],
-          'username': result['username'],
-          'avatar': result['avatar'],
-          'linkedAt': DateTime.now().millisecondsSinceEpoch,
-        });
-        if (!mounted) return;
-        setState(() {
-          _flow = null;
-          _error = false;
-          _message = context.read<AppState>().english
-              ? 'Account connected.'
-              : 'تم ربط الحساب.';
-        });
-        return;
-      }
-      if (status == 'pending') {
-        final retryMs = (result['retryInMs'] as num?)?.toInt() ??
-            ((_flow?['intervalSec'] as int? ?? 5) * 1000);
-        _schedulePoll(Duration(milliseconds: retryMs.clamp(3000, 30000)));
-        return;
-      }
-      setState(() {
-        _flow = {...flow, 'status': status ?? 'failed'};
-        _message = result['error']?.toString() ??
-            (status == 'expired'
-                ? (context.read<AppState>().english
+      switch (status) {
+        case 'authorized':
+          await app.saveLinkedService(widget.service, {
+            ...?account,
+            'linkedAt': DateTime.now().millisecondsSinceEpoch,
+          });
+          setState(() {
+            _flow = null;
+            _error = false;
+            _message = app.english ? 'Account connected.' : 'تم ربط الحساب.';
+          });
+          return;
+        case 'pending':
+          _schedulePoll(
+            Duration(
+              seconds: (flow['intervalSec'] as int? ?? 5).clamp(3, 30),
+            ),
+          );
+          return;
+        case 'slow_down':
+          setState(
+            () => _flow = {
+              ...flow,
+              'intervalSec':
+                  ((flow['intervalSec'] as int? ?? 5) + 5).clamp(5, 30),
+            },
+          );
+          _schedulePoll(
+            Duration(
+              seconds: (_flow!['intervalSec'] as int).clamp(5, 30),
+            ),
+          );
+          return;
+        default:
+          setState(() {
+            _flow = {...flow, 'status': status};
+            _message = app.english
+                ? (status == 'expired'
                     ? 'The code expired.'
-                    : 'انتهت صلاحية الرمز.')
-                : (context.read<AppState>().english
-                    ? 'The link was not approved.'
-                    : 'لم تتم الموافقة على الربط.'));
-        _error = true;
-      });
+                    : 'The link was not approved.')
+                : (status == 'expired'
+                    ? 'انتهت صلاحية الرمز.'
+                    : 'لم تتم الموافقة على الربط.');
+            _error = true;
+          });
+      }
     } catch (_) {
       // Keep the device flow alive through brief mobile-network interruptions.
       if (mounted) _schedulePoll(const Duration(seconds: 8));
@@ -261,6 +329,9 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
     final english = app.english;
     final linked = app.linkedServices[widget.service];
     final waiting = _flow?['status'] == 'waiting';
+    final hasCredentials = _isTrakt
+        ? app.providers.traktClientId != null
+        : app.providers.simklClientId != null;
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
@@ -292,7 +363,49 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
             ],
           ),
           const SizedBox(height: 14),
-          if (linked != null) ...[
+          if (_showCredentials) ...[
+            TextField(
+              controller: _clientId,
+              autocorrect: false,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: english ? 'Client ID' : 'Client ID',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _clientSecret,
+              autocorrect: false,
+              obscureText: true,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText:
+                    '${english ? 'Client secret' : 'Client Secret'} (${english ? 'optional for Trakt' : 'اختياري لـ Trakt'})',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              english
+                  ? 'Create a free developer application on ${_isTrakt ? 'trakt.tv/oauth/applications' : 'simkl.com/settings/developer'} — redirect URI can be any https address. Keys are stored only on this device.'
+                  : 'أنشئ تطبيق مطوّر مجاني على ${_isTrakt ? 'trakt.tv/oauth/applications' : 'simkl.com/settings/developer'} — يمكن أن يكون عنوان الردود أي رابط https. تُحفظ المفاتيح على هذا الجهاز فقط.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.tonal(
+                  onPressed: _busy ? null : _saveCredentials,
+                  child: Text(english ? 'Save credentials' : 'حفظ البيانات'),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _showCredentials = false),
+                  child: Text(english ? 'Cancel' : 'إلغاء'),
+                ),
+              ],
+            ),
+          ] else if (linked != null) ...[
             Text(
               '${english ? 'Connected as' : 'متصل باسم'}  ${linked['username'] ?? widget.title}',
               style: Theme.of(context).textTheme.bodyMedium,
@@ -328,7 +441,7 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
             ),
             const SizedBox(height: 8),
             SelectableText(
-              _flow?['userCode']?.toString() ?? '',
+              _flow?['user_code']?.toString() ?? '',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: HorseTheme.gold,
@@ -344,7 +457,9 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
                 FilledButton.tonalIcon(
                   onPressed: () async {
                     await Clipboard.setData(
-                      ClipboardData(text: _flow?['userCode']?.toString() ?? ''),
+                      ClipboardData(
+                        text: _flow?['user_code']?.toString() ?? '',
+                      ),
                     );
                     if (mounted) {
                       _setMessage(
@@ -357,7 +472,7 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
                 ),
                 OutlinedButton.icon(
                   onPressed: () => launchUrl(
-                    Uri.parse(_flow?['verificationUrl'].toString() ?? ''),
+                    Uri.parse(_flow?['verification_url'].toString() ?? ''),
                     mode: LaunchMode.externalApplication,
                   ),
                   icon: const Icon(Icons.open_in_new_rounded),
@@ -378,26 +493,42 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
                   ),
             ),
           ] else ...[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _busy || app.horseUser == null ? null : _start,
-                icon: _busy
-                    ? const SizedBox.square(
-                        dimension: 17,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.link_rounded),
-                label: Text(
-                  app.horseUser == null
-                      ? (english
-                          ? 'Sign in to Horse first'
-                          : 'سجّل الدخول إلى Horse أولًا')
-                      : (english
-                          ? 'Connect ${widget.title}'
-                          : 'ربط ${widget.title}'),
-                ),
+            if (!hasCredentials)
+              Text(
+                english
+                    ? 'This device needs your own ${widget.title} developer credentials — nothing is proxied.'
+                    : 'يحتاج هذا الجهاز بيانات تطبيق ${widget.title} الخاصة بك — بلا أي وسيط.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _busy ? null : _start,
+                  icon: _busy
+                      ? const SizedBox.square(
+                          dimension: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.link_rounded),
+                  label: Text(
+                    hasCredentials
+                        ? (english
+                            ? 'Connect ${widget.title}'
+                            : 'ربط ${widget.title}')
+                        : (english
+                            ? 'Add ${widget.title} credentials'
+                            : 'إضافة بيانات ${widget.title}'),
+                  ),
+                ),
+                if (!hasCredentials)
+                  OutlinedButton(
+                    onPressed: () => setState(() => _showCredentials = true),
+                    child: Text(english ? 'Enter manually' : 'إدخال يدوي'),
+                  ),
+              ],
             ),
             if (_flow?['status'] != null)
               TextButton.icon(
@@ -405,6 +536,168 @@ class _LinkedServiceCardState extends State<_LinkedServiceCard> {
                 icon: const Icon(Icons.refresh_rounded),
                 label: Text(english ? 'Generate a new code' : 'إنشاء رمز جديد'),
               ),
+          ],
+          if (_message != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _message!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: _error ? const Color(0xFFFF8178) : HorseTheme.gold,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TmdbCard extends StatefulWidget {
+  const _TmdbCard();
+
+  @override
+  State<_TmdbCard> createState() => _TmdbCardState();
+}
+
+class _TmdbCardState extends State<_TmdbCard> {
+  final _key = TextEditingController();
+  bool _busy = false;
+  String? _message;
+  bool _error = false;
+
+  @override
+  void dispose() {
+    _key.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_key.text.trim().isEmpty) return;
+    final app = context.read<AppState>();
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await app.providers.saveTmdbKey(_key.text);
+      _key.clear();
+      if (mounted) {
+        setState(() {
+          _message = app.english
+              ? 'TMDB key verified — logos and artwork enabled.'
+              : 'تم التحقق من مفتاح TMDB — فُعّلت الشعارات والصور.';
+          _error = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _message = _friendlyError(error);
+          _error = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove() async {
+    await context.read<AppState>().providers.clearTmdbKey();
+    if (mounted) {
+      setState(() {
+        _message = context.read<AppState>().english
+            ? 'TMDB key removed.'
+            : 'تمت إزالة مفتاح TMDB.';
+        _error = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final english = app.english;
+    final connected = app.providers.tmdbKey != null;
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: HorseTheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: HorseTheme.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _ServiceIcon(icon: Icons.movie_filter_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TMDB', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 3),
+                    Text(
+                      english
+                          ? 'Official title logos, backdrops, and episode art.'
+                          : 'شعارات العناوين الرسمية وخلفياتها وصور الحلقات.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (connected)
+                const Icon(Icons.check_circle_rounded, color: HorseTheme.gold),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (connected) ...[
+            Text(
+              english
+                  ? 'A v3 key or v4 read-access token is active on this device.'
+                  : 'مفتاح v3 أو توكن v4 مفعّل على هذا الجهاز.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: _remove,
+                icon: const Icon(Icons.link_off_rounded),
+                label: Text(english ? 'Remove key' : 'إزالة المفتاح'),
+              ),
+            ),
+          ] else ...[
+            TextField(
+              controller: _key,
+              autocorrect: false,
+              obscureText: true,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: english ? 'API key / v4 token' : 'مفتاح API / توكن v4',
+                hintText: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              english
+                  ? 'Free key from themoviedb.org → Settings → API. Stored only on this device and sent only to TMDB.'
+                  : 'مفتاح مجاني من themoviedb.org ← الإعدادات ← API. يُحفظ على هذا الجهاز فقط ويُرسل لـ TMDB فقط.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: _busy ? null : _save,
+                icon: _busy
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.verified_user_outlined),
+                label: Text(english ? 'Verify and save' : 'التحقق والحفظ'),
+              ),
+            ),
           ],
           if (_message != null) ...[
             const SizedBox(height: 8),
@@ -438,7 +731,7 @@ class _DebridCardState extends State<_DebridCard> {
   @override
   void initState() {
     super.initState();
-    _service = context.read<AppState>().api.debridService ?? _service;
+    _service = context.read<AppState>().providers.debridService ?? _service;
   }
 
   @override
@@ -493,8 +786,8 @@ class _DebridCardState extends State<_DebridCard> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final english = app.english;
-    final service = app.api.debridService;
-    final connected = service != null && app.api.debridApiKey != null;
+    final service = app.providers.debridService;
+    final connected = service != null && app.providers.debridApiKey != null;
     final user = app.debridUser;
     return Container(
       padding: const EdgeInsets.all(17),
@@ -519,8 +812,8 @@ class _DebridCardState extends State<_DebridCard> {
                     const SizedBox(height: 3),
                     Text(
                       english
-                          ? 'Unlock cached torrent streams.'
-                          : 'تشغيل التورنتات المتاحة عبر خدمة Debrid.',
+                          ? 'Unlock cached torrent streams — resolved directly on this device.'
+                          : 'تشغيل التورنتات المتاحة عبر خدمة Debrid — يُجهَّز الرابط على هذا الجهاز مباشرة.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -536,11 +829,11 @@ class _DebridCardState extends State<_DebridCard> {
               '${_serviceName(service)}${user?['username'] == null ? '' : ' · ${user!['username']}'}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            if (user?['premium'] != null)
+            if (user?['planName'] != null)
               Padding(
                 padding: const EdgeInsets.only(top: 3),
                 child: Text(
-                  '${english ? 'Plan' : 'الخطة'}: ${user!['premium']}',
+                  '${english ? 'Plan' : 'الخطة'}: ${user!['planName']}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

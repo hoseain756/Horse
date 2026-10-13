@@ -300,103 +300,268 @@ class _FeaturedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final width = MediaQuery.sizeOf(context).width;
+    final english = Localizations.localeOf(context).languageCode != 'ar';
+    final wide = width >= 600;
+    if (!wide) {
+      // Phone: contained 16:11 art card with a rounded bottom edge.
+      final cardWidth = width - 32;
+      final height = cardWidth * 11 / 16 + 72;
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(28),
+          ),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: HorseTheme.raised,
+              border: Border.all(color: HorseTheme.line),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black54,
+                  blurRadius: 60,
+                  offset: Offset(0, 28),
+                  spreadRadius: -30,
+                ),
+              ],
+            ),
+            child: _HeroContent(
+              item: item,
+              english: english,
+              wide: false,
+              onTap: onTap,
+            ),
+          ),
+        ),
+      );
+    }
+    // Tablet: full-bleed band melting into the page background.
+    final height =
+        (width * .52).clamp(360.0, MediaQuery.sizeOf(context).height * .62);
     return SizedBox(
-      height: wide ? 330 : 260,
-      width: double.infinity,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if ((item.background ?? item.poster) != null)
-              Image.network(
-                item.background ?? item.poster!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const ColoredBox(color: HorseTheme.raised),
-              )
-            else
-              const ColoredBox(color: HorseTheme.raised),
-            const DecoratedBox(
+      height: height,
+      child: _HeroContent(item: item, english: english, wide: true, onTap: onTap),
+    );
+  }
+}
+
+class _HeroContent extends StatelessWidget {
+  const _HeroContent({
+    required this.item,
+    required this.english,
+    required this.wide,
+    required this.onTap,
+  });
+
+  final MediaItem item;
+  final bool english;
+  final bool wide;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = item.background ?? item.poster;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (image != null)
+          Image.network(
+            image,
+            fit: BoxFit.cover,
+            alignment: const Alignment(0, .3),
+            errorBuilder: (_, __, ___) => const ColoredBox(
+              color: HorseTheme.raised,
+              child: Icon(Icons.movie_outlined,
+                  size: 44, color: HorseTheme.gold),
+            ),
+          )
+        else
+          const ColoredBox(
+            color: HorseTheme.raised,
+            child: Icon(Icons.movie_outlined, size: 44, color: HorseTheme.gold),
+          ),
+        // Top scrim for legibility.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 110,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: .32),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (!wide)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: MediaQuery.sizeOf(context).width * .58,
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.centerRight,
-                  end: Alignment.centerLeft,
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
                   colors: [
-                    Color(0xEF080A0B),
-                    Color(0xB8080A0B),
-                    Color(0x18080A0B),
+                    Colors.black.withValues(alpha: .93),
+                    Colors.black.withValues(alpha: .48),
+                    Colors.transparent,
                   ],
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(wide ? 30 : 22),
-              child: Align(
-                alignment: AlignmentDirectional.bottomStart,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: HorseTheme.gold.withValues(alpha: .16),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Text(
-                          'HORSE  ·  ${item.type.toUpperCase()}',
-                          style: const TextStyle(
-                            color: HorseTheme.gold,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 11),
-                      Text(
-                        item.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      if (item.description != null) ...[
-                        const SizedBox(height: 7),
-                        Text(
-                          item.description!,
-                          maxLines: wide ? 2 : 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: Colors.white70),
-                        ),
-                      ],
-                      const SizedBox(height: 15),
-                      FilledButton.icon(
-                        onPressed: onTap,
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: Text(
-                          Localizations.localeOf(context).languageCode == 'ar'
-                              ? 'التفاصيل والتشغيل'
-                              : 'Details & play',
-                        ),
-                      ),
-                    ],
-                  ),
+          )
+        else ...[
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: [
+                    HorseTheme.canvas.withValues(alpha: .9),
+                    HorseTheme.canvas.withValues(alpha: .4),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: MediaQuery.sizeOf(context).height * .45,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    HorseTheme.canvas,
+                    HorseTheme.canvas.withValues(alpha: .55),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        // Content block.
+        Positioned(
+          left: wide ? 34 : 20,
+          right: wide ? 34 : 20,
+          bottom: wide ? 30 : 18,
+          child: wide
+              ? Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: _HeroText(
+                        item: item, english: english, wide: true, onTap: onTap),
+                  ),
+                )
+              : _HeroText(item: item, english: english, wide: false, onTap: onTap),
         ),
-      ),
+      ],
+    );
+  }
+}
+
+class _HeroText extends StatelessWidget {
+  const _HeroText({
+    required this.item,
+    required this.english,
+    required this.wide,
+    required this.onTap,
+  });
+
+  final MediaItem item;
+  final bool english;
+  final bool wide;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment:
+          wide ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: HorseTheme.gold.withValues(alpha: .16),
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Text(
+            'HORSE  ·  ${item.type == 'series' ? (english ? 'SERIES' : 'مسلسل') : (english ? 'MOVIE' : 'فيلم')}',
+            style: const TextStyle(
+              color: HorseTheme.gold,
+              fontWeight: FontWeight.w700,
+              fontSize: 10,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          item.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: wide ? TextAlign.start : TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: wide ? 30 : 24,
+            fontWeight: FontWeight.w800,
+            height: 1.15,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          [
+            if (item.releaseInfo != null) item.releaseInfo!,
+            ...item.genres.take(2),
+          ].join('  ·  ')
+              .replaceFirst(' ·  ·', ' ·'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: wide ? TextAlign.start : TextAlign.center,
+          style: const TextStyle(color: Colors.white60, fontSize: 13),
+        ),
+        if (wide && item.description != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            item.description!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.5),
+          ),
+        ],
+        const SizedBox(height: 15),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: HorseTheme.gold,
+            foregroundColor: const Color(0xFF1A1209),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            shape: const StadiumBorder(),
+            textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+          ),
+          onPressed: onTap,
+          icon: const Icon(Icons.play_arrow_rounded, size: 21),
+          label: Text(english ? 'Details & play' : 'التفاصيل والتشغيل'),
+        ),
+      ],
     );
   }
 }
@@ -404,17 +569,28 @@ class _FeaturedCard extends StatelessWidget {
 class _FeaturedSkeleton extends StatelessWidget {
   const _FeaturedSkeleton();
   @override
-  Widget build(BuildContext context) => Container(
-        height: 260,
-        decoration: BoxDecoration(
-          color: HorseTheme.surface,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: const Center(
-          child:
-              CircularProgressIndicator(color: HorseTheme.gold, strokeWidth: 2),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 600;
+    final height = wide
+        ? (width * .52).clamp(360.0, MediaQuery.sizeOf(context).height * .62)
+        : (width - 32) * 11 / 16 + 72;
+    return Container(
+      margin: wide ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 16),
+      height: height,
+      decoration: BoxDecoration(
+        color: HorseTheme.surface,
+        borderRadius: wide
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(bottom: Radius.circular(28)),
+        border: Border.all(color: HorseTheme.line),
+      ),
+      child: const Center(
+        child:
+            CircularProgressIndicator(color: HorseTheme.gold, strokeWidth: 2),
+      ),
+    );
+  }
 }
 
 class _ServiceMessage extends StatelessWidget {
