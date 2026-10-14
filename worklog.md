@@ -2889,3 +2889,19 @@ Work Log:
 
 Stage Summary:
 - Noor: one branch (main). Horse untouched (main + flutter-mobile).
+
+---
+Task ID: 94
+Agent: Z.ai Code (rank-10 digit overlap fix)
+Task: User reported (with screenshot) that in the RTL Top 10 rail the "10" renders wrong — the "1" is fully hidden behind the poster and the "0" floats far from it with a big gap. Wanted: "1" and "0" pulled together until one appears on top of the other, total footprint = ONE digit width.
+
+Work Log:
+- Diagnosed old code: rank 10 was a Row('1', translate -0.12em '0') inside a 1.6x-digit-wide box with poster at 0.88 of that width -> '1' ink fell behind the poster, '0' fully visible with ~26px gap (exactly the screenshot).
+- Rewrote OutlinedRankNumber rank-10 branch: SizedBox(width: digitWidth, height: fontSize*.78) + Stack(clipBehavior none) with '0' at left:0 and '1' at left:-digitWidth*0.30 -> outlines cross, pair = single-digit footprint. Inner Directionality.ltr kept (digits never flip to "01" in RTL); whole unit still mirrored as one block by parent PositionedDirectional.
+- Top10Item.build: isTen = rank == 10 (was >= 10); rankWidth now always digitWidth; posterStart for 10 = digitWidth*0.88 (~12% tucked, crossing stays visible); ranks 1-9 unchanged (0.65).
+- Constants: removed _tenWidthFactor, added _tenOnePull = 0.30 (tunable), updated _tenOverlap doc. Updated class doc comments.
+- pubspec.yaml: version 1.2.1+4 -> 1.2.2+5.
+- flutter analyze: "No issues found!". Committed 8293205, pushed Noor main (1366939..8293205).
+
+Stage Summary:
+- Rank 10 now renders as a Netflix-style tight "10" lockup: digits overlap, unit = one digit wide, ~12% tucked behind the poster in both LTR and RTL. Noor main = 8293205, single branch. Horse untouched. Tunables for future tweaks: _tenOnePull (overlap amount), _tenOverlap (poster coverage for 10).
