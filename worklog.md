@@ -3049,3 +3049,19 @@ Stage Summary:
 - Developer TODO (documented, blocking only App-Link auto-verification, NOT the flow): paste the APK signing cert SHA-256 into public/.well-known/assetlinks.json (keytool command in the file) and replace TEAMID_PLACEHOLDER in the AASA for iOS Universal Links. If this sandbox's preview domain changes, update NoorApi.traktHttpsRedirectBase (one constant) + the Trakt dashboard redirect.
 - Blocked tests, honestly: live user authorization (needs the user's trakt.tv login approval on a device), Android release build (no Android SDK in sandbox), iOS build (Linux host). Everything else verified.
 - Next candidates: pending-UI-tasks list from Task 101 (none left), Simkl watchlist push parity, Trakt ratings write (POST /sync/ratings) behind the existing rating UI.
+---
+Task ID: 103
+Agent: Z.ai Code (Horse web — Trakt relay delivery failure root-caused + fixed)
+Task: USER screenshot (SM-A217F): Trakt OAuth browser return shows «تعذّر إيصال التفويض إلى التطبيق» with the auth code displayed for manual copy; the app never completes. USER pasted the code in chat.
+
+Work Log:
+- DIAGNOSIS: dev.log showed the app (1.2.9+12) actively polling GET /api/trakt/relay?state=9GoK… every 3s (all 404) and the pending flow still live — but NOT A SINGLE browser POST /api/trakt/relay in the whole log, while the bridge card rendered (GET / 200). So the browser side fetched the page fine but its POST never reached the server.
+- REPRODUCTION: curl POST with browser headers (Origin + Sec-Fetch-Site: same-origin + Samsung UA) through the preview domain → 403 {"error":"blocked (cross-site request)"}; the same POST without Origin/Sec-Fetch headers → 200. Root cause: src/middleware.ts csrfViolation compared Origin against Host on EVERY mutating request; behind the host-rewriting preview gateway the internal Host never equals the public Origin host → every real-browser POST 403'd, while curl (no Origin) and localhost agent-browser tests (Origin==Host) silently passed. This also silently broke every other browser POST on the site.
+- FIX middleware.ts: Sec-Fetch-Site (browser-set, JS-unforgeable) is now the sole verdict when present (cross-site/unknown → blocked); Origin-vs-[X-Forwarded-Host, Host] comparison only for clients that omit the header (legacy browsers, native apps, curl).
+- DEFENSE-IN-DEPTH: /api/trakt/relay GET now also accepts state+code as a push (same validation/TTL/caps); bridge POSTs first and falls back to the GET push if any middlebox still drops the POST. Code-in-URL is PKCE-harmless (single-use, minutes-to-live, worthless without the device-held verifier).
+- VERIFIED live via the preview domain: browser-like POST 200 (was 403), genuine cross-site POST still 403, GET push stored + pollable, agent-browser E2E (?code&state → success card «تم ربط Trakt بنجاح», relay entry retrievable, primary POST path used), bun lint 0 errors.
+- Injected the user's pasted code into the relay under the live polling state mid-diagnosis — the app's 12-min flow deadline expired seconds before, so it was not picked up (codes also expire in 10 min on Trakt's side); user must retry linking.
+- Pushed Horse main 44e7afa..bfb158f. Noor untouched (no app change needed — the phone-side flow was correct).
+
+Stage Summary:
+- Root cause of the «تعذّر إيصال التفويض» screen: the site's own CSRF middleware 403'd every real-browser POST behind the preview domain (host-rewriting gateway), so the OAuth code never reached the relay. Fixed in middleware + GET-push fallback. The user just retries «ربط Trakt» in the app — no dashboard changes, no app reinstall needed. Lesson recorded: cross-origin CSRF checks must trust Sec-Fetch-Site before Origin/Host behind host-rewriting proxies, and agent/curl tests must run through the PUBLIC domain, not localhost, to catch this class of bug.
