@@ -2918,3 +2918,22 @@ Work Log:
 
 Stage Summary:
 - Hero = 65% of screen height on all devices, still bounded by the visible area under system bars + glass nav. Noor main = 5f0e122, single branch. Horse untouched. Tunable: the .65 factor in _featuredHeroHeight.
+
+---
+Task ID: 96
+Agent: Z.ai Code (integrations CLI test + fixes + toasts)
+Task: User reported: all linkings broken (Simkl fails; Trakt demands a client secret "unnecessarily"; RD/TorBox/AllDebrid untested; TMDB fine). Asked to test the linkings via a Dart CLI from CMD. Also: feedback texts (verified/copied/...) must appear as toast-style flashes near the bottom and auto-dismiss.
+
+Work Log:
+- Wrote tool/test_linkings.dart — pure-Dart CLI probe (dart run) hitting the real APIs with the app's exact request shapes. Ran it live:
+  * Trakt: device/code works (client_id valid; bogus id -> 401). Token exchange WITHOUT secret -> 400 empty body => Trakt genuinely REQUIRES the client_secret (their rule, not an app bug). 429 = slow_down.
+  * Simkl: POST /oauth/device -> 404 url_failed; GET too. Official Kodi addon source revealed /oauth/pin; probing it returned the KEY clue: "This client_id is an OAuth 2.0 app: use POST /oauth2/device". POST /oauth2/device -> 200 (device_code, user_code, verification_uri[_complete], expires_in 900, interval 5). Token: POST /oauth2/token + grant_type urn:ietf:params:oauth:grant-type:device_code -> authorization_pending with the embedded secret => embedded Simkl keys are VALID. Root causes in app: wrong endpoint x2 + wrong field name (verification_url) + wrong grant_type.
+  * TorBox: torbox.app/api/users/me served HTML! Fetched https://api.torbox.app/openapi.json -> real paths are /v1/api/user/me, /v1/api/torrents/{createtorrent,mylist,requestdl}. Verified /v1/api/user/me -> 403 {"success":false,"error":"BAD_TOKEN"}.
+  * Real-Debrid 401 bad_token (OK), AllDebrid AUTH_BAD_APIKEY envelope (OK).
+- noor_api.dart fixes: Simkl -> /oauth2/device + /oauth2/token + RFC grant; TorBox -> 4 URLs on api.torbox.app/v1/api; Trakt poll now treats 400 as pending ONLY for authorization_pending/slow_down JSON (empty-body 400 = wrong secret -> {'status':'error','reason':'invalid_client'}) so the UI no longer polls forever; simkl 429 also pending.
+- integrations_page.dart: reads verification_uri_complete ?? verification_uri ?? verification_url; invalid_client re-opens the secret form + specific toast; secret helper text now says exactly: trakt.tv/settings/api -> Noor app -> Client Secret.
+- NEW lib/shared/widgets/noor_toast.dart: bottom flash toast (above glass nav: safe+84), slide+fade in 200ms, auto-dismiss 2.2s (3s errors), IgnorePointer, replaces previous toast. Converted ALL inline _message texts in integrations page + 2 SnackBars (settings_data_page, custom_lists_page) to NoorToast.
+- Final probe: 8/8 PASS. flutter analyze: "No issues found!". Version 1.2.4+7. Committed 5390def, pushed main (5f0e122..5390def).
+
+Stage Summary:
+- Simkl linking now actually works end-to-end (code shown -> user approves at simkl.com/pin -> token stored). TorBox verification will work with a real key. Trakt REQUIRES the operator's client secret (proof from live API); wrong-secret loop fixed. All confirmations are auto-dismissing bottom toasts. Noor main = 5390def, single branch. Horse untouched. User can re-run the probe: dart run tool/test_linkings.dart
