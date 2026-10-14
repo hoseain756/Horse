@@ -3374,3 +3374,20 @@ Stage Summary:
 - Linking should now work end-to-end: tap ربط AniList → browser opens anilist.co authorize with the CORRECT client ID → login → consent → AniList returns the JWT to app.noor.mobile://callback (dashboard Redirect URL matches the screenshot) → app stores the token (~1 year) and verifies via Viewer. No user-facing credentials UI remains anywhere.
 - If the consent page STILL errors, the remaining suspects are: the dashboard app not saved with that Redirect URL, or the user's AniList session state — but the authorize request itself is now byte-correct per the official docs.
 - Residual: none in code; the secret is intentionally absent from the repo (implicit grant).
+
+---
+Task ID: 114
+Agent: Z.ai Code (solo)
+Task: USER confirms "تم الربط نجح" (AniList linking finally works after Task 113's Client-ID 53823 fix) — polish the post-link experience.
+
+Work Log:
+- Explored the post-link chain (completeAniListToken → saveLinkedService → refreshLinkedContent(force) → notify): UI updates live, but found 5 gaps via a sub-agent audit.
+- app_state.dart: (a) _linkedCatalogRails now also emits 'anilist-watching' (CURRENT status, NO isContinueable filter, cap 24) alongside 'anilist' (PLANNING) — home rails untouched; (b) refreshLinkedContent: a force arriving mid-refresh sets _linkedContentForceQueued and re-runs trailing (was silently swallowed by an in-flight TTL pass); (c) loading wave now notifyListeners + public linkedContentLoading getter; (d) syncLinkedService stamps lastSyncedAt on success (the integrations card's "Last synced" line was dead UI — nothing ever wrote it); (e) _dispatchOAuthCallback fires unawaited(refreshTrackerProfile(service)) right after a successful link (avatar/stats no longer wait for the card to be reopened).
+- anime_page.dart: personal rails 'أتابعها الآن · AniList' / 'أخطط لمشاهدتها · AniList' (MediaRail, anilist: ids resolve via the existing resolveAnime path) rendered ABOVE the public catalogs; when unlinked, a gold-accent _AniListLinkPrompt card ('اربط حساب AniList' + one-tap → IntegrationsPage) replaces them; loading/error/empty catalog states switched from SliverFillRemaining to compact SliverToBoxAdapter so the personal section never pushes public rails out of reach.
+- home_page.dart: _LinkedContinueSkeleton — geometry-matched placeholder (same 16:9 card spec/title/padding as _LinkedContinueRail, 3 static boxes, NeverScrollableScrollPhysics) rendered while linkedServices exist && no rows && linkedContentLoading.
+- Version 1.2.17+20. GATES: flutter analyze → No issues found; flutter test → 110/110. Commit 755bd65 pushed (5e1fbba..755bd65 main→main).
+
+Stage Summary:
+- The link→content loop is now fully observable: link → profile enriches (avatar/stats) → home shows a skeleton then the linked CW row + watchlist rails → Anime tab leads with the user's own Watching/Planning lists.
+- No user action needed beyond updating the build; nothing remaining from this task.
+- Next candidates: sync-history import carries no episode/position (imported AniList history can't resume — identity-only by design today); MAL watching rail on the Anime tab (only AniList currently); Trakt playback rows resume-from-detail.
