@@ -2905,3 +2905,16 @@ Work Log:
 
 Stage Summary:
 - Rank 10 now renders as a Netflix-style tight "10" lockup: digits overlap, unit = one digit wide, ~12% tucked behind the poster in both LTR and RTL. Noor main = 8293205, single branch. Horse untouched. Tunables for future tweaks: _tenOnePull (overlap amount), _tenOverlap (poster coverage for 10).
+
+---
+Task ID: 95
+Agent: Z.ai Code (hero height 65%)
+Task: User asked the featured hero to take 65% of the screen height.
+
+Work Log:
+- home_page.dart `_featuredHeroHeight()`: was 45% of screen height on phones (clamp 320-440) / 48% on >=600px widths (clamp 380-540), with a hard 640px available-height ceiling.
+- Now: preferredHeight = size.height * .65 (floor 280 for very short viewports e.g. landscape); availableHeight guard kept (screen - system bars - GlassNavigationBar.contentBottomInset) but the 640 cap removed so tall devices/tablets honor 65% too. Removed unused `large` var. Single source of truth — both hero variants (lines ~786/~1141) consume this function.
+- pubspec.yaml: 1.2.2+5 -> 1.2.3+6. flutter analyze: "No issues found!". Committed 5f0e122, pushed main (8293205..5f0e122).
+
+Stage Summary:
+- Hero = 65% of screen height on all devices, still bounded by the visible area under system bars + glass nav. Noor main = 5f0e122, single branch. Horse untouched. Tunable: the .65 factor in _featuredHeroHeight.
