@@ -107,14 +107,38 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-/** App poll: fetches the code for a pending flow (keyed by the app's state). */
+/** App poll — or, with `&code=`, a browser push fallback for proxies that
+ * drop cross-origin-looking POSTs. Pushing via GET puts the auth code in the
+ * URL, but PKCE keeps it harmless: the code is single-use, expires in
+ * minutes, and is worthless without the code_verifier that never leaves the
+ * app. POST stays the primary path, so this only runs when POST failed. */
 export async function GET(request: NextRequest) {
-  const state = new URL(request.url).searchParams.get("state");
+  const params = new URL(request.url).searchParams;
+  const state = params.get("state");
   if (!state || state.length > 512) {
     return NextResponse.json(
       { ok: false, error: "missing_state" },
       { status: 400 },
     );
+  }
+  const rawCode = params.get("code");
+  if (rawCode !== null) {
+    const code = safeToken(rawCode);
+    if (!code) {
+      return NextResponse.json(
+        { ok: false, error: "missing_state_or_code" },
+        { status: 400 },
+      );
+    }
+    prune();
+    registry.set(state, { code, state, createdAt: Date.now() });
+    while (registry.size > MAX_ENTRIES) {
+      const oldest = registry.keys().next();
+      if (oldest.done) break;
+      registry.delete(oldest.value);
+    }
+    await persistToFile();
+    return NextResponse.json({ ok: true });
   }
   prune();
   if (!registry.has(state)) await restoreFromFile();

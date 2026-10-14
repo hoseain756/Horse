@@ -64,16 +64,33 @@ export function TraktCallbackBridge() {
 
       setCode(authCode);
       setPhase("relaying");
+      // Primary: POST the pair to the relay. Some proxy chains mangle or
+      // challenge browser POSTs (WAF/CSRF layers), so on any failure fall
+      // back to a GET push — the auth code alone is useless without the
+      // code_verifier that never leaves the app (RFC 7636), and it is
+      // single-use with a short lifetime, so the URL exposure is safe.
+      let ok = false;
       try {
         const res = await fetch("/api/trakt/relay", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ state, code: authCode }),
         });
-        if (alive) setPhase(res.ok ? "ok" : "error");
+        ok = res.ok;
       } catch {
-        if (alive) setPhase("error");
+        ok = false;
       }
+      if (!ok) {
+        try {
+          const res = await fetch(
+            `/api/trakt/relay?state=${encodeURIComponent(state)}&code=${encodeURIComponent(authCode)}`,
+          );
+          ok = res.ok;
+        } catch {
+          ok = false;
+        }
+      }
+      if (alive) setPhase(ok ? "ok" : "error");
     })();
 
     return () => {

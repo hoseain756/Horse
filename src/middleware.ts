@@ -8,19 +8,35 @@ const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 function csrfViolation(req: NextRequest): boolean {
   if (!MUTATING.has(req.method)) return false;
   const site = req.headers.get("sec-fetch-site");
-  // Browsers on modern Chrome/Firefox/Safari send Sec-Fetch-* — trust it.
-  if (site && site !== "same-origin" && site !== "same-site" && site !== "none") return true;
-  const origin = req.headers.get("origin");
-  if (origin) {
-    try {
-      const o = new URL(origin);
-      const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
-      if (host && o.host !== host) return true;
-    } catch {
-      return true;
-    }
+  // Browsers (Chrome/Firefox/Safari/Samsung Internet, Chromium 76+) always
+  // attach Sec-Fetch-* to fetch/XHR and JS cannot forge them — trust the
+  // browser's own verdict FIRST and stop there. We deliberately do NOT also
+  // compare Origin against Host here: behind host-rewriting proxies (this
+  // sandbox's preview domain, tunnels) the internal Host header rarely
+  // equals the public Origin host, which 403'd every real-browser POST
+  // (e.g. the Trakt OAuth relay) while curl/agent tests silently passed.
+  if (site) {
+    return site !== "same-origin" && site !== "same-site" && site !== "none";
   }
-  return false;
+  // No Sec-Fetch-Site → legacy browser or non-browser client (native apps,
+  // curl). Fall back to an Origin/Host comparison across every host alias
+  // the proxy chain may expose.
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  try {
+    const o = new URL(origin);
+    const hosts = [
+      req.headers.get("x-forwarded-host"),
+      req.headers.get("host"),
+    ]
+      .filter((h): h is string => typeof h === "string" && h.length > 0)
+      .flatMap((h) => h.split(","))
+      .map((h) => h.trim().toLowerCase());
+    if (hosts.length === 0) return false;
+    return !hosts.includes(o.host.toLowerCase());
+  } catch {
+    return true;
+  }
 }
 
 export function middleware(req: NextRequest): NextResponse {
