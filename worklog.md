@@ -2802,3 +2802,18 @@ Work Log:
 
 Stage Summary:
 - github.com/hoseain756/Noor root IS the Flutter project now. Clone -> flutter pub get -> flutter run. Worklog + milestone log updated. Token at ~/ghflow/.token reusable for future pushes.
+
+---
+Task ID: 89-d
+Agent: Z.ai Code (Horse flutter-mobile flattening + sync)
+Task: User request — apply the same flattened shape to GitHub (Horse repo).
+
+Work Log:
+- Fetched origin/flutter-mobile (tip ca37e91): contained the ENTIRE web-project snapshot at root + mobile_app/ nested.
+- Worktree /tmp/fm-flatten @ ca37e91: git rm of the 34 web root items, moved mobile_app/* to root (dotglob), then tar-copied ALL tracked files from /home/z/Noor (v1.2.0+3 latest) over it.
+- Commit a10ed36 "restructure: mobile app at repository root, synced with Noor v1.2.0+3" — fast-forward push to Horse flutter-mobile (ca37e91..a10ed36, no force).
+- Accidental side branch fm-tmp was pushed during verification; DELETED via API (204). Remaining Horse branches: main (web, untouched b1cdea5) + flutter-mobile (app at root).
+- Worktree + temp branch cleaned locally; GitHub contents API verified root = android/ios/lib/docs/pubspec/README/.metadata, no mobile_app/.
+
+Stage Summary:
+- Horse/flutter-mobile == Noor main shape AND content (v1.2.0+3, app at root). Horse/main remains the web project. Worklog complete.
