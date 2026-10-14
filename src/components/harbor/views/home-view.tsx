@@ -202,32 +202,22 @@ export function HomeView() {
 
 // ---------- Top 10 rank row (Harbor signature numerals) ----------
 function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void }) {
+  const language = useSettings((s) => s.settings.uiLanguage || "en");
+  const ar = /^ar(?:-|_|$)/i.test(language);
   return (
-    <section aria-label="Top 10 today">
-      <div className="flex items-baseline justify-between px-4 md:px-8 mb-2.5">
-        <h2 className="md-title-medium text-ink">Top 10 Today</h2>
-        {/* B9: tiny/low-contrast utility text — ≥1024 CSS bumps this to 12dp
-            with ≥4.5:1 (top10-note in globals.css); bands below 1024 frozen. */}
-        <span className="top10-note md-body-small text-ink-subtle">trending on Stremio</span>
+    <section className="home-top10" dir={ar ? "rtl" : "ltr"} aria-labelledby="home-top10-title">
+      <div className="home-top10-heading">
+        <h2 id="home-top10-title" className="md-title-medium text-ink">
+          {ar ? "أفضل 10 اليوم" : "Top 10 Today"}
+        </h2>
       </div>
-      {/* Hover headroom: pt-3/-mt-1 keeps the 18px header→card gap while giving the hover lift room inside the scroll clip */}
-      <div className="harbor-scroll-x overflow-x-auto flex items-end gap-1 px-4 md:px-8 pb-3 pt-3 -mt-1">
+      <div className="home-top10-track harbor-scroll-x">
         {metas.map((m, i) => (
-          <div key={m.id} className="shrink-0 flex items-end group/top10">
-            <span
-              aria-hidden
-              className="font-display font-black leading-none select-none -me-3 md:-me-4 mb-7 text-transparent"
-              style={{
-                fontSize: "clamp(64px, 7vw, 110px)",
-                WebkitTextStroke: "2.5px rgba(255,255,255,0.35)",
-                transition: "color 0.25s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent-var)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "transparent")}
-            >
+          <div key={m.id} className="home-top10-item group/top10">
+            <span className="home-top10-rank" aria-hidden="true">
               {i + 1}
             </span>
-            <div className="w-[102px] md:w-[120px] relative z-10">
+            <div className="home-top10-card">
               <MetaCard meta={m} onOpen={() => onOpen(m)} />
             </div>
           </div>

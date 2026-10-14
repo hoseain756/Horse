@@ -636,9 +636,9 @@ export function FloatingSearch() {
   const barOff = tvOpen ? false : largeBand ? !sRevealed || hidden : hidden;
   const peekVisible = largeBand && !tvOpen && barOff;
 
-  // All hooks above; only the idle presentation is suppressed on immersive
-  // surfaces (an open search sheet/bar always renders).
-  if (suppressed && !expanded && !tvOpen) return null;
+  // All hooks above; idle search stays out of Settings because its own search
+  // indexes settings, while an explicitly opened app search still renders.
+  if ((suppressed || settingsActive) && !expanded && !tvOpen) return null;
 
   return (
     <>
@@ -669,7 +669,6 @@ export function FloatingSearch() {
       ref={wrapRef}
       onFocusCapture={onWrapFocusCapture}
       onBlurCapture={onWrapBlurCapture}
-      data-settings-view={settingsActive ? "true" : undefined}
       data-expanded={expanded ? "true" : undefined}
       className={cn(
         // Fixed top. PHONES (<600): 48×48 glass trigger at the top inline-END

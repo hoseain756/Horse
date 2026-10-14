@@ -19,7 +19,7 @@ import {
   Settings as SettingsIcon,
   X,
 } from "lucide-react";
-import { useSettings } from "@/lib/harbor/store";
+import { useNav, useSettings } from "@/lib/harbor/store";
 import { useAddons } from "@/lib/harbor/store";
 import { useTrakt } from "@/lib/harbor/trakt";
 import { useSimkl } from "@/lib/harbor/simkl";
@@ -253,6 +253,9 @@ export function SettingsShell({
   home?: (query: string) => React.ReactNode;
 }) {
   const settings = useSettings((s) => s.settings);
+  const navStack = useNav((s) => s.stack);
+  const popNav = useNav((s) => s.pop);
+  const resetNav = useNav((s) => s.resetTo);
   const addons = useAddons((s) => s.addons);
   const traktAuth = useTrakt((s) => s.auth);
   const simklAuth = useSimkl((s) => s.auth);
@@ -445,6 +448,14 @@ export function SettingsShell({
     setSearchOpen(false);
   };
 
+  const leaveSettings = () => {
+    if (typeof window !== "undefined" && /^#settings(?:\/|$)/i.test(window.location.hash)) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+    if (navStack.length > 1) popNav();
+    else resetNav({ kind: "view", view: "home" });
+  };
+
   /* ---- search across every row (ar + en + synonyms) ---- */
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -627,6 +638,11 @@ export function SettingsShell({
     return (
       <div className="set-shell set-overview pb-16" data-layout="overview" data-size={tv ? "tv" : "standard"}>
         <header className="set-overview-top">
+          <button type="button" onClick={leaveSettings} className="set-mobile-back harbor-tv-focus">
+            {rtl ? <ChevronRight aria-hidden /> : <ChevronLeft aria-hidden />}
+            <span>{tr("back")}</span>
+          </button>
+          <h1 className="set-mobile-title">{tr("settingsTitle")}</h1>
           <div className="set-overview-head">
             <div className="set-home-title">
               <span className="set-home-mark"><SettingsIcon aria-hidden /></span>
@@ -636,7 +652,7 @@ export function SettingsShell({
                 <p className="set-overview-description">{tr("setOverviewDesc")}</p>
               </div>
             </div>
-            <UserChip variant="settings" />
+            <div className="set-overview-user"><UserChip variant="settings" /></div>
           </div>
           <div className="set-overview-search">{SearchField}</div>
         </header>
@@ -664,21 +680,19 @@ export function SettingsShell({
     /* ---- TWO-PANE (≥840) — list never re-mounts, scroll persists ---- */
     return (
       <div className="set-shell pb-16" data-layout="panes" data-size={tv ? "tv" : "standard"}>
-        <div className="set-pane-list">
-          <div className="set-pane-heading">
-            <div className="set-pane-title">
-              <span className="set-home-mark"><SettingsIcon aria-hidden /></span>
-              <h1 className="md-title-large font-bold text-ink">{tr("settingsTitle")}</h1>
-            </div>
-            <UserChip variant="settings" />
-          </div>
+        <aside className="set-pane-list" aria-label={tr("settingsTitle")}>
+          <button type="button" onClick={leaveSettings} className="set-pane-back harbor-tv-focus">
+            {rtl ? <ChevronRight aria-hidden /> : <ChevronLeft aria-hidden />}
+            <span>{tr("back")}</span>
+          </button>
           {SearchField}
+          <div className="set-pane-account"><UserChip variant="settings" /></div>
           <button type="button" onClick={backToOverview} className="set-overview-link harbor-tv-focus">
             <SettingsIcon aria-hidden />
             <span>{tr("setOverview")}</span>
           </button>
           {renderCategoryList("navigation")}
-        </div>
+        </aside>
         <div className="set-pane-detail">
           <div className="set-detail-content">
             {detailHeader}
