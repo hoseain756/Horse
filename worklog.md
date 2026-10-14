@@ -2817,3 +2817,16 @@ Work Log:
 
 Stage Summary:
 - Horse/flutter-mobile == Noor main shape AND content (v1.2.0+3, app at root). Horse/main remains the web project. Worklog complete.
+
+---
+Task ID: 89-e
+Agent: Z.ai Code (revert Horse flutter-mobile)
+Task: User rejected the flutter-mobile restructure ("ارجع زي اول") — revert it.
+
+Work Log:
+- Force-pushed ca37e91 back to Horse flutter-mobile: a10ed36...ca37e91 (forced update).
+- Verified via API: branch tip = ca37e91, web files back at root, mobile_app/ folder restored.
+- a10ed36 (flatten+sync) abandoned on the remote; Noor/main untouched (still the flattened v1.2.0+3 the user explicitly requested).
+
+Stage Summary:
+- Horse/flutter-mobile == pre-restructure state (web snapshot at root + mobile_app/ with Horse-flavored v1.1.0+2). Noor repo keeps the user-approved flattened shape.
