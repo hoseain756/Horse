@@ -2989,3 +2989,21 @@ Work Log:
 
 Stage Summary:
 - Noor 1.2.6+9: hero text back to plain white-on-shadow; Top 10 numerals = background-filled (#000000) with the same white rim; whole app background pure black; long-press ANY media card → blurred backdrop + card-scales-up + title/year + reference-style floating menu (watch / library toggle / mark watched) with toast feedback. Tunables: poster width factor .58, blur 18/scrim .62, menu radius 22, row height 56 in media_quick_look.dart. CMD for the user: git pull then flutter run --release / flutter build apk --release.
+
+---
+Task ID: 100
+Agent: Z.ai Code (Noor mobile — Trakt linking fixed via browser PKCE)
+Task: USER screenshot (SM-A217F, Linked Services): Trakt device linking stuck — the app demands a "Noor Client Secret" and offers a paste box, but the user's Trakt app is PKCE-only (Client Secret "Not issued"), so the demanded secret cannot exist. USER: "حل المشكلة".
+
+Work Log:
+- DIAGNOSIS (live API, curl): POST /oauth/device/code with the PKCE client_id works; POST /oauth/device/token WITHOUT client_secret → 400 EMPTY body immediately (client rejected before the pending check) — Trakt's device grant hard-requires a secret the user's app can never have. The old screen was a dead end by design.
+- DESIGN: switch Trakt linking to RFC 7636 PKCE over the external browser with an RFC 8252 custom-scheme return `noor://callback` (user's Trakt redirect list already had only the preview URL; adding the scheme is a one-time user edit). No server, no relay, no secret. Simkl device flow (has an embedded secret) stays untouched.
+- NoorApi: removed the trakt branch from startLinkedService/pollLinkedService + the whole client-secret storage path (_traktSecretKey/_traktClientSecret/secret_required); added startTraktLink() (Random.secure 48B verifier, S256 challenge — verified against RFC 7636 appendix-B vector via a throwaway dart script, authorize URL shape checked), completeTraktLink() (state check → /oauth/token grant_type=authorization_code + code_verifier → stores access token under the existing noor.trakt.token key + refresh under noor.trakt.refresh → fetches /users/me username), cancelTraktLink(); errors mapped to reasons (access_denied/state_mismatch/exchange_failed/no_pending_flow...).
+- magnet_link_handler.dart → IncomingLinkListener: the existing noor/links EventChannel now routes noor:// intents to completeTraktLink wherever the user is (cold + warm), mirrors success into AppState.saveLinkedService('trakt', linked/username) and toasts AR/EN reasons; duplicate callbacks stay silent when already linked.
+- integrations_page.dart: Trakt card = browser PKCE (waiting panel + spinner + cancel + one-time-setup hint about noor://callback shown both idle and waiting); the red Client-Secret panel, _saveSecret, secret_required/invalid_client branches all deleted; restart label "إعادة بدء الربط" for trakt; "Generate a new code" kept for Simkl.
+- Native: MainActivity.captureLink forwards noor: VIEW intents over noor/links (magnet: unchanged); AndroidManifest gains a noor://callback BROWSABLE intent-filter.
+- pubspec: +crypto ^3.0.6 (already in the tree as transitive → no new download); version 1.2.6+9 → 1.2.7+10.
+- flutter analyze: "No issues found!" (fixed NoorToast import, leftover _needsSecret, unnecessary cast). Committed 42e93ac, pushed Noor main (bf180d7..42e93ac).
+
+Stage Summary:
+- Noor 1.2.7+10: Trakt linking no longer asks for any secret. User taps "ربط Trakt" → browser opens trakt.tv/oauth/authorize → approves → Android returns to the app via noor://callback → tokens stored → card shows متصل باسم <username>. PREREQUISITE (one-time): the user must add `noor://callback` as a Redirect URI on trakt.tv/oauth/applications (the app shows this hint inline). Previous tasks 1+2 (hero/Top10/black/long-press) were already done in Task 99 (bf180d7). Horse untouched. Single branch, main = 42e93ac.
