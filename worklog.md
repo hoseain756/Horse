@@ -3357,3 +3357,20 @@ Stage Summary:
 - Home now mirrors the Horse site structure end-to-end: hero → local CW → LINKED-ACCOUNT CW (Trakt pause points + AniList/MAL currently-watching, source-tagged) → recommendations/Top10/trending anchors → ONE RAIL PER ADD-ON CATALOG (web AddonRail parity) with full-page grids → watchlist rails per linked service.
 - Data layer is fail-soft and additive: provider hiccups keep previous rows; nothing writes local history/watchlist; hidden-anime setting filters the new content too.
 - Residual: real-device pass (poster enrichment timing, rail density on tablets); Trakt playback rows for shows resume from the detail page (no synthetic position — by design).
+
+---
+Task ID: 113
+Agent: Z.ai Code (solo)
+Task: USER (AR): "Hide the AniList app-credentials section from users; also I still could not link" — with the ACTUAL AniList dashboard screenshot: Client ID 53823, Secret b5a2ww… (client "noor", Redirect URL app.noor.mobile://callback).
+
+Work Log:
+- ROOT CAUSE CLOSED: the mystery from Tasks 108-111 is resolved by the owner's dashboard screenshot — the numeric Client ID is 53823 and the 40-char value IS the secret. Every build so far sent client_id=<secret> (Task 111 embedded it as the ID), which AniList rejects with the unknown-client page after login → "لم أستطع الربط".
+- noor_api.dart: defaultAniListClientId = '53823' (doc rewritten: dashboard client "noor", secret exists but is NEVER embedded per the standing no-secret directive — the official implicit grant needs none). aniListClientId() now ALWAYS returns the embedded credential; initialize() purges the legacy secure-storage override keys (_anilistClientIdKey — which could hold the user's pasted secret — and _anilistClientSecretKey), so old installs self-heal on first boot. Section comment corrected (IMPLICIT grant, not Authorization Code).
+- integrations_page.dart: the "بيانات التطبيق" section is GONE from the AniList card in BOTH idle and waiting states (toggle, 4-step dashboard walkthrough, Client-ID field, save button, editor prefill — all removed). Waiting panel hint replaced with "لا حاجة لأي إعداد — يأتي Noor ببيانات تطبيق X مدمجةً". invalid_client failure toast now points at updating the app build instead of editing credentials.
+- Regression lock: NEW test/anilist_credentials_test.dart — pins defaultAniListClientId == '53823' (validator-passing numeric) and asserts the authorize URL is a clean implicit-grant URL (client_id=53823, response_type=token, NO client_secret/redirect_uri params). Would fail on every pre-fix build.
+- GATES: flutter analyze → No issues found; flutter test → 110/110 (was 108). v1.2.16+19. Committed 5e1fbba, pushed 739d75a..5e1fbba main→main.
+
+Stage Summary:
+- Linking should now work end-to-end: tap ربط AniList → browser opens anilist.co authorize with the CORRECT client ID → login → consent → AniList returns the JWT to app.noor.mobile://callback (dashboard Redirect URL matches the screenshot) → app stores the token (~1 year) and verifies via Viewer. No user-facing credentials UI remains anywhere.
+- If the consent page STILL errors, the remaining suspects are: the dashboard app not saved with that Redirect URL, or the user's AniList session state — but the authorize request itself is now byte-correct per the official docs.
+- Residual: none in code; the secret is intentionally absent from the repo (implicit grant).
