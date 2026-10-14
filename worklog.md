@@ -2830,3 +2830,18 @@ Work Log:
 
 Stage Summary:
 - Horse/flutter-mobile == pre-restructure state (web snapshot at root + mobile_app/ with Horse-flavored v1.1.0+2). Noor repo keeps the user-approved flattened shape.
+
+---
+Task ID: 90
+Agent: Z.ai Code (local APK build instructions)
+Task: User wants to build the APK on his own Windows machine ("عطني امر في CMD يحمل المشروع ويشغل البناء").
+
+Work Log:
+- Re-verified remote state: Horse/flutter-mobile == ca37e91 (web snapshot at root + mobile_app/, horse_mobile v1.1.0+2) — revert 89-e confirmed intact. Noor/main == 85739ac (noor_mobile v1.2.0+3, app at root).
+- Checked both repos are PUBLIC (HTTP 200 unauthenticated) -> plain git clone works, no token needed on the user's machine.
+- Delivered CMD one-liner: clone Noor -> flutter pub get -> flutter build apk --release; APK at build\app\outputs\flutter-apk\app-release.apk.
+- Included prerequisites (Git for Windows, Flutter SDK, Android Studio + flutter doctor / --android-licenses), split-per-abi option (app-arm64-v8a.apk), and the Horse/mobile_app alternative with old-version warning (v1.1.0+2, pre-torrent).
+- Offered GitHub Actions cloud build as an alternative if he doesn't want to install Flutter locally.
+
+Stage Summary:
+- User can build v1.2.0+3 APK locally from Noor repo with one CMD command. Remote repos unchanged; nothing pushed this task.
