@@ -2937,3 +2937,20 @@ Work Log:
 
 Stage Summary:
 - Simkl linking now actually works end-to-end (code shown -> user approves at simkl.com/pin -> token stored). TorBox verification will work with a real key. Trakt REQUIRES the operator's client secret (proof from live API); wrong-secret loop fixed. All confirmations are auto-dismissing bottom toasts. Noor main = 5390def, single branch. Horse untouched. User can re-run the probe: dart run tool/test_linkings.dart
+
+---
+Task ID: 97
+Agent: Z.ai Code (home catalog = Horse web layout)
+Task: Rebuild the Noor home catalog to mirror the Horse website catalog: continue-watching first with the site's mobile rectangular cards and proportions, then "recommended for you", then per-type section rows (series/movies/anime from the same sources) with new-episodes rows at the bottom, each row carrying a "greater-than" mark that opens its section. Hero: text filled with the app background color variable + white outline, height 58%.
+
+Work Log:
+- Cloned hoseain756/Horse (Next.js web) to /tmp/Horse as the layout reference; extracted the exact CW card spec from home-cw.tsx + globals.css: width min(66vw, 300px), aspect 16/9, radius 16, 1px white22 border, bottom scrim 85%→45%→transparent, S/E tag "S1 E4" LTR + title 15px + episode/remaining subtitle inside the card, red #e53935 progress 3px at inset 8/bottom 4; remainingLabel/episodeFallback formats from i18n.ts.
+- home_page.dart `_ContinueRail`/`_ContinueCard` rewritten to that spec (old: 220x104 card with play button + title below). Entries sorted most-recently-watched first like the web row.
+- Hero: `_featuredHeroHeight` .65 → .58 (comment updated). Replaced `_heroMetadataStyle` with `_HeroOutlinedText`: two stacked Texts — white stroke layer (PaintingStyle.stroke, width 2.6, StrokeJoin.round) + fill layer using HorseTheme.canvas (the app background color variable) — applied to year/genre/type in the hero metadata row; separators dots unchanged.
+- Home order (harbor mode) is now: hero → continue watching → مقترح لك → أفضل 10 → مسلسلات رائجة → أفلام رائجة → أنمي رائج → أفلام الأنمي → من إضافاتك → حلقات جديدة → في السينما (last two = the "latest released" bottom rows).
+- Section rows: `_AsyncMediaSection` gained `onOpenSection`; MediaRail gained an optional header `_SectionChevron` (44px tap target, circular chip, gold chevron_right in LTR / chevron_left in RTL, Semantics+Tooltip "فتح القسم"/"Open section"). Navigation targets: series/new-episodes → CatalogBrowserPage(shows); movies/in-theaters → CatalogBrowserPage(movies); anime/anime-movies → AnimePage; addons → CatalogBrowserPage(catalogs).
+- Data: `_theaters` ('movie','top') hoisted to a field (feeds both the hero pool and the في السينما rail); added `_anime` (AniList via catalogs.anime()) + `_animeMovies` (type==movie split); `_reloadAnime()` for retries. `_open` now resolves anilist: items through catalogs.resolveAnime with a NoorToast error fallback (mirrors AnimePage), plain items push detail directly.
+- pubspec.yaml: 1.2.4+7 → 1.2.5+8. flutter analyze: "No issues found!". Committed 1e9ec9e, pushed main (5390def..1e9ec9e); origin/main verified synced after fetch.
+
+Stage Summary:
+- Home = Horse web structure: CW 16:9 cards w/ in-card text + red progress, per-type rails each with a section chevron, latest-release rows at the bottom; hero 58% with canvas-filled white-rimmed metadata text. Tunables: .58 factor, CW card math in _ContinueRail, chevron chip in media_rail.dart. Noor main = 1e9ec9e, single branch. Horse untouched.
