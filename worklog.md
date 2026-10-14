@@ -2877,3 +2877,15 @@ Work Log:
 
 Stage Summary:
 - Top 10 redesigned per spec; RTL/LTR mirror automatic; Western digits guaranteed; rank-10 tight-unit handling per spec constants (all tunable consts at top of Top10Item). build-deps-upgrade branch (9242ec1) still awaiting user's local toolchain test; main = 1366939 = import fix + redesign.
+
+---
+Task ID: 93
+Agent: Z.ai Code (branch cleanup)
+Task: User declined the toolchain upgrade test — delete the build-deps-upgrade branch.
+
+Work Log:
+- Deleted build-deps-upgrade from GitHub (push --delete) and locally (branch -D, was 9242ec1).
+- Verified: Noor now has a single branch, main @ 1366939 (import fix + 1.2.1+4 + Top 10 redesign). Toolchain warnings (Gradle 9.1.0/AGP 9.0.1/Kotlin 2.3.20 advisory) intentionally left as-is per user's choice.
+
+Stage Summary:
+- Noor: one branch (main). Horse untouched (main + flutter-mobile).
