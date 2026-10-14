@@ -2862,3 +2862,18 @@ Work Log:
 Stage Summary:
 - Noor main (34049d6) now builds for anyone: pull -> flutter build apk --release -> app-release.apk (v1.2.1+4).
 - build-deps-upgrade branch awaiting user's local test; on success merge to main. Horse repos untouched.
+
+---
+Task ID: 92
+Agent: Z.ai Code (Top 10 UI redesign)
+Task: Redesign the Top 10 section UI only (Netflix-style hollow rank numbers behind poster stickers), reusing existing data/state/localization/navigation. No business-logic changes, no new packages.
+
+Work Log:
+- Step 0 inspection: numbered rail lived in MediaRail(numbered:true), used ONLY by home_page.dart. Data: MediaItem via catalog_repository.homeTopTen() (already ranked, <=10). State: Provider + FutureBuilder in _AsyncMediaSection (loading skeleton/_RailLoading, error/_RailMessage+retry, empty/_RailMessage). Localization: bilingual ternaries (english ? ... : ...), title 'Top 10 Today'/'أفضل 10 اليوم'. Theme: HorseTheme (canvas #0B0D0E, gold #C99C62). Poster: PosterCard (Image.network + errorBuilder, hidePosterTitles/showImdbBadge settings). No google_fonts in pubspec -> system w900 used.
+- NEW lib/features/home/top10_rail.dart: Top10Rail (title + horizontal ListView.builder, BouncingScrollPhysics, take(10), start padding 16/34-wide, gap 14) -> Top10Item (Stack: PositionedDirectional number start:0 + poster start rankWidth*0.65 (ranks 1-9) / *0.88 (rank 10, covers only ~25% of the '0'); poster 120w, ratio 0.68 (~2:3), itemHeight = posterHeight+30 for shadow air) -> OutlinedRankNumber (w900, fontSize = posterHeight*1.05 ≈ 185, foreground Paint stroke 2.5 white .85, StrokeJoin.round, height .78, Directionality.ltr so digits never mirror; rank 10 = Row('1', translate -0.12em '0') tight unit) + _Top10Sticker (shadow Container OUTSIDE ClipRRect: black .35, blur 14, spread 1, offset (rtl?4:-4,4) toward the number; radius 12; ColoredBox raised placeholder + Image.network fit cover + icon fallback; Semantics 'rank. name').
+- home_page.dart: import top10_rail; _AsyncMediaSection success branch now numbered ? Top10Rail : MediaRail — loading/error/empty/retry states and _open() navigation untouched.
+- media_rail.dart: removed the now-dead numbered branch; all other rails byte-identical behavior.
+- flutter analyze: "No issues found!". Committed 1366939, pushed Noor main (34049d6..1366939), remote verified.
+
+Stage Summary:
+- Top 10 redesigned per spec; RTL/LTR mirror automatic; Western digits guaranteed; rank-10 tight-unit handling per spec constants (all tunable consts at top of Top10Item). build-deps-upgrade branch (9242ec1) still awaiting user's local toolchain test; main = 1366939 = import fix + redesign.
