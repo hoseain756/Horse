@@ -2749,3 +2749,39 @@ Stage Summary:
 - Noor v1.1.0+2 is website-FREE: every provider direct, no login anywhere, torrent streams on-device (libtorrent sequential + local HTTP server), sync via dedicated Supabase with least-privilege role noor_app (password NoorSync_9f4k2m7xQz, host aws-1-eu-central-1.pooler.supabase.com, user noor_app.hcyysnagdumpviromdzl:5432)
 - Operator keys embedded: TMDB v4 token, OMDb, MDBList, Trakt client_id (public), Simkl id+secret
 - PENDING PUSH: Noor main (ce4902e) + Horse main (11) + Horse flutter-mobile (3) — single device-flow code serves all
+
+---
+Task ID: 89-a
+Agent: Z.ai Code (magnet-opener agent)
+Task: Noor mobile_app — add direct "Open torrent" (paste magnet / info-hash) UX + external magnet link handling (VIEW intent). Work directly in /home/z/Noor/mobile_app per user instruction.
+
+Work Log:
+- Verified foundation: Supabase probe OK (role noor_app on 5432+6543), flutter pub get OK, full flutter analyze → No issues found (v1.1.0+2 commit ce4902e local, 1 ahead of origin).
+- NEW lib/features/torrent/magnet_opener.dart: bilingual (EN/AR) bottom-sheet flow — stages input→resolving(elapsed ticker)→files→preparing; accepts full magnet URI, 40-hex info hash, 32-char base32 (normalized via TorrentService.magnetFor); single-video torrents auto-play; multi-video shows selectable file list (pre-selected largest, size formatter); prepare → wait statusStream.ready (20s cap, non-fatal) → pop sheet + push VideoPlayerPage with synthetic MediaItem(id 'torrent:<hash>', type 'movie', name=torrent name), videoId 'torrent:<hash>' for resume; TorrentException + generic error paths restore file-picker stage when applicable; cancel during preparing → prepared.stop()+remove; _flowOpen module guard prevents stacked sheets; isSupported gate with the standard bilingual snackbar.
+- library_page.dart: header Row + gold _OpenTorrentButton (bolt icon, 'Torrent'/'تورنت') → openMagnetFlow.
+- External magnet links end-to-end: AndroidManifest intent-filter (VIEW/BROWSABLE/DEFAULT, scheme magnet); MainActivity.kt — LINK_CHANNEL "noor/links" EventChannel (anonymous StreamHandler delivering pendingLink on first listen), onCreate captures cold-start VIEW intent, onNewIntent emits warm ones via runOnUiThread under eventLock, cleanUpFlutterEngine nulls linkSink; Dart MagnetLinkListener (lib/features/torrent/magnet_link_handler.dart) wraps _LaunchGate in noor_app.dart, listens 'noor/links', opens openMagnetFlow(initialMagnet: uri) — sheet auto-fills and starts resolving post-frame.
+- Fixes during build: TorrentStatus requires filePath+fileSize in timeout fallback; unawaited(navigator.pop()) → void pop (use_of_void_result); captured non-final `prepared` not promoted in route-builder closure → final `torrent` local.
+- Verification: flutter analyze (full) → "No issues found!" 3× after each stage. Kotlin reviewed against jlibtorrent/Flutter embedding APIs (no gradle/SDK in sandbox — device build still pending user side).
+
+Stage Summary:
+- Noor mobile now has a first-class torrent entry point: paste magnet/hash in Library tab, or tap any magnet: link in a browser → Noor opens and streams on-device (no account, no server). Two new Dart files + library header button + manifest/Kotlin/NoorApp wiring.
+- analyze-clean; ready to commit as 90-a batch. Push still pending device-flow approval (code 62C3-0390).
+
+---
+Task ID: 89-b
+Agent: Z.ai Code (session continuation — magnet features + rebrand + version)
+Task: Continue working directly in /home/z/Noor/mobile_app while waiting for device-flow push approval.
+
+Work Log:
+- 2d771ba: Open Torrent flow (magnet_opener.dart, library header button, manifest magnet: intent-filter, MainActivity noor/links EventChannel cold+warm, MagnetLinkListener in noor_app).
+- a1450db: torrent history resume — _HistoryRow detects 'torrent:' ids and re-prepares the hash straight from the engine (instant resume from disk files, player opens at saved position); bolt badge on torrent posters; full cancellable prepare dialog with bilingual errors.
+- a88f66e: _TorrentDownloadsCard in settings_data_page — scans <docs>/torrents/* (size + file count per hash), per-torrent delete + clear-all (TorrentService.remove deleteFiles:true + recursive dir delete), bilingual, empty/busy states.
+- 38d8159: README rewritten for account-free Noor (old one still described the Horse server + Stremio sync era).
+- 6ae412a: version 1.1.0+2 -> 1.2.0+3.
+- a51c518: rebrand — all 26 user-visible 'Horse' strings -> 'Noor' (EN+AR) across noor_app/main_shell/search_sheet/settings_*/stats/addons; preferences server-streams note rewritten (native direct/Debrid/engine). Code identifiers (HorseTheme/HorseApi) intentionally kept.
+- Full `flutter test`: test/ dir is EMPTY (tests removed during decoupling) — flutter analyze remains the gate: "No issues found!" after every step.
+- Device flow: 62C3-0390 EXPIRED unused; re-minted **136E-3E18** (device_code 3415... in ~/ghflow/device.json), poll.sh verified working.
+
+Stage Summary:
+- Noor mobile @ 1.2.0+3, local main = 6 commits ahead of origin (ce4902e + 5 new). Torrent UX is now complete end-to-end: paste magnet/hash in Library, tap magnet: links from browsers, instant resume from history, on-disk downloads manager. Zero login anywhere.
+- BLOCKED on push: user must approve https://github.com/login/device with code 136E-3E18 (valid 15 min) — autopush.sh will push Noor main (+ Horse main/flutter-mobile pending round) automatically on approval.
