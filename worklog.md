@@ -3065,3 +3065,18 @@ Work Log:
 
 Stage Summary:
 - Root cause of the «تعذّر إيصال التفويض» screen: the site's own CSRF middleware 403'd every real-browser POST behind the preview domain (host-rewriting gateway), so the OAuth code never reached the relay. Fixed in middleware + GET-push fallback. The user just retries «ربط Trakt» in the app — no dashboard changes, no app reinstall needed. Lesson recorded: cross-origin CSRF checks must trust Sec-Fetch-Site before Origin/Host behind host-rewriting proxies, and agent/curl tests must run through the PUBLIC domain, not localhost, to catch this class of bug.
+---
+Task ID: 104
+Agent: Z.ai Code (Noor mobile — Trakt linking without the companion website)
+Task: USER: «اريد ان يرتبط Trakt بكود XXXXXXX وليس ومن موقع horse» — link Trakt with a code, no Horse website in the loop.
+
+Work Log:
+- RE-VERIFIED live (curl): Trakt device flow is still a dead end for this registration — device/code issues a code secret-less, but device/token returns 400 empty-body BEFORE any pending check. The user's app is PKCE-only (no secret exists), so the Simkl-style in-app code UX can never complete on Trakt.
+- IMPLEMENTED the closest no-website experience as the DEFAULT return leg: direct noor://callback (RFC 8252) — approve on trakt.tv and the OS bounces straight back into Noor; no companion site. startTraktLink now picks the redirect from a new secure-storage preference (noor.trakt.link.method: 'direct' default | 'relay'); the flow pins its choice byte-for-byte for the exchange (unchanged contract).
+- UI: SegmentedButton «مباشر للتطبيق / عبر الموقع» on the Trakt card (visible when unlinked + idle); per-method copy incl. the one-time dashboard step for direct mode (add noor://callback to Redirect URIs) and an in-flow hint if Trakt errors after approval; changing the method cancels any pending flow (a stale verifier can never complete against the wrong redirect).
+- MANUAL CODE LEG (the "code" ask, made safe by PKCE): NoorApi.submitTraktCode() + AppState.completeTraktWithCode() + a paste field in the waiting panel — any authorization code visible in the browser completes the link because the verifier never leaves the device. pollTraktLink skips the relay HTTP call entirely for direct-pinned flows.
+- Relay leg (website method) kept fully functional as the fallback, including the Task-103 CSRF fix.
+- GATES: flutter analyze → "No issues found!" (7.5s); flutter test → 25/25 passed. Version 1.2.10+13. Pushed Noor main 7855eb3..c3d32b2. Horse untouched.
+
+Stage Summary:
+- Noor 1.2.10+13: Trakt linking defaults to the direct noor://callback return (no website); user-selectable website fallback; manual code paste as a universal safety net. ONE-TIME USER STEP for direct mode: register noor://callback on trakt.tv/oauth/applications (they may have added it back in the Task-100 era — unknown; if they did, direct works immediately). The in-app device-code UX remains technically impossible for PKCE-only registrations (verified twice live).
