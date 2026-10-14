@@ -3391,3 +3391,20 @@ Stage Summary:
 - The link→content loop is now fully observable: link → profile enriches (avatar/stats) → home shows a skeleton then the linked CW row + watchlist rails → Anime tab leads with the user's own Watching/Planning lists.
 - No user action needed beyond updating the build; nothing remaining from this task.
 - Next candidates: sync-history import carries no episode/position (imported AniList history can't resume — identity-only by design today); MAL watching rail on the Anime tab (only AniList currently); Trakt playback rows resume-from-detail.
+
+---
+Task ID: 115
+Agent: Z.ai Code (solo)
+Task: USER (AR): "I want the phone status bar (battery/signal/network) transparent and the app full-screen; the search circle on the RIGHT, wearing the same liquid-glass theme as the bottom nav dock."
+
+Work Log:
+- Extracted the dock's exact glass recipe from glass_dock.dart: _kGlassTint 0xFFBFE6F2, _kPanelFill 0xFF10181C, saturate(1.35) matrix, panel fill alpha 0.434, 160° sheen (0x1F→0x0D tint), 1px specular/dark inset edges, tint ring @0.35, blur ladder 12(<600px)/14.
+- glass_navigation.dart — GlassSearchButton REBUILT with that recipe 1:1 (circular): backdrop ColorFiltered(saturate)→BackdropFilter(blur)→ColoredBox(panel .434), sheen gradient verbatim, curved specular top (0x80BFE6F2→0) + curved dark bottom (0→0x24000000) as the circle-form adaptations of the dock's straight hairlines, outer DecoratedBox ring (tint .35) + drop shadow; ripple Material moved INSIDE the ClipOval so the splash stays circular; blur ladder kept.
+- main.dart — SystemUiMode.edgeToEdge + SystemUiOverlayStyle with statusBarColor/navBarColor/navDivider all transparent, light icons both platforms, systemNavigationBarContrastEnforced:false (guards API 29+ contrast tint).
+- main_shell.dart — Scaffold wrapped in AnnotatedRegion<SystemUiOverlayStyle> (re-asserts transparent bars whenever the shell is visible — the player's immersive mode rewrites the global style; restores edge-to-edge on return); search button moved from physical top-LEFT to top-RIGHT (user mandate): right:16 phone / right:76 tablet (clears the 48px hamburger at right:16); content keeps SafeArea(top) so nothing collides with status icons while the background extends behind the bar.
+- v1.2.18+21. GATES: dart format clean; flutter analyze → No issues found; flutter test → 110/110. Commit 75f2bd5 pushed (755bd65..75f2bd5 main→main).
+
+Stage Summary:
+- Status bar is now transparent with the app background showing through (full-screen glass look); gesture bar transparent too; search circle = dock-identical liquid glass at the physical top-right.
+- Residual: none known; visual verification needs the owner's device (emulator-free repo). If the Android 15 predictive-back/gesture bar still tints on some OEM skins, the fallback is an AndroidManifest windowOptOutEdgeToEdgeEnforcement check — not needed for stock behavior.
+- Next candidates: extend the glass recipe to the tablet hamburger button for chrome consistency; per-page hero images bleeding under the status bar (would need per-page top-inset rework).
