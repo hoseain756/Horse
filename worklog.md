@@ -3080,3 +3080,21 @@ Work Log:
 
 Stage Summary:
 - Noor 1.2.10+13: Trakt linking defaults to the direct noor://callback return (no website); user-selectable website fallback; manual code paste as a universal safety net. ONE-TIME USER STEP for direct mode: register noor://callback on trakt.tv/oauth/applications (they may have added it back in the Task-100 era — unknown; if they did, direct works immediately). The in-app device-code UX remains technically impossible for PKCE-only registrations (verified twice live).
+
+---
+Task ID: 105
+Agent: Z.ai Code (Noor mobile — app-identifier OAuth redirect URI for AniList/MyAnimeList)
+Task: USER: inspect the Flutter project, identify the actual Android package name + iOS bundle identifier, generate a `com.example.myapp://callback`-style OAuth redirect URI from the real identifier, configure it on Android + iOS, ensure AniList/MyAnimeList compatibility, and report the exact URIs to register in each developer panel.
+
+Work Log:
+- IDENTIFIERS (verified in-tree): Android `applicationId`/`namespace` = app.noor.mobile (android/app/build.gradle.kts); iOS PRODUCT_BUNDLE_IDENTIFIER = app.noor.mobile in all 3 build configs (project.pbxproj). The app previously only registered the `noor://` scheme on Android (Trakt) and NOTHING on iOS.
+- PROVIDER REQUIREMENTS (fetched from official sources): AniList docs.anilist.co/guide/auth — application redirect URL "can be any valid URI, including custom URI schemes"; code returns as ?code=…; tokens live 1 year, no refresh. MyAnimeList official staff guide (blog.php?eid=835707) — recommends private-use URI schemes ("you may register the custom myapp://auth handler"), PKCE REQUIRED (code_challenge, plain method), callback carries ?code=…&state=…, redirect_uri may be omitted (uses the registered default) but should be sent byte-for-byte in authorize + token.
+- CANONICAL URI: app.noor.mobile://callback (RFC 8252 §7.1 reverse-DNS scheme + /callback authority).
+- Android: AndroidManifest gains a BROWSABLE intent-filter (scheme app.noor.mobile, host callback); MainActivity OAUTH_SCHEME const + captureLink forwards app.noor.mobile:// VIEW intents over noor/links (cold + warm, pending-buffer preserved).
+- iOS: Info.plist gains CFBundleURLTypes with app.noor.mobile (AniList/MAL) AND noor (gives Trakt's direct return iOS support for free); SceneDelegate.swift now forwards scene(_:openURLContexts:) + willConnectTo connectionOptions.urlContexts to Dart via a new NoorLinkForwarder (same noor/links EventChannel name as Android → zero Dart platform branching; parks pre-listen links).
+- Dart: NEW lib/core/oauth/oauth_redirect.dart — OAuthRedirect (scheme/host/redirectUri/anilistRedirectUri/malRedirectUri consts, isCallback, parse→OAuthCallback{code,state,error}) with case-insensitive scheme/host matching and foreign-link rejection; IncomingLinkListener routes app.noor.mobile:// → announceOAuthCallback + bilingual toast (arrival confirmation / denial); AppState gains oauthCallback {at, code, state, error?} (in-memory) + announceOAuthCallback() — the future AniList/MAL token exchange consumes the pending code from here. Trakt untouched (its flow pins noor://callback / HTTPS; never mixes schemes or the exchange fails).
+- TESTS: +10 in test/oauth_redirect_test.dart (constants, canonical parse, code-only AniList shape, code+state MAL shape, denial, whitespace, no-code rejection, foreign scheme/host rejection). flutter test → 35/35 passed; flutter analyze → "No issues found!" (6.7s); AndroidManifest.xml + Info.plist XML-validated; SceneDelegate reviewed (no Swift toolchain on Linux — iOS build untestable here, same as before).
+- Version 1.2.11+14. Committed 6b956a5, pushed Noor main c3d32b2..6b956a5. Horse untouched.
+
+Stage Summary:
+- Noor 1.2.11+14: the app now OWNS the app.noor.mobile:// custom scheme on Android + iOS. EXACT URIs the user must register: AniList → anilist.co/settings/developer → app → Redirect URL = app.noor.mobile://callback ; MyAnimeList → myanimelist.net/settings/apiconfig → app → Redirect URL = app.noor.mobile://callback. Callbacks land in AppState.oauthCallback with arrival toasts; no AniList/MAL OAuth flow exists yet — next task can build the token exchange on this plumbing (MAL needs PLAIN code_challenge; AniList needs no secret for public clients, 1-year tokens).
