@@ -16,6 +16,19 @@ const nextConfig: NextConfig = {
   // level — it never appears in production builds; this also removes it from
   // dev so screenshots/QA reflect the real UI.
   devIndicators: false,
+  // iOS Universal Links: the AASA file has no extension, so a plain static
+  // file would be served as application/octet-stream (Apple requires
+  // application/json) — rewrite it to a route handler that sets the header.
+  // /.well-known/assetlinks.json (Android App Links) is a static .json file
+  // and needs no rewrite.
+  async rewrites() {
+    return [
+      {
+        source: "/.well-known/apple-app-site-association",
+        destination: "/api/well-known/apple-app-site-association",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

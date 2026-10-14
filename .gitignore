@@ -79,3 +79,6 @@ gold_traces/**/query.db
 /.zshots/
 /download/
 qa-shots/*.tsv
+
+# Trakt OAuth relay runtime registry (in-memory mirror)
+db/trakt-relay.json
