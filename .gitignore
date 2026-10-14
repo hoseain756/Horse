@@ -72,3 +72,10 @@ upload/
 tmp/appmaps/
 tmp/gold_traces_query.db
 gold_traces/**/query.db
+
+# QA screenshots & agent-generated artifacts (never commit)
+/qa-*.png
+/qa-shots/
+/.zshots/
+/download/
+qa-shots/*.tsv
