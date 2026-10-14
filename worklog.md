@@ -2785,3 +2785,20 @@ Work Log:
 Stage Summary:
 - Noor mobile @ 1.2.0+3, local main = 6 commits ahead of origin (ce4902e + 5 new). Torrent UX is now complete end-to-end: paste magnet/hash in Library, tap magnet: links from browsers, instant resume from history, on-disk downloads manager. Zero login anywhere.
 - BLOCKED on push: user must approve https://github.com/login/device with code 136E-3E18 (valid 15 min) — autopush.sh will push Noor main (+ Horse main/flutter-mobile pending round) automatically on approval.
+
+---
+Task ID: 89-c
+Agent: Z.ai Code (repo flattening)
+Task: User request — Noor repo must BE the Flutter app at root, no mobile_app/ nesting.
+
+Work Log:
+- Verified origin/main root had ONLY mobile_app/ (129 files).
+- shopt dotglob + mv mobile_app/* . + rmdir; git add -A detected 129 renames (R).
+- README build section: `cd mobile_app` -> run from repo root.
+- docs/migration: appended Milestone 12 (flatten), annotated historical paths in design-reference.md + feature-parity-matrix.md.
+- flutter analyze from /home/z/Noor (root) -> "No issues found!".
+- Committed 85739ac and pushed with saved device-flow token: a51c518..85739ac main -> main.
+- Verified via GitHub contents API: root now shows android/, ios/, lib/, docs/, pubspec.yaml, README.md etc.
+
+Stage Summary:
+- github.com/hoseain756/Noor root IS the Flutter project now. Clone -> flutter pub get -> flutter run. Worklog + milestone log updated. Token at ~/ghflow/.token reusable for future pushes.
