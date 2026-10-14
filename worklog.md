@@ -2845,3 +2845,20 @@ Work Log:
 
 Stage Summary:
 - User can build v1.2.0+3 APK locally from Noor repo with one CMD command. Remote repos unchanged; nothing pushed this task.
+
+---
+Task ID: 91
+Agent: Z.ai Code (local build fixes -> repo fixes)
+Task: User built v1.2.0+3 locally on Windows; found MainActivity.kt missing MethodCall import (fixed locally by him) and toolchain advisory warnings (Gradle 9.1.0+/AGP 9.0.1+/Kotlin 2.3.20+).
+
+Work Log:
+- Read /home/z/Noor MainActivity.kt: confirmed MethodCall used at lines 91/207/262 with NO import (only MethodChannel was imported). Added `import io.flutter.plugin.common.MethodCall` (line 28, same as user's local fix).
+- Bumped pubspec.yaml version 1.2.0+3 -> 1.2.1+4 (only app-version reference; build.gradle.kts hits were jlibtorrent 1.2.0.18 deps).
+- flutter analyze: "No issues found!". Committed 34049d6 "fix(android): import MethodCall in MainActivity; bump to 1.2.1+4" and pushed to Noor main (85739ac..34049d6). Remote verified.
+- Verified recommended versions exist: Gradle 9.1.0-all.zip (200), AGP 9.0.1 (google maven, 200), Kotlin 2.3.20 (Maven Central, 200).
+- gradle.properties already has Flutter-migrator flags android.builtInKotlin=false + android.newDsl=false -> AGP 9 stays KGP-compatible.
+- Created branch build-deps-upgrade (commit 9242ec1): gradle-wrapper 8.14->9.1.0, AGP 8.11.1->9.0.1, Kotlin 2.2.20->2.3.20. Pushed as test branch; NOT merged to main until user builds it successfully on his machine (his Flutter is 3.49.0-0.2.pre).
+
+Stage Summary:
+- Noor main (34049d6) now builds for anyone: pull -> flutter build apk --release -> app-release.apk (v1.2.1+4).
+- build-deps-upgrade branch awaiting user's local test; on success merge to main. Horse repos untouched.
