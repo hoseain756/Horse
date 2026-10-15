@@ -3523,3 +3523,23 @@ Stage Summary:
 - The home page now draws behind the fully transparent status bar on both platforms: the featured hero (artwork + scrim) extends to y=0, status icons stay readable via the new top scrim, and every other tab/chrome element keeps its previous safe-area geometry — the rest of the UI is untouched.
 - Residual: on-device visual confirmation is with the owner (no emulator in repo); when the user scrolls, rails pass under the transparent bar (standard edge-to-edge behavior, same as Netflix/Disney+); classic home mode + service-message states carry the inset, so no content collides with the icons.
 - Next candidates: Task 118 residuals (in-player stream switching is still unwired; per-season TMDB stills port); anime/kids tabs could get the same hero-bleed treatment later if wanted; dark iOS launch storyboard variant.
+
+---
+Task ID: 120
+Agent: Z.ai Code (solo)
+Task: USER (AR): "I want the pre-modification back-button glow background (detail page) applied to the search button and the navigation bar. Also the season dropdown and the episodes view toggle must wear the same old-button design with the same glow background."
+
+Work Log:
+- Extracted the pre-118 back-pill recipe from git (commit 1bcd9f1, detail_hero.dart DetailBackPill): blur-12 backdrop over a black/55 fill, 1px white/15 ring, soft black shadow (blur 14, offset 0,4) — versus the current Task-118 cyan dock recipe (saturate 1.35 + #BFE6F2 ring/sheen + panel fill #10181C @ .434) the user dislikes.
+- lib/shared/widgets/glass_navigation.dart — GlassSearchButton rebuilt on the old recipe: removed ColorFiltered saturate + 160° tint sheen + specular-top/dark-bottom gradients + width-based blur ladder → single BackdropFilter(blur 12) over black/55; ring white/15; shadow black .35/14/(0,4). Covers search button (MainShell), detail back circle, sources-page back circle.
+- lib/features/shell/glass_dock.dart — bottom navigation dock: same swap (ring/shadow/fill/blur); cyan sheen + inset hairlines deleted; _kGlassTint/_kPanelFill/_kSaturate/_saturationMatrix removed; active-pill fill + icon colors untouched; sizing blur ladder (12/14) kept.
+- lib/features/media/detail_glass.dart — GlassPillSurface (season dropdown trigger + view toggle) on the old recipe; header docs updated; menu panel (_GlassMenuPanel) intentionally unchanged (expanded sheet, not a button).
+- lib/features/media/episode_views.dart — _SortChip switched from its opaque raised/70 container to GlassPillSurface so the whole episodes toolbar (season · sort · view) wears the identical old-glass surface.
+- NEW test/glass_recipe_test.dart (3 testWidgets): pins ring white/15 + shadow black .35/14/(0,4) + exactly one BackdropFilter + zero ColorFiltered layers on GlassSearchButton, GlassPillSurface and GlassDock — recipe-drift regression lock.
+- GATES: dart format clean; flutter analyze → No issues found; flutter test → 151/151 (was 148, +3). Version 1.2.23+26. Commit ac92a1d pushed (eeb7f50..ac92a1d main→main).
+
+Stage Summary:
+- The entire floating-glass family (search button, detail/sources back circles, phone bottom dock, season dropdown, sort chip, view toggle) now renders the exact pre-118 back-pill surface the user asked to keep; the cyan-tint dock recipe is fully removed from the app.
+- Deliberate scope cut: the tablet slide-in nav panel + hamburger keep their opaque surface/94 style (they never wore the cyan recipe; candidate for the same treatment if wanted), and the season dropdown's expanded MENU sheet keeps its elevated-panel style (only the BUTTON was mandated).
+- Residual: on-device look confirmation is with the owner; BackdropFilter renders as translucent fill in widget tests (no GPU) — visual verification happens on device.
+- Next candidates: extend the old-glass recipe to the tablet hamburger/nav panel; Task 118 residuals (in-player stream switching still unwired; per-season TMDB stills port); dark iOS launch storyboard variant.
