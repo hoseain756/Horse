@@ -4038,3 +4038,46 @@ GATES: node --check sw.js OK · lint 0 errors · behavioral tests a/b/c PASS.
 
 Stage Summary:
 - Horse-only deploy-recovery shipped (Noor untouched, per user mandate): stale-SW chunk crashes self-heal — v5 cache purge + reload-on-chunk-error. After this deploy lands, a user hitting "Application error" recovers automatically on the next open (or via one manual refresh); standing self-help if needed: close+reopen PWA or clear site data for horse-1.vercel.app.
+
+---
+Task ID: 127-plan
+Agent: Z.ai Code (orchestrator — solo; small blast radius, no parallel executors)
+Task: USER (AR): Noor device bugs — (1) Torrentio torrent play → `TorrentException(torrent_error): g0.d`; (2) direct-URL streams (pengu.uk penguin addon) → WHITE screen, player never opens. Test with the two provided addon manifests. Never build an APK; no command-line device testing (user tests on SM-A217F).
+
+AUDIT FINDINGS (Explore 127-a torrent / 127-b player, static proof):
+- WHITE SCREEN ROOT CAUSE (confirmed): `MediaKit.ensureInitialized()` is NEVER called (no commit ever contained it). media_kit 1.2.6 `NativeLibrary.path` THROWS 'MediaKit.ensureInitialized must be called...' when `Player()` is constructed → exception in `MediaKitEngine()` ctor inside `_createEngine()` during the player route's first frame → release `RenderErrorBox` (light grey ≈ white, fills screen, back gesture dead). Affects ALL five player entry points. `MediaKit.ensureInitialized` is idempotent (`if (_initialized) return;` — verified in pub cache source).
+- g0.d ROOT CAUSE (ranked #1): Flutter 3.47 enables R8 minify+shrink for release BY DEFAULT (FlutterPlugin.kt:214-223) and the app has no override / no proguard-rules → jlibtorrent SWIG wrappers get obfuscated (class → `g0.d`); a native Throwable (`NoClassDefFoundError`/`<clinit>` LinkageError class) surfaces via MainActivity.kt catch → `result.error("torrent_error", t.message)` → PlatformException → TorrentException toString. Fix = disable minification (+ enrich native error messages with real class names while at it).
+- SECONDARY (penguin streams would 403 after white-screen fix): headers parsing only supports FLAT `behaviorHints.proxyHeaders` — nested spec shape `{request:{...},response:{...}}`, legacy `behaviorHints.headers`, and `url|Header=V&Header=V` pipe syntax are NOT handled (media_detail_page.dart:602-604, video_player_page.dart:742-747).
+
+BINDING CONTRACT (solo; zero overlap by construction):
+1. lib/main.dart: + `MediaKit.ensureInitialized();` after WidgetsFlutterBinding (import package:media_kit/media_kit.dart).
+2. lib/features/player/engine/playback_engine.dart: MediaKitEngine ctor calls `MediaKit.ensureInitialized()` first line (idempotent, defensive for all 5 entry points).
+3. lib/features/player/stream_headers.dart (NEW): `PlaybackSource` + `parsePlaybackSource(stream)` → normalizes pipe-split URL, flat proxyHeaders, nested {request,response} (request only), legacy behaviorHints.headers; skips non-scalar values.
+4. lib/features/media/media_detail_page.dart: `_launchStream` direct branch → use parsePlaybackSource (clean url + headers).
+5. lib/features/player/video_player_page.dart: `_createEngine` wraps ctor in try/catch → new `_engineInitError` field; build `failed` ORs it; _ErrorPanel message fallback + retry resets it; `_resolveForPlayback` uses parsePlaybackSource.
+6. android/app/build.gradle.kts: release `isMinifyEnabled=false`, `isShrinkResources=false` + comment (g0.d).
+7. android/.../MainActivity.kt: both generic catches message = `"${t.javaClass.name}: ${t.message...}"`.
+8. pubspec.yaml 1.2.28+32 → 1.2.29+33.
+GATES: dart format · flutter analyze 0 issues · flutter test 151+ · NO APK BUILD (user mandate) · commit+push Noor main · worklog 127.
+
+---
+Task ID: 127
+Agent: Z.ai Code (orchestrator — solo per 127-plan contract)
+Task: USER (AR): Noor device bugs — Torrentio play → `TorrentException(torrent_error): g0.d`; direct-URL streams (pengu.uk penguin addon) → white screen, player never opens. Test with the provided addons; no APK builds, no command-line device testing.
+
+Work Log:
+- Parallel audits (127-a torrent pipeline / 127-b player navigation) → root causes: (1) MediaKit.ensureInitialized() never called — Player() ctor throws inside the player route's first frame → release RenderErrorBox (white screen) for ALL player entry points; (2) Flutter 3.47 default R8 release minification obfuscates jlibtorrent/SWIG wrappers (no keep rules, no override) → native Throwable messages like "g0.d"; (3) headers parsing only supported flat proxyHeaders (nested {request,response}, legacy headers, url|pipe all unhandled → 403s on penguin streams).
+- lib/main.dart: + MediaKit.ensureInitialized() after WidgetsFlutterBinding (idempotent — verified in media_kit 1.2.6 source).
+- lib/features/player/engine/playback_engine.dart: MediaKitEngine ctor calls ensureInitialized defensively first line.
+- lib/features/player/stream_headers.dart (NEW): PlaybackSource + parsePlaybackSource — pipe `url|K=V&K=V` split, flat proxyHeaders, nested {request,response} (request only), legacy behaviorHints.headers; scalar-only absorption, first-writer precedence (pipe > proxy > legacy), Map.unmodifiable.
+- lib/features/media/media_detail_page.dart: _launchStream direct branch uses parsePlaybackSource (directHeaders local → VideoPlayerPage.headers).
+- lib/features/player/video_player_page.dart: _createEngine try/catch → _engineInitError field surfaced via build's failed flag + _ErrorPanel(message fallback) + retry resets it; _resolveForPlayback uses parsePlaybackSource (headers preserved for debrid/engine branches; debrid var renamed debridUrl to avoid shadowing).
+- android/app/build.gradle.kts: release isMinifyEnabled=false + isShrinkResources=false with g0.d rationale comment.
+- android/.../MainActivity.kt: both generic catches now message = "${t.javaClass.name}: ${t.message...}" (diagnosable native errors).
+- pubspec.yaml 1.2.28+32 → 1.2.29+33.
+- GATES: dart format clean (1 file changed) · flutter analyze → No issues found · flutter test → 151/151 · NO APK BUILD (user mandate).
+- Commit 33d7ea1 pushed 213b313..33d7ea1 (GitHub API verified origin/main = 33d7ea1).
+
+Stage Summary:
+- Task 127 SHIPPED at v1.2.29+33 @ 33d7ea1: white-screen player root cause eliminated at boot + engine-construction safety net + readable torrent errors (no more obfuscated messages) + full Stremio header-shape normalization for direct-link addons (penguin-style). User validates on device (SM-A217F) with Torrentio + pengu.uk manifests; if a torrent still fails, the SnackBar now shows the REAL exception class + message instead of "g0.d".
+- Honest notes: on-device torrent success still depends on peers/network (engine unchanged — only the error surface + obfuscation breakage fixed); debrid accounts continue to bypass P2P entirely.
