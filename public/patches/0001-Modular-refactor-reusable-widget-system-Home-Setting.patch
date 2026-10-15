@@ -1,0 +1,4763 @@
+From 8643b2d4a916e68c21efa6569464d16115d11180 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Thu, 15 Oct 2026 06:26:23 +0000
+Subject: [PATCH] Modular refactor: reusable widget system + Home/Settings
+ decomposition (Task 121)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Parallel-agent refactor (lead + 5 agents, ownership matrix enforced):
+- HorseTheme additive tokens: semantic colors (hairline, scrimPoster/Strong,
+  danger, success, progressRed, imdbYellow), radii, motion (emphasized curve,
+  dur fast/med/slow), gutter() + breakpoints — one design-token source.
+- NEW shared AppStateMessage (replaces 9 near-identical state widgets across
+  live_tv, catalog browser/grid, calendar; pixel-identical per-site params).
+- NEW shared ShimmerBox (moved verbatim from detail_hero + export shim).
+- Home 2216→586 lines: FeaturedHero / ContinueWatchingRail (+CwCardData,
+  ContinueCard, LinkedContinue*) / AsyncMediaSection / RailLoadingSkeleton /
+  HomeSectionHeader under features/home/widgets/ — triplicated CW geometry
+  solved once (_CwRailMetrics) and 3x gold-bar header unified.
+- Settings kit: SettingsTile + SettingsSectionTitle extracted, settings_page
+  rewired (390→323 L); near-miss rows deliberately kept local.
+- media_rail gold literal → HorseTheme.gold.
+
+Zero behavior/UI change (QA 121-e: SHIP, all audits PASS). Gates: analyze
+clean, 151/151 tests = baseline. v1.2.24+27
+---
+ lib/core/theme/horse_theme.dart               |   35 +
+ lib/features/calendar/calendar_page.dart      |   41 +-
+ .../catalog/catalog_browser_page.dart         |   46 +-
+ lib/features/catalog/catalog_grid_page.dart   |   59 +-
+ lib/features/home/home_page.dart              | 1676 +----------------
+ .../home/widgets/async_media_section.dart     |  226 +++
+ .../home/widgets/continue_watching_rail.dart  |  723 +++++++
+ lib/features/home/widgets/featured_hero.dart  |  721 +++++++
+ .../home/widgets/home_section_header.dart     |   40 +
+ lib/features/live_tv/live_tv_page.dart        |   58 +-
+ lib/features/media/detail_hero.dart           |  100 +-
+ lib/features/settings/addons_page.dart        |    2 +-
+ lib/features/settings/settings_data_page.dart |   29 +-
+ lib/features/settings/settings_page.dart      |  112 +-
+ .../settings/widgets/settings_tiles.dart      |   92 +
+ lib/shared/widgets/app_state_message.dart     |  110 ++
+ lib/shared/widgets/media_rail.dart            |    2 +-
+ lib/shared/widgets/shimmer_box.dart           |   96 +
+ pubspec.yaml                                  |    2 +-
+ 19 files changed, 2169 insertions(+), 2001 deletions(-)
+ create mode 100644 lib/features/home/widgets/async_media_section.dart
+ create mode 100644 lib/features/home/widgets/continue_watching_rail.dart
+ create mode 100644 lib/features/home/widgets/featured_hero.dart
+ create mode 100644 lib/features/home/widgets/home_section_header.dart
+ create mode 100644 lib/features/settings/widgets/settings_tiles.dart
+ create mode 100644 lib/shared/widgets/app_state_message.dart
+ create mode 100644 lib/shared/widgets/shimmer_box.dart
+
+diff --git a/lib/core/theme/horse_theme.dart b/lib/core/theme/horse_theme.dart
+index d4e4b55..6fa8fc2 100644
+--- a/lib/core/theme/horse_theme.dart
++++ b/lib/core/theme/horse_theme.dart
+@@ -128,4 +128,39 @@ abstract final class HorseTheme {
+       ),
+     );
+   }
++
++  // --- Task 121 shared tokens (additive) ---
++
++  /// Semantic colors reused across features (evidence: audit 121-a2 §1.2 —
++  /// recurring file-local literals promoted to shared tokens). `danger`
++  /// aliases colorScheme.error; the scrims/hairline/badge hues were
++  /// duplicated as raw hexes in 5–7 files each.
++  static const Color hairline = Color(0x14FFFFFF); // white .08 borders
++  static const Color scrimPoster = Color(0xB8000000); // black .72 poster scrims
++  static const Color scrimStrong = Color(0x8C000000); // black .55 strong scrims
++  static const Color danger = Color(0xFFFF8178); // == scheme.error
++  static const Color success = Color(0xFF22C55E); // watched/positive
++  static const Color progressRed = Color(0xFFDC2626); // resume progress bars
++  static const Color imdbYellow = Color(0xFFF5C518); // IMDb badge amber
++
++  /// Shared corner radii (circular(999) alone appears ×29 across features).
++  static const double radiusPill = 999;
++  static const double radiusCard = 16;
++  static const double radiusInput = 14;
++  static const double radiusChip = 12;
++
++  /// Motion tokens — `emphasized` was defined 3× independently (detail_hero
++  /// `_cubicEmphasized`, episode_views inline, glass_dock `kDockEase`);
++  /// durations cluster at 150/220/350ms across features.
++  static const Cubic emphasized = Cubic(0.2, 0, 0, 1);
++  static const Duration durFast = Duration(milliseconds: 150);
++  static const Duration durMed = Duration(milliseconds: 220);
++  static const Duration durSlow = Duration(milliseconds: 350);
++
++  /// Page gutter used by media rails + detail skeleton geometry, and the
++  /// read-only breakpoint references (700/600/840) repeated at ~20 sites.
++  static double gutter({required bool wide}) => wide ? 34 : 20;
++  static const double bpWide = 700;
++  static const double bpHero = 600;
++  static const double bpTablet = 840;
+ }
+diff --git a/lib/features/calendar/calendar_page.dart b/lib/features/calendar/calendar_page.dart
+index 0db1f5c..e87e966 100644
+--- a/lib/features/calendar/calendar_page.dart
++++ b/lib/features/calendar/calendar_page.dart
+@@ -5,6 +5,7 @@ import '../../core/models/anime_airing.dart';
+ import '../../core/models/media_item.dart';
+ import '../../core/state/app_state.dart';
+ import '../../core/theme/horse_theme.dart';
++import '../../shared/widgets/app_state_message.dart';
+ import '../media/media_detail_page.dart';
+ 
+ class CalendarPage extends StatefulWidget {
+@@ -197,17 +198,19 @@ class _CalendarPageState extends State<CalendarPage> {
+                       );
+                     }
+                     if (snapshot.hasError) {
+-                      return _CalendarMessage(
++                      return AppStateMessage(
++                        icon: Icons.calendar_month_outlined,
+                         message: english
+                             ? 'The calendar could not be loaded.'
+                             : 'تعذر تحميل التقويم.',
+-                        action: english ? 'Retry' : 'إعادة المحاولة',
+-                        onPressed: _retry,
++                        actionLabel: english ? 'Retry' : 'إعادة المحاولة',
++                        onAction: _retry,
+                       );
+                     }
+                     final episodes = snapshot.data ?? const [];
+                     if (episodes.isEmpty) {
+-                      return _CalendarMessage(
++                      return AppStateMessage(
++                        icon: Icons.calendar_month_outlined,
+                         message: app.watchlist
+                                     .any((item) => item.type == 'series') ||
+                                 app.history
+@@ -218,8 +221,8 @@ class _CalendarPageState extends State<CalendarPage> {
+                             : (english
+                                 ? 'Save a series or start watching one to see its new episodes here.'
+                                 : 'أضف مسلسلًا إلى قائمتك أو ابدأ مشاهدته لعرض حلقاته الجديدة هنا.'),
+-                        action: english ? 'Refresh' : 'تحديث',
+-                        onPressed: _retry,
++                        actionLabel: english ? 'Refresh' : 'تحديث',
++                        onAction: _retry,
+                       );
+                     }
+                     final grouped = <DateTime, List<_CalendarEpisode>>{};
+@@ -324,32 +327,6 @@ class _EpisodeTile extends StatelessWidget {
+   }
+ }
+ 
+-class _CalendarMessage extends StatelessWidget {
+-  const _CalendarMessage(
+-      {required this.message, required this.action, required this.onPressed});
+-  final String message;
+-  final String action;
+-  final VoidCallback onPressed;
+-
+-  @override
+-  Widget build(BuildContext context) => Center(
+-        child: Padding(
+-          padding: const EdgeInsets.all(28),
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const Icon(Icons.calendar_month_outlined,
+-                  size: 44, color: HorseTheme.muted),
+-              const SizedBox(height: 12),
+-              Text(message, textAlign: TextAlign.center),
+-              const SizedBox(height: 14),
+-              OutlinedButton(onPressed: onPressed, child: Text(action)),
+-            ],
+-          ),
+-        ),
+-      );
+-}
+-
+ DateTime? _releaseDate(dynamic raw) {
+   if (raw is! String || raw.trim().isEmpty) return null;
+   return DateTime.tryParse(raw.trim());
+diff --git a/lib/features/catalog/catalog_browser_page.dart b/lib/features/catalog/catalog_browser_page.dart
+index 440d4a6..8bf50e8 100644
+--- a/lib/features/catalog/catalog_browser_page.dart
++++ b/lib/features/catalog/catalog_browser_page.dart
+@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
+ 
+ import '../../core/models/media_item.dart';
+ import '../../core/state/app_state.dart';
+-import '../../core/theme/horse_theme.dart';
++import '../../shared/widgets/app_state_message.dart';
+ import '../../shared/widgets/poster_card.dart';
+ import '../media/media_detail_page.dart';
+ 
+@@ -270,18 +270,24 @@ class _CatalogBrowserPageState extends State<CatalogBrowserPage> {
+               if (_loading) const LinearProgressIndicator(minHeight: 2),
+               Expanded(
+                 child: _error != null && _items.isEmpty
+-                    ? _Message(
++                    ? AppStateMessage(
++                        icon: Icons.movie_filter_outlined,
++                        iconSize: 42,
++                        padding: const EdgeInsets.all(24),
+                         message: _error!,
+-                        action: english ? 'Try again' : 'إعادة المحاولة',
+-                        onPressed: () =>
++                        actionLabel: english ? 'Try again' : 'إعادة المحاولة',
++                        onAction: () =>
+                             unawaited(_load(query: _search.text.trim())))
+                     : _items.isEmpty && !_loading
+-                        ? _Message(
++                        ? AppStateMessage(
++                            icon: Icons.movie_filter_outlined,
++                            iconSize: 42,
++                            padding: const EdgeInsets.all(24),
+                             message: english
+                                 ? 'No titles match these filters.'
+                                 : 'لا توجد عناوين تطابق عوامل التصفية.',
+-                            action: english ? 'Refresh' : 'تحديث',
+-                            onPressed: () =>
++                            actionLabel: english ? 'Refresh' : 'تحديث',
++                            onAction: () =>
+                                 unawaited(_load(query: _search.text.trim())))
+                         : GridView.builder(
+                             padding: const EdgeInsetsDirectional.fromSTEB(
+@@ -315,29 +321,3 @@ class _CatalogBrowserPageState extends State<CatalogBrowserPage> {
+     );
+   }
+ }
+-
+-class _Message extends StatelessWidget {
+-  const _Message(
+-      {required this.message, required this.action, required this.onPressed});
+-  final String message;
+-  final String action;
+-  final VoidCallback onPressed;
+-
+-  @override
+-  Widget build(BuildContext context) => Center(
+-        child: Padding(
+-          padding: const EdgeInsets.all(24),
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const Icon(Icons.movie_filter_outlined,
+-                  size: 42, color: HorseTheme.muted),
+-              const SizedBox(height: 12),
+-              Text(message, textAlign: TextAlign.center),
+-              const SizedBox(height: 14),
+-              OutlinedButton(onPressed: onPressed, child: Text(action)),
+-            ],
+-          ),
+-        ),
+-      );
+-}
+diff --git a/lib/features/catalog/catalog_grid_page.dart b/lib/features/catalog/catalog_grid_page.dart
+index 182e6ea..d995039 100644
+--- a/lib/features/catalog/catalog_grid_page.dart
++++ b/lib/features/catalog/catalog_grid_page.dart
+@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
+ import '../../core/models/media_item.dart';
+ import '../../core/state/app_state.dart';
+ import '../../core/theme/horse_theme.dart';
++import '../../shared/widgets/app_state_message.dart';
+ import '../../shared/widgets/poster_card.dart';
+ import '../media/media_detail_page.dart';
+ 
+@@ -21,8 +22,7 @@ class CatalogGridPage extends StatefulWidget {
+     this.items,
+     this.loader,
+     this.onOpen,
+-  })  : assert(items != null || loader != null,
+-            'Provide items or a loader');
++  }) : assert(items != null || loader != null, 'Provide items or a loader');
+ 
+   final String title;
+ 
+@@ -122,24 +122,30 @@ class _CatalogGridPageState extends State<CatalogGridPage> {
+           child: _loading && items.isEmpty
+               ? const Center(child: CircularProgressIndicator())
+               : _failed && items.isEmpty
+-                  ? _GridMessage(
++                  ? AppStateMessage(
++                      icon: Icons.movie_filter_outlined,
++                      iconSize: 42,
++                      padding: const EdgeInsets.all(24),
+                       message: english
+                           ? 'This catalog could not be loaded.'
+                           : 'تعذر تحميل هذا الكتالوج.',
+-                      action: english ? 'Try again' : 'إعادة المحاولة',
+-                      onPressed: () => unawaited(_load()),
++                      actionLabel: english ? 'Try again' : 'إعادة المحاولة',
++                      onAction: () => unawaited(_load()),
+                     )
+                   : items.isEmpty && !_loading
+-                      ? _GridMessage(
++                      ? AppStateMessage(
++                          icon: Icons.movie_filter_outlined,
++                          iconSize: 42,
++                          padding: const EdgeInsets.all(24),
+                           message: english
+                               ? 'No titles are available in this catalog.'
+                               : 'لا توجد عناوين في هذا الكتالوج.',
+-                          action: english ? 'Refresh' : 'تحديث',
+-                          onPressed: () => unawaited(_load()),
++                          actionLabel: english ? 'Refresh' : 'تحديث',
++                          onAction: () => unawaited(_load()),
+                         )
+                       : GridView.builder(
+-                          padding:
+-                              const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 120),
++                          padding: const EdgeInsetsDirectional.fromSTEB(
++                              16, 8, 16, 120),
+                           gridDelegate:
+                               SliverGridDelegateWithMaxCrossAxisExtent(
+                             maxCrossAxisExtent: 185,
+@@ -169,36 +175,3 @@ class _CatalogGridPageState extends State<CatalogGridPage> {
+     );
+   }
+ }
+-
+-class _GridMessage extends StatelessWidget {
+-  const _GridMessage({
+-    required this.message,
+-    required this.action,
+-    required this.onPressed,
+-  });
+-
+-  final String message;
+-  final String action;
+-  final VoidCallback onPressed;
+-
+-  @override
+-  Widget build(BuildContext context) => Center(
+-        child: Padding(
+-          padding: const EdgeInsets.all(24),
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const Icon(
+-                Icons.movie_filter_outlined,
+-                size: 42,
+-                color: HorseTheme.muted,
+-              ),
+-              const SizedBox(height: 12),
+-              Text(message, textAlign: TextAlign.center),
+-              const SizedBox(height: 14),
+-              OutlinedButton(onPressed: onPressed, child: Text(action)),
+-            ],
+-          ),
+-        ),
+-      );
+-}
+diff --git a/lib/features/home/home_page.dart b/lib/features/home/home_page.dart
+index dccc297..ad274a5 100644
+--- a/lib/features/home/home_page.dart
++++ b/lib/features/home/home_page.dart
+@@ -1,21 +1,19 @@
+ import 'dart:async';
+-import 'dart:math' as math;
+ 
+ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../../core/data/catalog_repository.dart';
+-import '../../core/models/integration_cw.dart';
+ import '../../core/models/media_item.dart';
+-import '../../core/models/featured_artwork.dart';
+ import '../../core/state/app_state.dart';
+ import '../../core/theme/horse_theme.dart';
+ import '../../core/data/content_classifier.dart';
+ import '../../shared/widgets/media_rail.dart';
+ import '../../shared/widgets/noor_toast.dart';
+ import '../shell/noor_dock_tabs.dart';
+-import 'cw_upcoming.dart';
+-import 'top10_rail.dart';
++import 'widgets/async_media_section.dart';
++import 'widgets/continue_watching_rail.dart';
++import 'widgets/featured_hero.dart';
+ import '../anime/anime_page.dart';
+ import '../catalog/catalog_browser_page.dart';
+ import '../catalog/catalog_grid_page.dart';
+@@ -230,14 +228,14 @@ class _HomePageState extends State<HomePage> {
+               builder: (context, snapshot) {
+                 final featured = snapshot.data;
+                 if (featured != null && featured.isNotEmpty) {
+-                  return _FeaturedCard(
++                  return FeaturedHero(
+                     items: featured.take(8).toList(growable: false),
+                     autoplayActive: widget.active,
+                     onTap: _open,
+                   );
+                 }
+                 if (snapshot.connectionState == ConnectionState.waiting) {
+-                  return const _FeaturedSkeleton();
++                  return const FeaturedSkeleton();
+                 }
+                 return Padding(
+                   padding:
+@@ -256,7 +254,7 @@ class _HomePageState extends State<HomePage> {
+               padding: EdgeInsetsDirectional.only(
+                 bottom: MediaRail.sectionSpacing(context),
+               ),
+-              child: _ContinueRail(
++              child: ContinueWatchingRail(
+                 entries: app.continueWatching,
+                 english: english,
+               ),
+@@ -271,7 +269,7 @@ class _HomePageState extends State<HomePage> {
+               padding: EdgeInsetsDirectional.only(
+                 bottom: MediaRail.sectionSpacing(context),
+               ),
+-              child: _LinkedContinueRail(
++              child: LinkedContinueRail(
+                 entries: app.linkedContinueWatching,
+                 english: english,
+                 onOpen: _open,
+@@ -286,11 +284,11 @@ class _HomePageState extends State<HomePage> {
+               padding: EdgeInsetsDirectional.only(
+                 bottom: MediaRail.sectionSpacing(context),
+               ),
+-              child: _LinkedContinueSkeleton(english: english),
++              child: LinkedContinueSkeleton(english: english),
+             ),
+           ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Recommended for you' : 'مقترح لك',
+             future: _recommendations!,
+             onTap: _open,
+@@ -299,7 +297,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Top 10 Today' : 'أفضل 10 اليوم',
+             future: _topTen!,
+             numbered: true,
+@@ -314,7 +312,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Trending series' : 'مسلسلات رائجة',
+             future: _series!,
+             onTap: _open,
+@@ -330,7 +328,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Trending movies' : 'أفلام رائجة',
+             future: _movies!,
+             onTap: _open,
+@@ -346,7 +344,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Trending anime' : 'أنمي رائج',
+             future: _anime!,
+             onTap: _open,
+@@ -356,7 +354,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'Anime movies' : 'أفلام الأنمي',
+             future: _animeMovies!,
+             onTap: _open,
+@@ -369,7 +367,7 @@ class _HomePageState extends State<HomePage> {
+         // rows that fail or stay empty simply don't render.
+         for (final row in _catalogRows)
+           SliverToBoxAdapter(
+-            child: _AsyncMediaSection(
++            child: AsyncMediaSection(
+               title: row.title,
+               subtitle: row.subtitle,
+               future: _catalogRowFutures[row.key] ??
+@@ -392,7 +390,7 @@ class _HomePageState extends State<HomePage> {
+             ),
+           ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'New episodes' : 'حلقات جديدة',
+             future: _newEpisodes!,
+             onTap: _open,
+@@ -408,7 +406,7 @@ class _HomePageState extends State<HomePage> {
+           ),
+         ),
+         SliverToBoxAdapter(
+-          child: _AsyncMediaSection(
++          child: AsyncMediaSection(
+             title: english ? 'In theaters' : 'في السينما',
+             future: _theaters!,
+             onTap: _open,
+@@ -544,1640 +542,12 @@ class _HomePageState extends State<HomePage> {
+       Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+ }
+ 
+-class _AsyncMediaSection extends StatelessWidget {
+-  const _AsyncMediaSection({
+-    required this.title,
+-    required this.future,
+-    required this.onTap,
+-    required this.onRetry,
+-    required this.english,
+-    this.subtitle,
+-    this.numbered = false,
+-    this.showEmptyState = false,
+-    this.onOpenSection,
+-  });
+-
+-  final String title;
+-
+-  /// Optional source line under the rail title (the add-on name, mirroring
+-  /// the web Rail subtitle).
+-  final String? subtitle;
+-  final Future<List<MediaItem>> future;
+-  final ValueChanged<MediaItem> onTap;
+-  final VoidCallback onRetry;
+-  final bool english;
+-  final bool numbered;
+-  final bool showEmptyState;
+-
+-  /// Opens the full catalog section this rail belongs to (the header
+-  /// "greater-than" mark).
+-  final VoidCallback? onOpenSection;
+-
+-  @override
+-  Widget build(BuildContext context) => FutureBuilder<List<MediaItem>>(
+-        future: future,
+-        builder: (context, snapshot) {
+-          if (snapshot.connectionState == ConnectionState.waiting) {
+-            return _RailLoading(title: title);
+-          }
+-          final items = snapshot.data ?? const <MediaItem>[];
+-          if (snapshot.hasError) {
+-            if (!showEmptyState) return const SizedBox.shrink();
+-            return _RailMessage(
+-              title: title,
+-              message: english
+-                  ? 'Could not load today’s ranking.'
+-                  : 'تعذر تحميل قائمة اليوم.',
+-              actionLabel: english ? 'Retry' : 'إعادة المحاولة',
+-              onRetry: onRetry,
+-            );
+-          }
+-          if (items.isEmpty) {
+-            if (!showEmptyState) return const SizedBox.shrink();
+-            return _RailMessage(
+-              title: title,
+-              message: english
+-                  ? 'No ranked titles are available right now.'
+-                  : 'لا تتوفر عناوين في القائمة حاليًا.',
+-              actionLabel: english ? 'Refresh' : 'تحديث',
+-              onRetry: onRetry,
+-            );
+-          }
+-          return Padding(
+-            padding: EdgeInsetsDirectional.only(
+-              bottom: MediaRail.sectionSpacing(context),
+-            ),
+-            // The Top 10 row uses the ranked sticker layout; every other
+-            // section keeps the standard poster rail.
+-            child: numbered
+-                ? Top10Rail(title: title, items: items, onTap: onTap)
+-                : MediaRail(
+-                    title: title,
+-                    subtitle: subtitle,
+-                    items: items,
+-                    onTap: onTap,
+-                    onOpenSection: onOpenSection,
+-                  ),
+-          );
+-        },
+-      );
+-}
+-
+-class _RailLoading extends StatelessWidget {
+-  const _RailLoading({required this.title});
+-  final String title;
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final settings = context.watch<AppState>().webSettings;
+-    final showTitle = settings['hidePosterTitles'] != true;
+-    final width = MediaQuery.sizeOf(context).width;
+-    final posterWidth = width >= 700 ? 138.0 : 122.0;
+-    final posterHeight = posterWidth / .72;
+-    final labelHeight = showTitle
+-        ? 8 + MediaQuery.textScalerOf(context).scale(14) * 1.3 * 2
+-        : 0.0;
+-    final railHeight = posterHeight + labelHeight;
+-    return Padding(
+-      padding: EdgeInsetsDirectional.only(
+-        bottom: MediaRail.sectionSpacing(context),
+-      ),
+-      child: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          Padding(
+-            padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+-            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+-          ),
+-          SizedBox(height: MediaRail.headerSpacing(context)),
+-          SizedBox(
+-            height: railHeight,
+-            child: ListView.separated(
+-              padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+-              scrollDirection: Axis.horizontal,
+-              itemCount: 6,
+-              separatorBuilder: (_, __) => SizedBox(
+-                width: (width * .035).clamp(12.0, 18.0).toDouble(),
+-              ),
+-              itemBuilder: (_, __) => SizedBox(
+-                width: posterWidth,
+-                child: Column(
+-                  crossAxisAlignment: CrossAxisAlignment.start,
+-                  children: [
+-                    SizedBox(
+-                      height: posterHeight,
+-                      child: DecoratedBox(
+-                        decoration: BoxDecoration(
+-                          color: HorseTheme.surface,
+-                          borderRadius: BorderRadius.circular(14),
+-                        ),
+-                      ),
+-                    ),
+-                    if (showTitle) ...[
+-                      const SizedBox(height: 8),
+-                      const SizedBox(
+-                        width: 96,
+-                        height: 11,
+-                        child: DecoratedBox(
+-                          decoration: BoxDecoration(
+-                            color: HorseTheme.surface,
+-                            borderRadius: BorderRadius.all(Radius.circular(8)),
+-                          ),
+-                        ),
+-                      ),
+-                      const SizedBox(height: 5),
+-                      const SizedBox(
+-                        width: 64,
+-                        height: 9,
+-                        child: DecoratedBox(
+-                          decoration: BoxDecoration(
+-                            color: HorseTheme.surface,
+-                            borderRadius: BorderRadius.all(Radius.circular(8)),
+-                          ),
+-                        ),
+-                      ),
+-                    ],
+-                  ],
+-                ),
+-              ),
+-            ),
+-          ),
+-        ],
+-      ),
+-    );
+-  }
+-}
+-
+-class _RailMessage extends StatelessWidget {
+-  const _RailMessage({
+-    required this.title,
+-    required this.message,
+-    required this.actionLabel,
+-    required this.onRetry,
+-  });
+-  final String title;
+-  final String message;
+-  final String actionLabel;
+-  final VoidCallback onRetry;
+-
+-  @override
+-  Widget build(BuildContext context) => Padding(
+-        padding: EdgeInsetsDirectional.fromSTEB(
+-          20,
+-          4,
+-          20,
+-          MediaRail.sectionSpacing(context),
+-        ),
+-        child: Column(
+-          crossAxisAlignment: CrossAxisAlignment.start,
+-          children: [
+-            Text(title, style: Theme.of(context).textTheme.titleLarge),
+-            const SizedBox(height: 8),
+-            Text(message, style: Theme.of(context).textTheme.bodyMedium),
+-            const SizedBox(height: 8),
+-            Align(
+-              alignment: AlignmentDirectional.centerStart,
+-              child: TextButton.icon(
+-                onPressed: onRetry,
+-                icon: const Icon(Icons.refresh_rounded),
+-                label: Text(actionLabel),
+-              ),
+-            ),
+-          ],
+-        ),
+-      );
+-}
+-
+-/// Continue watching, rebuilt to the Harbor web round-21 mobile spec:
+-/// 16:9 rectangular cards (min(66vw, 300px) wide), the S/E tag + title +
+-/// episode/remaining subtitle painted INSIDE the card over a bottom scrim,
+-/// hairline white border, the signature red track-less progress bar, the
+-/// "upcoming episode" badge + amber fresh dot (bounded metadata enrichment,
+-/// Task 111) and the Harbor long-press menu (details / mark watched / remove).
+-/// Rows are ordered most-recently-watched first, exactly like the site.
+-class _ContinueRail extends StatefulWidget {
+-  const _ContinueRail({required this.entries, required this.english});
+-  final List<WatchHistoryEntry> entries;
+-  final bool english;
+-
+-  @override
+-  State<_ContinueRail> createState() => _ContinueRailState();
+-}
+-
+-class _ContinueRailState extends State<_ContinueRail> {
+-  final Map<String, CwEnrichment?> _enrichment = {};
+-  late final CwEnrichmentCache _cache = CwEnrichmentCache(_loadDetail);
+-  String? _enrichSignature;
+-
+-  Future<MediaItem?> _loadDetail(MediaItem item) {
+-    final app = context.read<AppState>();
+-    return app.catalogs
+-        .detail(item.type, item.id, app.addons)
+-        .timeout(const Duration(seconds: 10), onTimeout: () => null);
+-  }
+-
+-  /// Finished episode ids from history — the web `episodeWatchedSet()` that
+-  /// drives the fresh-dot decision.
+-  Set<String> _watchedVideoIds(AppState app) => app.history
+-      .where(
+-        (h) =>
+-            h.durationMs > 0 &&
+-            h.positionMs >= h.durationMs - 120000 &&
+-            h.videoId != null,
+-      )
+-      .map((h) => h.videoId!)
+-      .toSet();
+-
+-  /// Web parity: only the first six visible series cards trigger metadata
+-  /// lookups (`enrich: i < 6`); results land via setState, fail soft.
+-  void _ensureEnrichment() {
+-    final app = context.read<AppState>();
+-    final signature =
+-        widget.entries.map((e) => '${e.item.id}:${e.watchedAt}').join('|');
+-    if (signature == _enrichSignature) return;
+-    _enrichSignature = signature;
+-    final watched = _watchedVideoIds(app);
+-    final now = DateTime.now();
+-    var launched = 0;
+-    for (final entry in widget.entries) {
+-      if (launched >= CwEnrichmentCache.maxEnrichedCards) break;
+-      if (entry.item.type != 'series') continue;
+-      if (entry.season == null || entry.episode == null) continue;
+-      if (_enrichment.containsKey(entry.item.id)) continue;
+-      launched++;
+-      final itemId = entry.item.id;
+-      unawaited(
+-        _cache.enrichmentFor(entry.item, entry, watched, now).then((value) {
+-          if (!mounted) return;
+-          setState(() => _enrichment[itemId] = value);
+-        }),
+-      );
+-    }
+-  }
+-
+-  @override
+-  void didChangeDependencies() {
+-    super.didChangeDependencies();
+-    _ensureEnrichment();
+-  }
+-
+-  @override
+-  void didUpdateWidget(covariant _ContinueRail oldWidget) {
+-    super.didUpdateWidget(oldWidget);
+-    _ensureEnrichment();
+-  }
+-
+-  /// Web token parity: movies show the remaining-time subtitle
+-  /// ("1h 20m left" / "تبقى 1س 20د") when more than a minute remains.
+-  static String? _remainingLabel(WatchHistoryEntry entry, bool english) {
+-    final remaining = entry.durationMs - entry.positionMs;
+-    if (remaining <= 60000) return null;
+-    final totalMin = (remaining / 60000).round();
+-    final h = totalMin ~/ 60;
+-    final m = totalMin % 60;
+-    final parts = <String>[
+-      if (h > 0) '$h${english ? 'h' : 'س'}',
+-      if (m > 0 || h == 0) '$m${english ? 'm' : 'د'}',
+-    ];
+-    return english ? '${parts.join(' ')} left' : 'تبقى ${parts.join(' ')}';
+-  }
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    // Most recently watched first — same ordering as the Harbor web row.
+-    final sorted = [...widget.entries]
+-      ..sort((a, b) => b.watchedAt.compareTo(a.watchedAt));
+-    final wide = MediaQuery.sizeOf(context).width >= 700;
+-    // Web tokens: --cw-card-w = min(66vw, 300px) with aspect-ratio 16 / 9.
+-    final cardWidth = math.min(MediaQuery.sizeOf(context).width * .66, 300.0);
+-    final cardHeight = cardWidth * 9 / 16;
+-    return Column(
+-      crossAxisAlignment: CrossAxisAlignment.start,
+-      children: [
+-        Padding(
+-          padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-          child: Row(
+-            children: [
+-              Container(
+-                width: 3,
+-                height: 19,
+-                decoration: BoxDecoration(
+-                  color: HorseTheme.gold,
+-                  borderRadius: BorderRadius.circular(4),
+-                ),
+-              ),
+-              const SizedBox(width: 10),
+-              Expanded(
+-                child: Text(
+-                  // Exact site strings (web homeT "continueWatching").
+-                  widget.english ? 'Continue Watching' : 'متابعة المشاهدة',
+-                  style: Theme.of(context).textTheme.titleLarge,
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-        const SizedBox(height: 12),
+-        SizedBox(
+-          height: cardHeight,
+-          child: ListView.separated(
+-            padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-            scrollDirection: Axis.horizontal,
+-            itemCount: sorted.length,
+-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+-            itemBuilder: (context, index) {
+-              final entry = sorted[index];
+-              final item = entry.item;
+-              final isSeries = item.type == 'series' &&
+-                  entry.season != null &&
+-                  entry.episode != null;
+-              final enrichment = _enrichment[item.id];
+-              final epName = enrichment?.episodeName;
+-              final data = _CwCardData(
+-                id: '${entry.item.id}:${entry.watchedAt}',
+-                item: item,
+-                progress: entry.durationMs > 0
+-                    ? (entry.positionMs / entry.durationMs).clamp(0.0, 1.0)
+-                    : 0.0,
+-                epTag: isSeries ? 'S${entry.season} E${entry.episode}' : null,
+-                subtitle: isSeries
+-                    ? (epName != null && epName.isNotEmpty
+-                        ? epName
+-                        : (widget.english
+-                            ? 'Episode ${entry.episode}'
+-                            : 'الحلقة ${entry.episode}'))
+-                    : _remainingLabel(entry, widget.english),
+-                badge: cwUpcomingLabel(
+-                    enrichment?.nextAirMs, widget.english, DateTime.now()),
+-                fresh: enrichment?.fresh ?? false,
+-              );
+-              return _ContinueCard(
+-                data: data,
+-                english: widget.english,
+-                width: cardWidth,
+-                height: cardHeight,
+-                onOpen: () => Navigator.of(context).push(
+-                  MaterialPageRoute<void>(
+-                    builder: (_) => MediaDetailPage(
+-                      item: item,
+-                      resumeVideoId: entry.videoId,
+-                      resumePositionMs: entry.positionMs,
+-                    ),
+-                  ),
+-                ),
+-                onMarkWatched: () {
+-                  unawaited(
+-                    context
+-                        .read<AppState>()
+-                        .markContinueWatchingWatched(item.id)
+-                        .then((_) {
+-                      if (context.mounted) {
+-                        NoorToast.show(
+-                          context,
+-                          widget.english
+-                              ? 'Marked as watched'
+-                              : 'تم التحديد كمشاهد',
+-                        );
+-                      }
+-                    }),
+-                  );
+-                },
+-                onRemove: () => unawaited(
+-                  context.read<AppState>().removeContinueWatchingEntry(item.id),
+-                ),
+-              );
+-            },
+-          ),
+-        ),
+-      ],
+-    );
+-  }
+-}
+-
+-/// Visual payload of one continue-watching card — built either from a local
+-/// history entry (with metadata enrichment) or from a linked-service entry
+-/// (source tag instead of menu actions).
+-class _CwCardData {
+-  const _CwCardData({
+-    required this.id,
+-    required this.item,
+-    required this.progress,
+-    this.epTag,
+-    this.subtitle,
+-    this.badge,
+-    this.fresh = false,
+-    this.sourceLabel,
+-  });
+-
+-  final String id;
+-  final MediaItem item;
+-
+-  /// 0..1 — drives the red track-less progress bar (0 hides it).
+-  final double progress;
+-  final String? epTag;
+-  final String? subtitle;
+-  final String? badge;
+-  final bool fresh;
+-
+-  /// Small provenance pill ("Trakt" / "AniList" / "MyAnimeList") on cards
+-  /// sourced from a linked service.
+-  final String? sourceLabel;
+-}
+-
+-class _ContinueCard extends StatelessWidget {
+-  const _ContinueCard({
+-    required this.data,
+-    required this.english,
+-    required this.width,
+-    required this.height,
+-    required this.onOpen,
+-    this.onMarkWatched,
+-    this.onRemove,
+-  });
+-
+-  final _CwCardData data;
+-  final bool english;
+-  final double width;
+-  final double height;
+-
+-  final VoidCallback onOpen;
+-
+-  /// Present only on LOCAL continue-watching cards — they unlock the
+-  /// "mark as watched" / "remove" actions in the long-press menu.
+-  final VoidCallback? onMarkWatched;
+-  final VoidCallback? onRemove;
+-
+-  // Web token: --cw-progress: #e53935.
+-  static const _progressRed = Color(0xFFE53935);
+-  // Web token: --cw-fresh-dot: #f5b301.
+-  static const _freshDot = Color(0xFFF5B301);
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final item = data.item;
+-    final progress = data.progress;
+-    final image = item.background ?? item.poster;
+-    final epTag = data.epTag;
+-    final subtitle = data.subtitle;
+-    final badge = data.badge;
+-    final fresh = data.fresh;
+-    final sourceLabel = data.sourceLabel;
+-    final semantics = [
+-      english ? 'Resume' : 'استئناف',
+-      item.name,
+-      if (epTag != null) epTag,
+-      if (subtitle != null) subtitle,
+-      if (badge != null) badge,
+-      if (progress > 0) '${(progress * 100).round()}%',
+-    ].join(', ');
+-
+-    void openDetail() => onOpen();
+-
+-    /// Harbor-web long-press menu (web CwContextMenu → the mobile M3 sheet):
+-    /// view details always; mark-as-watched / remove only on LOCAL cards —
+-    /// linked-service cards carry no local position data to act on.
+-    Future<void> openMenu() {
+-      return showModalBottomSheet<void>(
+-        context: context,
+-        useSafeArea: true,
+-        backgroundColor: HorseTheme.surface,
+-        shape: const RoundedRectangleBorder(
+-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+-        ),
+-        builder: (sheetContext) {
+-          void close() => Navigator.of(sheetContext).pop();
+-          return SafeArea(
+-            child: Column(
+-              mainAxisSize: MainAxisSize.min,
+-              crossAxisAlignment: CrossAxisAlignment.stretch,
+-              children: [
+-                Padding(
+-                  padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 20, 2),
+-                  child: Text(
+-                    item.name,
+-                    maxLines: 1,
+-                    overflow: TextOverflow.ellipsis,
+-                    style: Theme.of(sheetContext).textTheme.titleMedium,
+-                  ),
+-                ),
+-                const SizedBox(height: 6),
+-                ListTile(
+-                  leading: const Icon(Icons.info_outline_rounded),
+-                  title: Text(english ? 'View details' : 'عرض التفاصيل'),
+-                  onTap: () {
+-                    close();
+-                    openDetail();
+-                  },
+-                ),
+-                if (onMarkWatched != null)
+-                  ListTile(
+-                    leading: const Icon(Icons.visibility_outlined),
+-                    title: Text(english ? 'Mark as watched' : 'تحديد كمشاهد'),
+-                    onTap: () {
+-                      close();
+-                      onMarkWatched!();
+-                    },
+-                  ),
+-                if (onRemove != null)
+-                  ListTile(
+-                    leading: const Icon(
+-                      Icons.delete_outline_rounded,
+-                      color: _progressRed,
+-                    ),
+-                    title: Text(
+-                      english
+-                          ? 'Remove from Continue Watching'
+-                          : 'إزالة من متابعة المشاهدة',
+-                      style: const TextStyle(color: _progressRed),
+-                    ),
+-                    onTap: () {
+-                      close();
+-                      onRemove!();
+-                    },
+-                  ),
+-              ],
+-            ),
+-          );
+-        },
+-      );
+-    }
+-
+-    return SizedBox(
+-      width: width,
+-      height: height,
+-      child: Semantics(
+-        button: true,
+-        label: semantics,
+-        child: InkWell(
+-          borderRadius: BorderRadius.circular(16),
+-          onTap: openDetail,
+-          onLongPress: () => unawaited(openMenu()),
+-          child: Stack(
+-            clipBehavior: Clip.none,
+-            children: [
+-              Positioned.fill(
+-                child: ClipRRect(
+-                  borderRadius: BorderRadius.circular(16),
+-                  child: Stack(
+-                    fit: StackFit.expand,
+-                    children: [
+-                      image == null
+-                          ? const ColoredBox(color: HorseTheme.surface)
+-                          : Image.network(
+-                              image,
+-                              fit: BoxFit.cover,
+-                              errorBuilder: (_, __, ___) => const ColoredBox(
+-                                color: HorseTheme.surface,
+-                              ),
+-                            ),
+-                      // Web scrim: to top, 85% black → 45% → transparent.
+-                      const DecoratedBox(
+-                        decoration: BoxDecoration(
+-                          gradient: LinearGradient(
+-                            begin: Alignment.bottomCenter,
+-                            end: Alignment.topCenter,
+-                            stops: [0, .45, .75],
+-                            colors: [
+-                              Color(0xD9000000),
+-                              Color(0x73000000),
+-                              Color(0x00000000),
+-                            ],
+-                          ),
+-                        ),
+-                      ),
+-                      PositionedDirectional(
+-                        start: 10,
+-                        end: 10,
+-                        bottom: 12,
+-                        child: Column(
+-                          crossAxisAlignment: CrossAxisAlignment.start,
+-                          mainAxisSize: MainAxisSize.min,
+-                          children: [
+-                            if (epTag != null) ...[
+-                              Directionality(
+-                                textDirection: TextDirection.ltr,
+-                                child: Text(
+-                                  epTag,
+-                                  maxLines: 1,
+-                                  overflow: TextOverflow.ellipsis,
+-                                  style: TextStyle(
+-                                    fontSize: 11,
+-                                    fontWeight: FontWeight.w700,
+-                                    height: 1.3,
+-                                    color: Colors.white.withValues(alpha: .95),
+-                                  ),
+-                                ),
+-                              ),
+-                              const SizedBox(height: 2),
+-                            ],
+-                            Text(
+-                              item.name,
+-                              maxLines: 1,
+-                              overflow: TextOverflow.ellipsis,
+-                              style: const TextStyle(
+-                                fontSize: 15,
+-                                fontWeight: FontWeight.w700,
+-                                height: 1.2,
+-                                color: Colors.white,
+-                              ),
+-                            ),
+-                            if (subtitle != null)
+-                              Text(
+-                                subtitle,
+-                                maxLines: 1,
+-                                overflow: TextOverflow.ellipsis,
+-                                style: TextStyle(
+-                                  fontSize: 12,
+-                                  fontWeight: FontWeight.w500,
+-                                  height: 1.35,
+-                                  color: Colors.white.withValues(alpha: .65),
+-                                ),
+-                              ),
+-                          ],
+-                        ),
+-                      ),
+-                      if (progress > 0)
+-                        PositionedDirectional(
+-                          start: 8,
+-                          end: 8,
+-                          bottom: 4,
+-                          child: ClipRRect(
+-                            borderRadius: BorderRadius.circular(2),
+-                            child: LinearProgressIndicator(
+-                              value: progress,
+-                              minHeight: 3,
+-                              backgroundColor:
+-                                  Colors.white.withValues(alpha: .24),
+-                              color: _progressRed,
+-                            ),
+-                          ),
+-                        ),
+-                      // Web .cw-badge: top-end black-70 pill, radius 8,
+-                      // 12px/500 white text, 8px inset.
+-                      if (badge != null)
+-                        PositionedDirectional(
+-                          top: 8,
+-                          end: 8,
+-                          child: Container(
+-                            height: 22,
+-                            constraints: BoxConstraints(maxWidth: width * .7),
+-                            padding: const EdgeInsetsDirectional.symmetric(
+-                              horizontal: 7,
+-                            ),
+-                            alignment: AlignmentDirectional.center,
+-                            decoration: BoxDecoration(
+-                              color: Colors.black.withValues(alpha: .7),
+-                              borderRadius: BorderRadius.circular(8),
+-                            ),
+-                            child: Text(
+-                              badge,
+-                              maxLines: 1,
+-                              overflow: TextOverflow.ellipsis,
+-                              style: const TextStyle(
+-                                fontSize: 12,
+-                                fontWeight: FontWeight.w500,
+-                                color: Colors.white,
+-                              ),
+-                            ),
+-                          ),
+-                        ),
+-                      // Source pill (linked-service cards only): top-start
+-                      // black-60 pill naming the provider — Trakt, AniList,
+-                      // MyAnimeList — so provenance is visible at a glance.
+-                      if (sourceLabel != null)
+-                        PositionedDirectional(
+-                          top: 8,
+-                          start: 8,
+-                          child: Container(
+-                            height: 20,
+-                            padding: const EdgeInsetsDirectional.symmetric(
+-                              horizontal: 7,
+-                            ),
+-                            alignment: AlignmentDirectional.center,
+-                            decoration: BoxDecoration(
+-                              color: Colors.black.withValues(alpha: .6),
+-                              borderRadius: BorderRadius.circular(7),
+-                            ),
+-                            child: Text(
+-                              sourceLabel,
+-                              maxLines: 1,
+-                              overflow: TextOverflow.ellipsis,
+-                              style: TextStyle(
+-                                fontSize: 10.5,
+-                                fontWeight: FontWeight.w600,
+-                                letterSpacing: .2,
+-                                color: Colors.white.withValues(alpha: .92),
+-                              ),
+-                            ),
+-                          ),
+-                        ),
+-                      // Web .cw-fresh: 5px amber dot above the progress bar.
+-                      if (fresh)
+-                        const PositionedDirectional(
+-                          start: 8,
+-                          bottom: 12,
+-                          child: SizedBox(
+-                            width: 5,
+-                            height: 5,
+-                            child: DecoratedBox(
+-                              decoration: BoxDecoration(
+-                                color: _freshDot,
+-                                shape: BoxShape.circle,
+-                              ),
+-                            ),
+-                          ),
+-                        ),
+-                    ],
+-                  ),
+-                ),
+-              ),
+-              // Web card border: 1px rgba(255,255,255,.22), radius 16.
+-              Positioned.fill(
+-                child: IgnorePointer(
+-                  child: DecoratedBox(
+-                    decoration: BoxDecoration(
+-                      borderRadius: BorderRadius.circular(16),
+-                      border: Border.all(
+-                        color: Colors.white.withValues(alpha: .22),
+-                      ),
+-                    ),
+-                  ),
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-}
+-
+-/// Continue-watching cards sourced from the LINKED tracking services —
+-/// Trakt paused playback and the anime trackers' "currently watching" list.
+-/// Exactly the Harbor-web card spec (16:9, scrim, S/E tag, red progress
+-/// bar) plus a small source pill; taps flow through the tracker-resolve
+-/// path for `anilist:`/`mal:` identities. The long-press menu intentionally
+-/// offers "view details" only — there is no local position data to mark or
+-/// remove.
+-class _LinkedContinueRail extends StatelessWidget {
+-  const _LinkedContinueRail({
+-    required this.entries,
+-    required this.english,
+-    required this.onOpen,
+-  });
+-
+-  final List<IntegrationCwEntry> entries;
+-  final bool english;
+-  final ValueChanged<MediaItem> onOpen;
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final wide = MediaQuery.sizeOf(context).width >= 700;
+-    final cardWidth = math.min(MediaQuery.sizeOf(context).width * .66, 300.0);
+-    final cardHeight = cardWidth * 9 / 16;
+-    return Column(
+-      crossAxisAlignment: CrossAxisAlignment.start,
+-      children: [
+-        Padding(
+-          padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-          child: Row(
+-            children: [
+-              Container(
+-                width: 3,
+-                height: 19,
+-                decoration: BoxDecoration(
+-                  color: HorseTheme.gold,
+-                  borderRadius: BorderRadius.circular(4),
+-                ),
+-              ),
+-              const SizedBox(width: 10),
+-              Expanded(
+-                child: Text(
+-                  english
+-                      ? 'Continue Watching · Linked accounts'
+-                      : 'متابعة المشاهدة · الحسابات المرتبطة',
+-                  style: Theme.of(context).textTheme.titleLarge,
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-        const SizedBox(height: 12),
+-        SizedBox(
+-          height: cardHeight,
+-          child: ListView.separated(
+-            padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-            scrollDirection: Axis.horizontal,
+-            itemCount: entries.length,
+-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+-            itemBuilder: (context, index) {
+-              final entry = entries[index];
+-              return _ContinueCard(
+-                data: _cardData(entry, english),
+-                english: english,
+-                width: cardWidth,
+-                height: cardHeight,
+-                onOpen: () => onOpen(entry.item),
+-              );
+-            },
+-          ),
+-        ),
+-      ],
+-    );
+-  }
+-
+-  /// Anime trackers surface the NEXT episode to watch as the subtitle
+-  /// (there is no mid-episode position to resume); Trakt carries a real
+-  /// pause percentage and, for shows, the exact season/episode.
+-  static _CwCardData _cardData(IntegrationCwEntry entry, bool english) {
+-    final isTracker = entry.source != 'trakt';
+-    final next = entry.nextEpisode;
+-    return _CwCardData(
+-      id: '${entry.source}:${entry.item.id}',
+-      item: entry.item,
+-      progress: entry.progress,
+-      epTag: entry.season != null && entry.episode != null
+-          ? 'S${entry.season} E${entry.episode}'
+-          : null,
+-      subtitle: isTracker && next != null
+-          ? (english ? 'Episode $next' : 'الحلقة $next')
+-          : null,
+-      sourceLabel: switch (entry.source) {
+-        'trakt' => 'Trakt',
+-        'anilist' => 'AniList',
+-        _ => 'MyAnimeList',
+-      },
+-    );
+-  }
+-}
+-
+-/// First-load placeholder for the linked continue-watching row: mirrors the
+-/// real rail's geometry (web card spec, same widths) so the layout doesn't
+-/// jump when the rows arrive. Rendered only while a linked refresh is in
+-/// flight and no rows exist yet.
+-class _LinkedContinueSkeleton extends StatelessWidget {
+-  const _LinkedContinueSkeleton({required this.english});
+-
+-  final bool english;
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final wide = MediaQuery.sizeOf(context).width >= 700;
+-    final cardWidth = math.min(MediaQuery.sizeOf(context).width * .66, 300.0);
+-    final cardHeight = cardWidth * 9 / 16;
+-    return Column(
+-      crossAxisAlignment: CrossAxisAlignment.start,
+-      children: [
+-        Padding(
+-          padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-          child: Row(
+-            children: [
+-              Container(
+-                width: 3,
+-                height: 19,
+-                decoration: BoxDecoration(
+-                  color: HorseTheme.gold,
+-                  borderRadius: BorderRadius.circular(4),
+-                ),
+-              ),
+-              const SizedBox(width: 10),
+-              Expanded(
+-                child: Text(
+-                  english
+-                      ? 'Continue Watching · Linked accounts'
+-                      : 'متابعة المشاهدة · الحسابات المرتبطة',
+-                  style: Theme.of(context).textTheme.titleLarge,
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-        const SizedBox(height: 12),
+-        SizedBox(
+-          height: cardHeight,
+-          child: ListView.separated(
+-            physics: const NeverScrollableScrollPhysics(),
+-            padding: EdgeInsets.symmetric(horizontal: wide ? 34 : 20),
+-            scrollDirection: Axis.horizontal,
+-            itemCount: 3,
+-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+-            itemBuilder: (context, index) => Container(
+-              width: cardWidth,
+-              decoration: BoxDecoration(
+-                color: Colors.white.withValues(alpha: .06),
+-                borderRadius: BorderRadius.circular(16),
+-                border: Border.all(color: Colors.white.withValues(alpha: .08)),
+-              ),
+-            ),
+-          ),
+-        ),
+-      ],
+-    );
+-  }
+-}
+-
+-class _FeaturedCard extends StatefulWidget {
+-  const _FeaturedCard({
+-    required this.items,
+-    required this.autoplayActive,
+-    required this.onTap,
+-  });
+-  final List<MediaItem> items;
+-  final bool autoplayActive;
+-  final ValueChanged<MediaItem> onTap;
+-
+-  @override
+-  State<_FeaturedCard> createState() => _FeaturedCardState();
+-}
+-
+-class _FeaturedCardState extends State<_FeaturedCard>
+-    with WidgetsBindingObserver {
+-  Timer? _autoplayTimer;
+-  Timer? _touchResumeTimer;
+-  int _activeIndex = 0;
+-  double _dragDistance = 0;
+-  bool _reducedMotion = false;
+-  bool _appActive = true;
+-  bool _touching = false;
+-  String? _artworkSignature;
+-  final Map<String, FeaturedArtwork> _artwork = {};
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    WidgetsBinding.instance.addObserver(this);
+-  }
+-
+-  @override
+-  void didChangeDependencies() {
+-    super.didChangeDependencies();
+-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+-    if (reduceMotion != _reducedMotion) {
+-      _reducedMotion = reduceMotion;
+-    }
+-    _enrichSlides();
+-    _startAutoplay();
+-  }
+-
+-  @override
+-  void didUpdateWidget(covariant _FeaturedCard oldWidget) {
+-    super.didUpdateWidget(oldWidget);
+-    if (_itemsSignature(oldWidget.items) != _itemsSignature(widget.items)) {
+-      _activeIndex = 0;
+-      _artworkSignature = null;
+-      _startAutoplay();
+-    }
+-    if (oldWidget.autoplayActive != widget.autoplayActive) _startAutoplay();
+-    _enrichSlides();
+-  }
+-
+-  @override
+-  void dispose() {
+-    WidgetsBinding.instance.removeObserver(this);
+-    _autoplayTimer?.cancel();
+-    _touchResumeTimer?.cancel();
+-    super.dispose();
+-  }
+-
+-  @override
+-  void didChangeAppLifecycleState(AppLifecycleState state) {
+-    _appActive = state == AppLifecycleState.resumed;
+-    if (_appActive) {
+-      _startAutoplay();
+-    } else {
+-      _autoplayTimer?.cancel();
+-    }
+-  }
+-
+-  String _itemsSignature(List<MediaItem> items) =>
+-      items.map((item) => item.id).join('|');
+-
+-  void _enrichSlides() {
+-    if (widget.items.isEmpty) return;
+-    final app = context.read<AppState>();
+-    final language = app.webSettings['tmdbLanguage']?.toString() ?? 'en-US';
+-    final region = app.webSettings['region']?.toString() ?? 'US';
+-    final uiLanguage = app.english ? 'en' : 'ar';
+-    final signature =
+-        '${_itemsSignature(widget.items)}:$language:$region:$uiLanguage:'
+-        '${app.webSettings['tmdbEnabled']}:${app.api.hasUserTmdbKey ? 'user' : 'default'}';
+-    if (signature == _artworkSignature) return;
+-    _artworkSignature = signature;
+-    _artwork.clear();
+-    if (app.webSettings['tmdbEnabled'] == false) return;
+-    unawaited(_loadFeaturedArtwork(
+-      app,
+-      signature: signature,
+-      language: language,
+-      region: region,
+-      uiLanguage: uiLanguage,
+-    ));
+-  }
+-
+-  Future<void> _loadFeaturedArtwork(
+-    AppState app, {
+-    required String signature,
+-    required String language,
+-    required String region,
+-    required String uiLanguage,
+-  }) async {
+-    for (final item in widget.items) {
+-      if (!mounted || signature != _artworkSignature) return;
+-      final result = await app.catalogs.featuredArtwork(
+-        item,
+-        language: language,
+-        region: region,
+-        uiLanguage: uiLanguage,
+-      );
+-      if (!mounted || signature != _artworkSignature) return;
+-      setState(() => _artwork[item.id] = result);
+-      await Future<void>.delayed(const Duration(milliseconds: 150));
+-    }
+-  }
+-
+-  void _startAutoplay() {
+-    _autoplayTimer?.cancel();
+-    if (_reducedMotion ||
+-        !_appActive ||
+-        _touching ||
+-        !widget.autoplayActive ||
+-        widget.items.length < 2) {
+-      return;
+-    }
+-    _autoplayTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+-      if (!mounted || _touching) return;
+-      _setActiveSlide((_activeIndex + 1) % widget.items.length);
+-    });
+-  }
+-
+-  void _pauseForTouch() {
+-    _touchResumeTimer?.cancel();
+-    _autoplayTimer?.cancel();
+-    _touching = true;
+-  }
+-
+-  void _resumeAfterTouch() {
+-    _touchResumeTimer?.cancel();
+-    _touchResumeTimer = Timer(const Duration(seconds: 8), () {
+-      if (!mounted) return;
+-      _touching = false;
+-      _startAutoplay();
+-    });
+-  }
+-
+-  void _goToSlide(int targetIndex) {
+-    _pauseForTouch();
+-    _resumeAfterTouch();
+-    _setActiveSlide(targetIndex);
+-  }
+-
+-  void _setActiveSlide(int targetIndex) {
+-    if (!mounted || widget.items.length < 2) return;
+-    final count = widget.items.length;
+-    final target = ((targetIndex % count) + count) % count;
+-    if (target == _activeIndex) return;
+-    setState(() => _activeIndex = target);
+-  }
+-
+-  void _handleSwipeEnd() {
+-    if (_dragDistance.abs() < 36 || widget.items.length < 2) return;
+-    final forward = Directionality.of(context) == TextDirection.rtl
+-        ? _dragDistance > 0
+-        : _dragDistance < 0;
+-    _setActiveSlide((_activeIndex + (forward ? 1 : -1)) % widget.items.length);
+-    _dragDistance = 0;
+-  }
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final heroHeight = _featuredHeroHeight(context);
+-    final activeItem = widget.items[_activeIndex];
+-    return SizedBox(
+-      height: heroHeight,
+-      child: Listener(
+-        behavior: HitTestBehavior.translucent,
+-        onPointerDown: (_) => _pauseForTouch(),
+-        onPointerUp: (_) => _resumeAfterTouch(),
+-        onPointerCancel: (_) => _resumeAfterTouch(),
+-        child: GestureDetector(
+-          behavior: HitTestBehavior.opaque,
+-          onHorizontalDragStart: (_) => _dragDistance = 0,
+-          onHorizontalDragUpdate: (details) =>
+-              _dragDistance += details.delta.dx,
+-          onHorizontalDragEnd: (_) => _handleSwipeEnd(),
+-          child: Stack(
+-            fit: StackFit.expand,
+-            children: [
+-              AnimatedSwitcher(
+-                duration: _reducedMotion
+-                    ? Duration.zero
+-                    : const Duration(milliseconds: 380),
+-                switchInCurve: Curves.easeOutCubic,
+-                switchOutCurve: Curves.easeOutCubic,
+-                child: _FeaturedArtwork(
+-                  key: ValueKey(activeItem.id),
+-                  item: activeItem,
+-                  artwork: _artwork[activeItem.id],
+-                ),
+-              ),
+-              const Positioned.fill(child: _FeaturedScrim()),
+-              Positioned.fill(
+-                child: _FeaturedOverlay(
+-                  item: activeItem,
+-                  artwork: _artwork[activeItem.id],
+-                  itemsCount: widget.items.length,
+-                  activeIndex: _activeIndex,
+-                  reduceMotion: _reducedMotion,
+-                  onSelectPage: _goToSlide,
+-                  onTap: () => widget.onTap(activeItem),
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-}
+-
+-class _FeaturedArtwork extends StatelessWidget {
+-  const _FeaturedArtwork({
+-    super.key,
+-    required this.item,
+-    required this.artwork,
+-  });
+-
+-  final MediaItem item;
+-  final FeaturedArtwork? artwork;
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final size = MediaQuery.sizeOf(context);
+-    final large = size.width >= 600;
+-    final portrait = artwork?.portrait ?? item.poster;
+-    final landscape = artwork?.landscape ?? item.background;
+-    final background =
+-        large ? (landscape ?? portrait) : (portrait ?? landscape);
+-
+-    // FIX: Keep AnimatedSwitcher artwork at the full hero size instead of its image's intrinsic size.
+-    return SizedBox.expand(
+-      child: background != null
+-          ? Image.network(
+-              background,
+-              width: double.infinity,
+-              height: double.infinity,
+-              fit: BoxFit.cover,
+-              alignment: large ? Alignment.center : Alignment.topCenter,
+-              errorBuilder: (_, __, ___) =>
+-                  const ColoredBox(color: HorseTheme.raised),
+-            )
+-          : const ColoredBox(color: HorseTheme.raised),
+-    );
+-  }
+-}
+-
+-class _FeaturedScrim extends StatelessWidget {
+-  const _FeaturedScrim();
+-
+-  @override
+-  Widget build(BuildContext context) => const Stack(
+-        fit: StackFit.expand,
+-        children: [
+-          // Bottom fade into the canvas — the original hero scrim, unchanged.
+-          DecoratedBox(
+-            decoration: BoxDecoration(
+-              gradient: LinearGradient(
+-                begin: Alignment.topCenter,
+-                end: Alignment.bottomCenter,
+-                stops: [0, .34, .64, .9],
+-                colors: [
+-                  Color(0x00000000),
+-                  Color(0x18000000),
+-                  Color(0xB8000000),
+-                  Color(0xFF000000),
+-                ],
+-              ),
+-            ),
+-          ),
+-          // EDGE-TO-EDGE readability scrim (Task 119): the hero now bleeds
+-          // behind the transparent status bar, so a short dark band keeps
+-          // the clock/battery/signal icons readable over bright artwork
+-          // (same idea as the web home hero's top gradient).
+-          DecoratedBox(
+-            decoration: BoxDecoration(
+-              gradient: LinearGradient(
+-                begin: Alignment.topCenter,
+-                end: Alignment.bottomCenter,
+-                stops: [0, .16],
+-                colors: [Color(0x66000000), Color(0x00000000)],
+-              ),
+-            ),
+-          ),
+-        ],
+-      );
+-}
+-
+-class _FeaturedOverlay extends StatelessWidget {
+-  const _FeaturedOverlay({
+-    required this.item,
+-    required this.artwork,
+-    required this.itemsCount,
+-    required this.activeIndex,
+-    required this.reduceMotion,
+-    required this.onSelectPage,
+-    required this.onTap,
+-  });
+-
+-  final MediaItem item;
+-  final FeaturedArtwork? artwork;
+-  final int itemsCount;
+-  final int activeIndex;
+-  final bool reduceMotion;
+-  final ValueChanged<int> onSelectPage;
+-  final VoidCallback onTap;
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final size = MediaQuery.sizeOf(context);
+-    final large = size.width >= 600;
+-    final english = context.read<AppState>().english;
+-    final logo = artwork?.logo ?? item.logo;
+-    final genre = artwork?.genre ?? item.genres.firstOrNull;
+-    final year = item.releaseInfo?.split('–').first.trim();
+-    final metadataHeight = math
+-        .max(24.0, MediaQuery.textScalerOf(context).scale(16) * 1.3)
+-        .toDouble();
+-    final typeLabel = switch (item.type.toLowerCase()) {
+-      'movie' => english ? 'Movie' : 'فيلم',
+-      'series' => english ? 'Series' : 'مسلسل',
+-      _ => item.type,
+-    };
+-
+-    return Stack(
+-      fit: StackFit.expand,
+-      children: [
+-        Padding(
+-          padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 12),
+-          child: Column(
+-            mainAxisAlignment: MainAxisAlignment.end,
+-            children: [
+-              SizedBox(
+-                height: 50,
+-                child: Align(
+-                  alignment: Alignment.bottomCenter,
+-                  child: AnimatedSwitcher(
+-                    duration: reduceMotion
+-                        ? Duration.zero
+-                        : const Duration(milliseconds: 220),
+-                    transitionBuilder: (child, animation) => FadeTransition(
+-                      opacity: animation,
+-                      child: child,
+-                    ),
+-                    child: logo == null
+-                        ? const SizedBox.shrink(key: ValueKey('empty-logo'))
+-                        : Image.network(
+-                            logo,
+-                            key: ValueKey(logo),
+-                            width: math.min(size.width * .5, 175.0),
+-                            height: 50,
+-                            fit: BoxFit.contain,
+-                            semanticLabel: item.name,
+-                            errorBuilder: (_, __, ___) =>
+-                                const SizedBox.shrink(),
+-                          ),
+-                  ),
+-                ),
+-              ),
+-              const SizedBox(height: 10),
+-              SizedBox(
+-                height: metadataHeight,
+-                child: Center(
+-                  child: AnimatedSwitcher(
+-                    duration: reduceMotion
+-                        ? Duration.zero
+-                        : const Duration(milliseconds: 180),
+-                    transitionBuilder: (child, animation) => FadeTransition(
+-                      opacity: animation,
+-                      child: child,
+-                    ),
+-                    child: ConstrainedBox(
+-                      key: ValueKey(item.id),
+-                      constraints: BoxConstraints(maxWidth: size.width - 32),
+-                      child: Row(
+-                        mainAxisSize: MainAxisSize.min,
+-                        mainAxisAlignment: MainAxisAlignment.center,
+-                        children: [
+-                          if (year?.isNotEmpty == true) ...[
+-                            Text(year!, style: _heroMetadataStyle),
+-                            const Padding(
+-                              padding: EdgeInsets.symmetric(horizontal: 10),
+-                              child: _HeroMetadataDot(),
+-                            ),
+-                          ],
+-                          if (genre?.isNotEmpty == true) ...[
+-                            Flexible(
+-                              child: Text(
+-                                genre!,
+-                                maxLines: 1,
+-                                overflow: TextOverflow.ellipsis,
+-                                style: _heroMetadataStyle,
+-                              ),
+-                            ),
+-                            const Padding(
+-                              padding: EdgeInsets.symmetric(horizontal: 10),
+-                              child: _HeroMetadataDot(),
+-                            ),
+-                          ],
+-                          Text(typeLabel, style: _heroMetadataStyle),
+-                        ],
+-                      ),
+-                    ),
+-                  ),
+-                ),
+-              ),
+-              SizedBox(height: large ? 12 : 10),
+-              FilledButton(
+-                onPressed: onTap,
+-                style: FilledButton.styleFrom(
+-                  minimumSize: Size(146, large ? 42 : 38),
+-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+-                  backgroundColor: const Color(0xFFF5F6F8),
+-                  foregroundColor: const Color(0xFF0B0B0B),
+-                  padding: const EdgeInsets.symmetric(horizontal: 28),
+-                  shape: const StadiumBorder(),
+-                  textStyle: const TextStyle(
+-                    fontSize: 14,
+-                    fontWeight: FontWeight.w700,
+-                    height: 1,
+-                  ),
+-                ),
+-                child: Text(english ? 'View details' : 'عرض التفاصيل'),
+-              ),
+-              if (itemsCount > 1) ...[
+-                const SizedBox(height: 10),
+-                Semantics(
+-                  label: english ? 'Featured items' : 'العناوين المميزة',
+-                  child: SizedBox(
+-                    height: 8,
+-                    child: Row(
+-                      mainAxisSize: MainAxisSize.min,
+-                      children: [
+-                        for (var index = 0; index < itemsCount; index++) ...[
+-                          if (index > 0) const SizedBox(width: 8),
+-                          Semantics(
+-                            button: true,
+-                            selected: index == activeIndex,
+-                            label: english
+-                                ? 'Item ${index + 1} of $itemsCount'
+-                                : 'العنوان ${index + 1} من $itemsCount',
+-                            onTap: () => onSelectPage(index),
+-                            child: GestureDetector(
+-                              behavior: HitTestBehavior.opaque,
+-                              onTap: () => onSelectPage(index),
+-                              child: AnimatedContainer(
+-                                duration: reduceMotion
+-                                    ? Duration.zero
+-                                    : const Duration(milliseconds: 180),
+-                                width: index == activeIndex ? 32 : 8,
+-                                height: 8,
+-                                decoration: const BoxDecoration(
+-                                  color: Colors.white,
+-                                  borderRadius: BorderRadius.all(
+-                                    Radius.circular(12),
+-                                  ),
+-                                ),
+-                              ),
+-                            ),
+-                          ),
+-                        ],
+-                      ],
+-                    ),
+-                  ),
+-                ),
+-              ],
+-            ],
+-          ),
+-        ),
+-        if (itemsCount > 1)
+-          PositionedDirectional(
+-            start: 0,
+-            end: 0,
+-            bottom: 0,
+-            child: Center(
+-              child: SizedBox(
+-                width: itemsCount * 16.0 + 16,
+-                height: 40,
+-                child: GestureDetector(
+-                  behavior: HitTestBehavior.opaque,
+-                  onTapUp: (details) {
+-                    final rowWidth = itemsCount * 16.0 + 16;
+-                    final logicalX =
+-                        Directionality.of(context) == TextDirection.rtl
+-                            ? rowWidth - details.localPosition.dx
+-                            : details.localPosition.dx;
+-                    var cursor = 0.0;
+-                    var nearestIndex = 0;
+-                    var nearestDistance = double.infinity;
+-                    for (var dot = 0; dot < itemsCount; dot++) {
+-                      final slotWidth = dot == activeIndex ? 32.0 : 8.0;
+-                      final distance =
+-                          (logicalX - (cursor + slotWidth / 2)).abs();
+-                      if (distance < nearestDistance) {
+-                        nearestDistance = distance;
+-                        nearestIndex = dot;
+-                      }
+-                      cursor += slotWidth + 8;
+-                    }
+-                    onSelectPage(nearestIndex);
+-                  },
+-                  child: const SizedBox.expand(),
+-                ),
+-              ),
+-            ),
+-          ),
+-      ],
+-    );
+-  }
+-}
+-
+-/// Hero metadata row: plain white text with a soft shadow, as before the
+-/// outlined-text experiment (user: "ارجع نص الهيرو كما هو سابقاً").
+-const _heroMetadataStyle = TextStyle(
+-  color: Colors.white,
+-  fontSize: 16,
+-  fontWeight: FontWeight.w700,
+-  shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
+-);
+-
+-class _HeroMetadataDot extends StatelessWidget {
+-  const _HeroMetadataDot();
+-
+-  @override
+-  Widget build(BuildContext context) => Container(
+-        width: 4,
+-        height: 4,
+-        decoration: BoxDecoration(
+-          color: Colors.white.withValues(alpha: .6),
+-          shape: BoxShape.circle,
+-        ),
+-      );
+-}
+-
+-class _FeaturedSkeleton extends StatelessWidget {
+-  const _FeaturedSkeleton();
+-  @override
+-  Widget build(BuildContext context) {
+-    final heroHeight = _featuredHeroHeight(context);
+-    final english = context.read<AppState>().english;
+-    final metadataHeight = math
+-        .max(24.0, MediaQuery.textScalerOf(context).scale(16) * 1.3)
+-        .toDouble();
+-    return SizedBox(
+-      height: heroHeight,
+-      child: Semantics(
+-        label:
+-            english ? 'Loading featured titles' : 'جارٍ تحميل العناوين المميزة',
+-        child: Stack(
+-          fit: StackFit.expand,
+-          children: [
+-            const ColoredBox(color: Color(0xFF050608)),
+-            const DecoratedBox(
+-              decoration: BoxDecoration(
+-                gradient: LinearGradient(
+-                  begin: Alignment.topCenter,
+-                  end: Alignment.bottomCenter,
+-                  stops: [0, .34, .64, .9],
+-                  colors: [
+-                    Color(0x00000000),
+-                    Color(0x18000000),
+-                    Color(0xB8000000),
+-                    Color(0xFF000000),
+-                  ],
+-                ),
+-              ),
+-            ),
+-            // Task 119: same status-bar readability band as the real hero,
+-            // so the loading state matches the edge-to-edge presentation.
+-            const DecoratedBox(
+-              decoration: BoxDecoration(
+-                gradient: LinearGradient(
+-                  begin: Alignment.topCenter,
+-                  end: Alignment.bottomCenter,
+-                  stops: [0, .16],
+-                  colors: [Color(0x66000000), Color(0x00000000)],
+-                ),
+-              ),
+-            ),
+-            Positioned.fill(
+-              child: Padding(
+-                padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 12),
+-                child: Column(
+-                  mainAxisAlignment: MainAxisAlignment.end,
+-                  children: [
+-                    const SizedBox(height: 50),
+-                    const SizedBox(height: 10),
+-                    SizedBox(
+-                      height: metadataHeight,
+-                      child: Center(
+-                        child: Wrap(
+-                          alignment: WrapAlignment.center,
+-                          spacing: 10,
+-                          children: [
+-                            _HeroSkeletonChip(width: 38),
+-                            _HeroSkeletonChip(width: 52),
+-                            _HeroSkeletonChip(width: 30),
+-                          ],
+-                        ),
+-                      ),
+-                    ),
+-                    const SizedBox(height: 10),
+-                    Container(
+-                      width: 146,
+-                      height: 38,
+-                      decoration: BoxDecoration(
+-                        color: Colors.white.withValues(alpha: .2),
+-                        borderRadius: BorderRadius.circular(24),
+-                      ),
+-                    ),
+-                    const SizedBox(height: 10),
+-                    const Row(
+-                      mainAxisSize: MainAxisSize.min,
+-                      children: [
+-                        _HeroSkeletonDot(active: true),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                        SizedBox(width: 8),
+-                        _HeroSkeletonDot(),
+-                      ],
+-                    ),
+-                  ],
+-                ),
+-              ),
+-            ),
+-          ],
+-        ),
+-      ),
+-    );
+-  }
+-}
+-
+-class _HeroSkeletonChip extends StatelessWidget {
+-  const _HeroSkeletonChip({required this.width});
+-
+-  final double width;
+-
+-  @override
+-  Widget build(BuildContext context) => Container(
+-        width: width,
+-        height: 16,
+-        decoration: BoxDecoration(
+-          color: Colors.white.withValues(alpha: .2),
+-          borderRadius: BorderRadius.circular(12),
+-        ),
+-      );
+-}
+-
+-class _HeroSkeletonDot extends StatelessWidget {
+-  const _HeroSkeletonDot({this.active = false});
+-
+-  final bool active;
+-
+-  @override
+-  Widget build(BuildContext context) => Container(
+-        width: active ? 32 : 8,
+-        height: 8,
+-        decoration: BoxDecoration(
+-          color: Colors.white.withValues(alpha: .28),
+-          borderRadius: BorderRadius.circular(8),
+-        ),
+-      );
+-}
+-
+-double _featuredHeroHeight(BuildContext context) {
+-  final size = MediaQuery.sizeOf(context);
+-  final viewPadding = MediaQuery.viewPaddingOf(context);
+-  // Task: the featured hero takes ~58% of the screen height on every
+-  // device. Since Task 119 it bleeds BEHIND the transparent status bar
+-  // (its top edge is y=0), but the height guard is unchanged: the hero
+-  // must never extend into the glass dock zone, and keeps a small floor
+-  // for very short viewports (e.g. landscape phones).
+-  final availableHeight =
+-      (size.height - viewPadding.top - glassDockContentClearance(context))
+-          .clamp(0.0, double.infinity);
+-  final preferredHeight = (size.height * .58).clamp(280.0, double.infinity);
+-  return math.min(availableHeight, preferredHeight).toDouble();
+-}
+-
++/// Home-local "could not load the catalog" card for the featured-hero slot.
++/// Deliberately NOT the shared [AppStateMessage]: this one is a decorated
++/// surface card (radius 20, padding 20, `minHeight` 180) with a
++/// `titleMedium` message and NO leading icon — a different shape from the
++/// shared "icon → 12 → message → 14 → button" column (audit 121-a2), so
++/// adopting it would change the visuals.
+ class _ServiceMessage extends StatelessWidget {
+   const _ServiceMessage({required this.english, required this.onRetry});
+   final bool english;
+diff --git a/lib/features/home/widgets/async_media_section.dart b/lib/features/home/widgets/async_media_section.dart
+new file mode 100644
+index 0000000..0da9463
+--- /dev/null
++++ b/lib/features/home/widgets/async_media_section.dart
+@@ -0,0 +1,226 @@
++import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++
++import '../../../core/models/media_item.dart';
++import '../../../core/state/app_state.dart';
++import '../../../core/theme/horse_theme.dart';
++import '../../../shared/widgets/media_rail.dart';
++import '../top10_rail.dart';
++
++/// One home catalog row driven by a future: the geometry-matched rail
++/// skeleton while waiting, a title + message + retry row on error/empty
++/// (Top 10 rows only — other rows fail/empty silently), else the standard
++/// poster rail or the ranked Top 10 layout. Moved verbatim from
++/// home_page.dart (Task 121-c).
++class AsyncMediaSection extends StatelessWidget {
++  const AsyncMediaSection({
++    super.key,
++    required this.title,
++    required this.future,
++    required this.onTap,
++    required this.onRetry,
++    required this.english,
++    this.subtitle,
++    this.numbered = false,
++    this.showEmptyState = false,
++    this.onOpenSection,
++  });
++
++  final String title;
++
++  /// Optional source line under the rail title (the add-on name, mirroring
++  /// the web Rail subtitle).
++  final String? subtitle;
++  final Future<List<MediaItem>> future;
++  final ValueChanged<MediaItem> onTap;
++  final VoidCallback onRetry;
++  final bool english;
++  final bool numbered;
++  final bool showEmptyState;
++
++  /// Opens the full catalog section this rail belongs to (the header
++  /// "greater-than" mark).
++  final VoidCallback? onOpenSection;
++
++  @override
++  Widget build(BuildContext context) => FutureBuilder<List<MediaItem>>(
++        future: future,
++        builder: (context, snapshot) {
++          if (snapshot.connectionState == ConnectionState.waiting) {
++            return RailLoadingSkeleton(title: title);
++          }
++          final items = snapshot.data ?? const <MediaItem>[];
++          if (snapshot.hasError) {
++            if (!showEmptyState) return const SizedBox.shrink();
++            return _RailMessage(
++              title: title,
++              message: english
++                  ? 'Could not load today’s ranking.'
++                  : 'تعذر تحميل قائمة اليوم.',
++              actionLabel: english ? 'Retry' : 'إعادة المحاولة',
++              onRetry: onRetry,
++            );
++          }
++          if (items.isEmpty) {
++            if (!showEmptyState) return const SizedBox.shrink();
++            return _RailMessage(
++              title: title,
++              message: english
++                  ? 'No ranked titles are available right now.'
++                  : 'لا تتوفر عناوين في القائمة حاليًا.',
++              actionLabel: english ? 'Refresh' : 'تحديث',
++              onRetry: onRetry,
++            );
++          }
++          return Padding(
++            padding: EdgeInsetsDirectional.only(
++              bottom: MediaRail.sectionSpacing(context),
++            ),
++            // The Top 10 row uses the ranked sticker layout; every other
++            // section keeps the standard poster rail.
++            child: numbered
++                ? Top10Rail(title: title, items: items, onTap: onTap)
++                : MediaRail(
++                    title: title,
++                    subtitle: subtitle,
++                    items: items,
++                    onTap: onTap,
++                    onOpenSection: onOpenSection,
++                  ),
++          );
++        },
++      );
++}
++
++/// Loading placeholder matching the real rail's geometry: title, then a
++/// horizontal row of surface "posters" (138px wide at the 700px breakpoint,
++/// else 122) with the two-line label stub when poster titles are shown.
++class RailLoadingSkeleton extends StatelessWidget {
++  const RailLoadingSkeleton({super.key, required this.title});
++  final String title;
++
++  @override
++  Widget build(BuildContext context) {
++    final settings = context.watch<AppState>().webSettings;
++    final showTitle = settings['hidePosterTitles'] != true;
++    final width = MediaQuery.sizeOf(context).width;
++    final posterWidth = width >= 700 ? 138.0 : 122.0;
++    final posterHeight = posterWidth / .72;
++    final labelHeight = showTitle
++        ? 8 + MediaQuery.textScalerOf(context).scale(14) * 1.3 * 2
++        : 0.0;
++    final railHeight = posterHeight + labelHeight;
++    return Padding(
++      padding: EdgeInsetsDirectional.only(
++        bottom: MediaRail.sectionSpacing(context),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Padding(
++            padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
++            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
++          ),
++          SizedBox(height: MediaRail.headerSpacing(context)),
++          SizedBox(
++            height: railHeight,
++            child: ListView.separated(
++              padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
++              scrollDirection: Axis.horizontal,
++              itemCount: 6,
++              separatorBuilder: (_, __) => SizedBox(
++                width: (width * .035).clamp(12.0, 18.0).toDouble(),
++              ),
++              itemBuilder: (_, __) => SizedBox(
++                width: posterWidth,
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    SizedBox(
++                      height: posterHeight,
++                      child: DecoratedBox(
++                        decoration: BoxDecoration(
++                          color: HorseTheme.surface,
++                          borderRadius: BorderRadius.circular(14),
++                        ),
++                      ),
++                    ),
++                    if (showTitle) ...[
++                      const SizedBox(height: 8),
++                      const SizedBox(
++                        width: 96,
++                        height: 11,
++                        child: DecoratedBox(
++                          decoration: BoxDecoration(
++                            color: HorseTheme.surface,
++                            borderRadius: BorderRadius.all(Radius.circular(8)),
++                          ),
++                        ),
++                      ),
++                      const SizedBox(height: 5),
++                      const SizedBox(
++                        width: 64,
++                        height: 9,
++                        child: DecoratedBox(
++                          decoration: BoxDecoration(
++                            color: HorseTheme.surface,
++                            borderRadius: BorderRadius.all(Radius.circular(8)),
++                          ),
++                        ),
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++/// Rail-level error/empty message: title line, message, then the retry
++/// [TextButton.icon]. Deliberately NOT the shared [AppStateMessage] — that
++/// widget renders a centered icon-over-text column for page-level states,
++/// while this rail-level row keeps its start-aligned title + inline button
++/// shape (audit 121-a2: a different family).
++class _RailMessage extends StatelessWidget {
++  const _RailMessage({
++    required this.title,
++    required this.message,
++    required this.actionLabel,
++    required this.onRetry,
++  });
++  final String title;
++  final String message;
++  final String actionLabel;
++  final VoidCallback onRetry;
++
++  @override
++  Widget build(BuildContext context) => Padding(
++        padding: EdgeInsetsDirectional.fromSTEB(
++          20,
++          4,
++          20,
++          MediaRail.sectionSpacing(context),
++        ),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Text(title, style: Theme.of(context).textTheme.titleLarge),
++            const SizedBox(height: 8),
++            Text(message, style: Theme.of(context).textTheme.bodyMedium),
++            const SizedBox(height: 8),
++            Align(
++              alignment: AlignmentDirectional.centerStart,
++              child: TextButton.icon(
++                onPressed: onRetry,
++                icon: const Icon(Icons.refresh_rounded),
++                label: Text(actionLabel),
++              ),
++            ),
++          ],
++        ),
++      );
++}
+diff --git a/lib/features/home/widgets/continue_watching_rail.dart b/lib/features/home/widgets/continue_watching_rail.dart
+new file mode 100644
+index 0000000..3b70300
+--- /dev/null
++++ b/lib/features/home/widgets/continue_watching_rail.dart
+@@ -0,0 +1,723 @@
++import 'dart:async';
++import 'dart:math' as math;
++
++import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++
++import '../../../core/models/integration_cw.dart';
++import '../../../core/models/media_item.dart';
++import '../../../core/state/app_state.dart';
++import '../../../core/theme/horse_theme.dart';
++import '../../../shared/widgets/noor_toast.dart';
++import '../../media/media_detail_page.dart';
++import '../cw_upcoming.dart';
++import 'home_section_header.dart';
++
++/// Web CW rail geometry solved once per build for the current width — the
++/// single copy of the math that used to be triplicated across the local
++/// rail, the linked rail and the linked skeleton: the web tokens
++/// `--cw-card-w = min(66vw, 300px)` with aspect-ratio 16 / 9, and the 700px
++/// breakpoint flipping the 34/20 rail gutter.
++class _CwRailMetrics {
++  const _CwRailMetrics({
++    required this.cardWidth,
++    required this.cardHeight,
++    required this.pad,
++  });
++
++  factory _CwRailMetrics.solve(double width) {
++    final wide = width >= HorseTheme.bpWide;
++    final cardWidth = math.min(width * .66, 300.0);
++    return _CwRailMetrics(
++      cardWidth: cardWidth,
++      cardHeight: cardWidth * 9 / 16,
++      pad: wide ? 34 : 20,
++    );
++  }
++
++  final double cardWidth;
++  final double cardHeight;
++  final double pad;
++}
++
++/// Continue watching, rebuilt to the Harbor web round-21 mobile spec:
++/// 16:9 rectangular cards (min(66vw, 300px) wide), the S/E tag + title +
++/// episode/remaining subtitle painted INSIDE the card over a bottom scrim,
++/// hairline white border, the signature red track-less progress bar, the
++/// "upcoming episode" badge + amber fresh dot (bounded metadata enrichment,
++/// Task 111) and the Harbor long-press menu (details / mark watched / remove).
++/// Rows are ordered most-recently-watched first, exactly like the site.
++class ContinueWatchingRail extends StatefulWidget {
++  const ContinueWatchingRail({
++    super.key,
++    required this.entries,
++    required this.english,
++  });
++
++  final List<WatchHistoryEntry> entries;
++  final bool english;
++
++  @override
++  State<ContinueWatchingRail> createState() => _ContinueRailState();
++}
++
++class _ContinueRailState extends State<ContinueWatchingRail> {
++  final Map<String, CwEnrichment?> _enrichment = {};
++  late final CwEnrichmentCache _cache = CwEnrichmentCache(_loadDetail);
++  String? _enrichSignature;
++
++  Future<MediaItem?> _loadDetail(MediaItem item) {
++    final app = context.read<AppState>();
++    return app.catalogs
++        .detail(item.type, item.id, app.addons)
++        .timeout(const Duration(seconds: 10), onTimeout: () => null);
++  }
++
++  /// Finished episode ids from history — the web `episodeWatchedSet()` that
++  /// drives the fresh-dot decision.
++  Set<String> _watchedVideoIds(AppState app) => app.history
++      .where(
++        (h) =>
++            h.durationMs > 0 &&
++            h.positionMs >= h.durationMs - 120000 &&
++            h.videoId != null,
++      )
++      .map((h) => h.videoId!)
++      .toSet();
++
++  /// Web parity: only the first six visible series cards trigger metadata
++  /// lookups (`enrich: i < 6`); results land via setState, fail soft.
++  void _ensureEnrichment() {
++    final app = context.read<AppState>();
++    final signature =
++        widget.entries.map((e) => '${e.item.id}:${e.watchedAt}').join('|');
++    if (signature == _enrichSignature) return;
++    _enrichSignature = signature;
++    final watched = _watchedVideoIds(app);
++    final now = DateTime.now();
++    var launched = 0;
++    for (final entry in widget.entries) {
++      if (launched >= CwEnrichmentCache.maxEnrichedCards) break;
++      if (entry.item.type != 'series') continue;
++      if (entry.season == null || entry.episode == null) continue;
++      if (_enrichment.containsKey(entry.item.id)) continue;
++      launched++;
++      final itemId = entry.item.id;
++      unawaited(
++        _cache.enrichmentFor(entry.item, entry, watched, now).then((value) {
++          if (!mounted) return;
++          setState(() => _enrichment[itemId] = value);
++        }),
++      );
++    }
++  }
++
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    _ensureEnrichment();
++  }
++
++  @override
++  void didUpdateWidget(covariant ContinueWatchingRail oldWidget) {
++    super.didUpdateWidget(oldWidget);
++    _ensureEnrichment();
++  }
++
++  /// Web token parity: movies show the remaining-time subtitle
++  /// ("1h 20m left" / "تبقى 1س 20د") when more than a minute remains.
++  static String? _remainingLabel(WatchHistoryEntry entry, bool english) {
++    final remaining = entry.durationMs - entry.positionMs;
++    if (remaining <= 60000) return null;
++    final totalMin = (remaining / 60000).round();
++    final h = totalMin ~/ 60;
++    final m = totalMin % 60;
++    final parts = <String>[
++      if (h > 0) '$h${english ? 'h' : 'س'}',
++      if (m > 0 || h == 0) '$m${english ? 'm' : 'د'}',
++    ];
++    return english ? '${parts.join(' ')} left' : 'تبقى ${parts.join(' ')}';
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    // Most recently watched first — same ordering as the Harbor web row.
++    final sorted = [...widget.entries]
++      ..sort((a, b) => b.watchedAt.compareTo(a.watchedAt));
++    // Web tokens: --cw-card-w = min(66vw, 300px) with aspect-ratio 16 / 9 —
++    // solved once (with the 34/20 gutter) by [_CwRailMetrics].
++    final metrics = _CwRailMetrics.solve(MediaQuery.sizeOf(context).width);
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Padding(
++          padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++          child: HomeSectionHeader(
++            // Exact site strings (web homeT "continueWatching").
++            title: widget.english ? 'Continue Watching' : 'متابعة المشاهدة',
++          ),
++        ),
++        const SizedBox(height: 12),
++        SizedBox(
++          height: metrics.cardHeight,
++          child: ListView.separated(
++            padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++            scrollDirection: Axis.horizontal,
++            itemCount: sorted.length,
++            separatorBuilder: (_, __) => const SizedBox(width: 12),
++            itemBuilder: (context, index) {
++              final entry = sorted[index];
++              final item = entry.item;
++              final isSeries = item.type == 'series' &&
++                  entry.season != null &&
++                  entry.episode != null;
++              final enrichment = _enrichment[item.id];
++              final epName = enrichment?.episodeName;
++              final data = CwCardData(
++                id: '${entry.item.id}:${entry.watchedAt}',
++                item: item,
++                progress: entry.durationMs > 0
++                    ? (entry.positionMs / entry.durationMs).clamp(0.0, 1.0)
++                    : 0.0,
++                epTag: isSeries ? 'S${entry.season} E${entry.episode}' : null,
++                subtitle: isSeries
++                    ? (epName != null && epName.isNotEmpty
++                        ? epName
++                        : (widget.english
++                            ? 'Episode ${entry.episode}'
++                            : 'الحلقة ${entry.episode}'))
++                    : _remainingLabel(entry, widget.english),
++                badge: cwUpcomingLabel(
++                    enrichment?.nextAirMs, widget.english, DateTime.now()),
++                fresh: enrichment?.fresh ?? false,
++              );
++              return ContinueCard(
++                data: data,
++                english: widget.english,
++                width: metrics.cardWidth,
++                height: metrics.cardHeight,
++                onOpen: () => Navigator.of(context).push(
++                  MaterialPageRoute<void>(
++                    builder: (_) => MediaDetailPage(
++                      item: item,
++                      resumeVideoId: entry.videoId,
++                      resumePositionMs: entry.positionMs,
++                    ),
++                  ),
++                ),
++                onMarkWatched: () {
++                  unawaited(
++                    context
++                        .read<AppState>()
++                        .markContinueWatchingWatched(item.id)
++                        .then((_) {
++                      if (context.mounted) {
++                        NoorToast.show(
++                          context,
++                          widget.english
++                              ? 'Marked as watched'
++                              : 'تم التحديد كمشاهد',
++                        );
++                      }
++                    }),
++                  );
++                },
++                onRemove: () => unawaited(
++                  context.read<AppState>().removeContinueWatchingEntry(item.id),
++                ),
++              );
++            },
++          ),
++        ),
++      ],
++    );
++  }
++}
++
++/// Visual payload of one continue-watching card — built either from a local
++/// history entry (with metadata enrichment) or from a linked-service entry
++/// (source tag instead of menu actions).
++class CwCardData {
++  const CwCardData({
++    required this.id,
++    required this.item,
++    required this.progress,
++    this.epTag,
++    this.subtitle,
++    this.badge,
++    this.fresh = false,
++    this.sourceLabel,
++  });
++
++  final String id;
++  final MediaItem item;
++
++  /// 0..1 — drives the red track-less progress bar (0 hides it).
++  final double progress;
++  final String? epTag;
++  final String? subtitle;
++  final String? badge;
++  final bool fresh;
++
++  /// Small provenance pill ("Trakt" / "AniList" / "MyAnimeList") on cards
++  /// sourced from a linked service.
++  final String? sourceLabel;
++}
++
++class ContinueCard extends StatelessWidget {
++  const ContinueCard({
++    super.key,
++    required this.data,
++    required this.english,
++    required this.width,
++    required this.height,
++    required this.onOpen,
++    this.onMarkWatched,
++    this.onRemove,
++  });
++
++  final CwCardData data;
++  final bool english;
++  final double width;
++  final double height;
++
++  final VoidCallback onOpen;
++
++  /// Present only on LOCAL continue-watching cards — they unlock the
++  /// "mark as watched" / "remove" actions in the long-press menu.
++  final VoidCallback? onMarkWatched;
++  final VoidCallback? onRemove;
++
++  // Web token: --cw-progress: #e53935.
++  static const _progressRed = Color(0xFFE53935);
++  // Web token: --cw-fresh-dot: #f5b301.
++  static const _freshDot = Color(0xFFF5B301);
++
++  @override
++  Widget build(BuildContext context) {
++    final item = data.item;
++    final progress = data.progress;
++    final image = item.background ?? item.poster;
++    final epTag = data.epTag;
++    final subtitle = data.subtitle;
++    final badge = data.badge;
++    final fresh = data.fresh;
++    final sourceLabel = data.sourceLabel;
++    final semantics = [
++      english ? 'Resume' : 'استئناف',
++      item.name,
++      if (epTag != null) epTag,
++      if (subtitle != null) subtitle,
++      if (badge != null) badge,
++      if (progress > 0) '${(progress * 100).round()}%',
++    ].join(', ');
++
++    void openDetail() => onOpen();
++
++    /// Harbor-web long-press menu (web CwContextMenu → the mobile M3 sheet):
++    /// view details always; mark-as-watched / remove only on LOCAL cards —
++    /// linked-service cards carry no local position data to act on.
++    Future<void> openMenu() {
++      return showModalBottomSheet<void>(
++        context: context,
++        useSafeArea: true,
++        backgroundColor: HorseTheme.surface,
++        shape: const RoundedRectangleBorder(
++          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
++        ),
++        builder: (sheetContext) {
++          void close() => Navigator.of(sheetContext).pop();
++          return SafeArea(
++            child: Column(
++              mainAxisSize: MainAxisSize.min,
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                Padding(
++                  padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 20, 2),
++                  child: Text(
++                    item.name,
++                    maxLines: 1,
++                    overflow: TextOverflow.ellipsis,
++                    style: Theme.of(sheetContext).textTheme.titleMedium,
++                  ),
++                ),
++                const SizedBox(height: 6),
++                ListTile(
++                  leading: const Icon(Icons.info_outline_rounded),
++                  title: Text(english ? 'View details' : 'عرض التفاصيل'),
++                  onTap: () {
++                    close();
++                    openDetail();
++                  },
++                ),
++                if (onMarkWatched != null)
++                  ListTile(
++                    leading: const Icon(Icons.visibility_outlined),
++                    title: Text(english ? 'Mark as watched' : 'تحديد كمشاهد'),
++                    onTap: () {
++                      close();
++                      onMarkWatched!();
++                    },
++                  ),
++                if (onRemove != null)
++                  ListTile(
++                    leading: const Icon(
++                      Icons.delete_outline_rounded,
++                      color: _progressRed,
++                    ),
++                    title: Text(
++                      english
++                          ? 'Remove from Continue Watching'
++                          : 'إزالة من متابعة المشاهدة',
++                      style: const TextStyle(color: _progressRed),
++                    ),
++                    onTap: () {
++                      close();
++                      onRemove!();
++                    },
++                  ),
++              ],
++            ),
++          );
++        },
++      );
++    }
++
++    return SizedBox(
++      width: width,
++      height: height,
++      child: Semantics(
++        button: true,
++        label: semantics,
++        child: InkWell(
++          borderRadius: BorderRadius.circular(16),
++          onTap: openDetail,
++          onLongPress: () => unawaited(openMenu()),
++          child: Stack(
++            clipBehavior: Clip.none,
++            children: [
++              Positioned.fill(
++                child: ClipRRect(
++                  borderRadius: BorderRadius.circular(16),
++                  child: Stack(
++                    fit: StackFit.expand,
++                    children: [
++                      image == null
++                          ? const ColoredBox(color: HorseTheme.surface)
++                          : Image.network(
++                              image,
++                              fit: BoxFit.cover,
++                              errorBuilder: (_, __, ___) => const ColoredBox(
++                                color: HorseTheme.surface,
++                              ),
++                            ),
++                      // Web scrim: to top, 85% black → 45% → transparent.
++                      const DecoratedBox(
++                        decoration: BoxDecoration(
++                          gradient: LinearGradient(
++                            begin: Alignment.bottomCenter,
++                            end: Alignment.topCenter,
++                            stops: [0, .45, .75],
++                            colors: [
++                              Color(0xD9000000),
++                              Color(0x73000000),
++                              Color(0x00000000),
++                            ],
++                          ),
++                        ),
++                      ),
++                      PositionedDirectional(
++                        start: 10,
++                        end: 10,
++                        bottom: 12,
++                        child: Column(
++                          crossAxisAlignment: CrossAxisAlignment.start,
++                          mainAxisSize: MainAxisSize.min,
++                          children: [
++                            if (epTag != null) ...[
++                              Directionality(
++                                textDirection: TextDirection.ltr,
++                                child: Text(
++                                  epTag,
++                                  maxLines: 1,
++                                  overflow: TextOverflow.ellipsis,
++                                  style: TextStyle(
++                                    fontSize: 11,
++                                    fontWeight: FontWeight.w700,
++                                    height: 1.3,
++                                    color: Colors.white.withValues(alpha: .95),
++                                  ),
++                                ),
++                              ),
++                              const SizedBox(height: 2),
++                            ],
++                            Text(
++                              item.name,
++                              maxLines: 1,
++                              overflow: TextOverflow.ellipsis,
++                              style: const TextStyle(
++                                fontSize: 15,
++                                fontWeight: FontWeight.w700,
++                                height: 1.2,
++                                color: Colors.white,
++                              ),
++                            ),
++                            if (subtitle != null)
++                              Text(
++                                subtitle,
++                                maxLines: 1,
++                                overflow: TextOverflow.ellipsis,
++                                style: TextStyle(
++                                  fontSize: 12,
++                                  fontWeight: FontWeight.w500,
++                                  height: 1.35,
++                                  color: Colors.white.withValues(alpha: .65),
++                                ),
++                              ),
++                          ],
++                        ),
++                      ),
++                      if (progress > 0)
++                        PositionedDirectional(
++                          start: 8,
++                          end: 8,
++                          bottom: 4,
++                          child: ClipRRect(
++                            borderRadius: BorderRadius.circular(2),
++                            child: LinearProgressIndicator(
++                              value: progress,
++                              minHeight: 3,
++                              backgroundColor:
++                                  Colors.white.withValues(alpha: .24),
++                              color: _progressRed,
++                            ),
++                          ),
++                        ),
++                      // Web .cw-badge: top-end black-70 pill, radius 8,
++                      // 12px/500 white text, 8px inset.
++                      if (badge != null)
++                        PositionedDirectional(
++                          top: 8,
++                          end: 8,
++                          child: Container(
++                            height: 22,
++                            constraints: BoxConstraints(maxWidth: width * .7),
++                            padding: const EdgeInsetsDirectional.symmetric(
++                              horizontal: 7,
++                            ),
++                            alignment: AlignmentDirectional.center,
++                            decoration: BoxDecoration(
++                              color: Colors.black.withValues(alpha: .7),
++                              borderRadius: BorderRadius.circular(8),
++                            ),
++                            child: Text(
++                              badge,
++                              maxLines: 1,
++                              overflow: TextOverflow.ellipsis,
++                              style: const TextStyle(
++                                fontSize: 12,
++                                fontWeight: FontWeight.w500,
++                                color: Colors.white,
++                              ),
++                            ),
++                          ),
++                        ),
++                      // Source pill (linked-service cards only): top-start
++                      // black-60 pill naming the provider — Trakt, AniList,
++                      // MyAnimeList — so provenance is visible at a glance.
++                      if (sourceLabel != null)
++                        PositionedDirectional(
++                          top: 8,
++                          start: 8,
++                          child: Container(
++                            height: 20,
++                            padding: const EdgeInsetsDirectional.symmetric(
++                              horizontal: 7,
++                            ),
++                            alignment: AlignmentDirectional.center,
++                            decoration: BoxDecoration(
++                              color: Colors.black.withValues(alpha: .6),
++                              borderRadius: BorderRadius.circular(7),
++                            ),
++                            child: Text(
++                              sourceLabel,
++                              maxLines: 1,
++                              overflow: TextOverflow.ellipsis,
++                              style: TextStyle(
++                                fontSize: 10.5,
++                                fontWeight: FontWeight.w600,
++                                letterSpacing: .2,
++                                color: Colors.white.withValues(alpha: .92),
++                              ),
++                            ),
++                          ),
++                        ),
++                      // Web .cw-fresh: 5px amber dot above the progress bar.
++                      if (fresh)
++                        const PositionedDirectional(
++                          start: 8,
++                          bottom: 12,
++                          child: SizedBox(
++                            width: 5,
++                            height: 5,
++                            child: DecoratedBox(
++                              decoration: BoxDecoration(
++                                color: _freshDot,
++                                shape: BoxShape.circle,
++                              ),
++                            ),
++                          ),
++                        ),
++                    ],
++                  ),
++                ),
++              ),
++              // Web card border: 1px rgba(255,255,255,.22), radius 16.
++              Positioned.fill(
++                child: IgnorePointer(
++                  child: DecoratedBox(
++                    decoration: BoxDecoration(
++                      borderRadius: BorderRadius.circular(16),
++                      border: Border.all(
++                        color: Colors.white.withValues(alpha: .22),
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++/// Continue-watching cards sourced from the LINKED tracking services —
++/// Trakt paused playback and the anime trackers' "currently watching" list.
++/// Exactly the Harbor-web card spec (16:9, scrim, S/E tag, red progress
++/// bar) plus a small source pill; taps flow through the tracker-resolve
++/// path for `anilist:`/`mal:` identities. The long-press menu intentionally
++/// offers "view details" only — there is no local position data to mark or
++/// remove.
++class LinkedContinueRail extends StatelessWidget {
++  const LinkedContinueRail({
++    super.key,
++    required this.entries,
++    required this.english,
++    required this.onOpen,
++  });
++
++  final List<IntegrationCwEntry> entries;
++  final bool english;
++  final ValueChanged<MediaItem> onOpen;
++
++  @override
++  Widget build(BuildContext context) {
++    final metrics = _CwRailMetrics.solve(MediaQuery.sizeOf(context).width);
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Padding(
++          padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++          child: HomeSectionHeader(
++            title: english
++                ? 'Continue Watching · Linked accounts'
++                : 'متابعة المشاهدة · الحسابات المرتبطة',
++          ),
++        ),
++        const SizedBox(height: 12),
++        SizedBox(
++          height: metrics.cardHeight,
++          child: ListView.separated(
++            padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++            scrollDirection: Axis.horizontal,
++            itemCount: entries.length,
++            separatorBuilder: (_, __) => const SizedBox(width: 12),
++            itemBuilder: (context, index) {
++              final entry = entries[index];
++              return ContinueCard(
++                data: _cardData(entry, english),
++                english: english,
++                width: metrics.cardWidth,
++                height: metrics.cardHeight,
++                onOpen: () => onOpen(entry.item),
++              );
++            },
++          ),
++        ),
++      ],
++    );
++  }
++
++  /// Anime trackers surface the NEXT episode to watch as the subtitle
++  /// (there is no mid-episode position to resume); Trakt carries a real
++  /// pause percentage and, for shows, the exact season/episode.
++  static CwCardData _cardData(IntegrationCwEntry entry, bool english) {
++    final isTracker = entry.source != 'trakt';
++    final next = entry.nextEpisode;
++    return CwCardData(
++      id: '${entry.source}:${entry.item.id}',
++      item: entry.item,
++      progress: entry.progress,
++      epTag: entry.season != null && entry.episode != null
++          ? 'S${entry.season} E${entry.episode}'
++          : null,
++      subtitle: isTracker && next != null
++          ? (english ? 'Episode $next' : 'الحلقة $next')
++          : null,
++      sourceLabel: switch (entry.source) {
++        'trakt' => 'Trakt',
++        'anilist' => 'AniList',
++        _ => 'MyAnimeList',
++      },
++    );
++  }
++}
++
++/// First-load placeholder for the linked continue-watching row: mirrors the
++/// real rail's geometry (web card spec, same widths) so the layout doesn't
++/// jump when the rows arrive. Rendered only while a linked refresh is in
++/// flight and no rows exist yet.
++class LinkedContinueSkeleton extends StatelessWidget {
++  const LinkedContinueSkeleton({super.key, required this.english});
++
++  final bool english;
++
++  @override
++  Widget build(BuildContext context) {
++    final metrics = _CwRailMetrics.solve(MediaQuery.sizeOf(context).width);
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Padding(
++          padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++          child: HomeSectionHeader(
++            title: english
++                ? 'Continue Watching · Linked accounts'
++                : 'متابعة المشاهدة · الحسابات المرتبطة',
++          ),
++        ),
++        const SizedBox(height: 12),
++        SizedBox(
++          height: metrics.cardHeight,
++          child: ListView.separated(
++            physics: const NeverScrollableScrollPhysics(),
++            padding: EdgeInsets.symmetric(horizontal: metrics.pad),
++            scrollDirection: Axis.horizontal,
++            itemCount: 3,
++            separatorBuilder: (_, __) => const SizedBox(width: 12),
++            itemBuilder: (context, index) => Container(
++              width: metrics.cardWidth,
++              decoration: BoxDecoration(
++                color: Colors.white.withValues(alpha: .06),
++                borderRadius: BorderRadius.circular(16),
++                border: Border.all(color: HorseTheme.hairline),
++              ),
++            ),
++          ),
++        ),
++      ],
++    );
++  }
++}
+diff --git a/lib/features/home/widgets/featured_hero.dart b/lib/features/home/widgets/featured_hero.dart
+new file mode 100644
+index 0000000..15b1ff5
+--- /dev/null
++++ b/lib/features/home/widgets/featured_hero.dart
+@@ -0,0 +1,721 @@
++import 'dart:async';
++import 'dart:math' as math;
++
++import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++
++import '../../../core/models/featured_artwork.dart';
++import '../../../core/models/media_item.dart';
++import '../../../core/state/app_state.dart';
++import '../../../core/theme/horse_theme.dart';
++import '../../shell/noor_dock_tabs.dart' show glassDockContentClearance;
++
++/// The featured hero carousel (home's top slot): full-bleed autoplaying
++/// artwork with TMDB-enriched logo / portrait / landscape picks, the bottom
++/// scrim ladder, metadata row, "View details" pill and page dots — plus the
++/// geometry-matched [FeaturedSkeleton] loading state. Moved verbatim from
++/// home_page.dart (Task 121-c); visuals, keys and ordering are unchanged.
++class FeaturedHero extends StatefulWidget {
++  const FeaturedHero({
++    super.key,
++    required this.items,
++    required this.autoplayActive,
++    required this.onTap,
++  });
++
++  final List<MediaItem> items;
++  final bool autoplayActive;
++  final ValueChanged<MediaItem> onTap;
++
++  @override
++  State<FeaturedHero> createState() => _FeaturedCardState();
++}
++
++class _FeaturedCardState extends State<FeaturedHero>
++    with WidgetsBindingObserver {
++  Timer? _autoplayTimer;
++  Timer? _touchResumeTimer;
++  int _activeIndex = 0;
++  double _dragDistance = 0;
++  bool _reducedMotion = false;
++  bool _appActive = true;
++  bool _touching = false;
++  String? _artworkSignature;
++  final Map<String, FeaturedArtwork> _artwork = {};
++
++  @override
++  void initState() {
++    super.initState();
++    WidgetsBinding.instance.addObserver(this);
++  }
++
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    final reduceMotion = MediaQuery.disableAnimationsOf(context);
++    if (reduceMotion != _reducedMotion) {
++      _reducedMotion = reduceMotion;
++    }
++    _enrichSlides();
++    _startAutoplay();
++  }
++
++  @override
++  void didUpdateWidget(covariant FeaturedHero oldWidget) {
++    super.didUpdateWidget(oldWidget);
++    if (_itemsSignature(oldWidget.items) != _itemsSignature(widget.items)) {
++      _activeIndex = 0;
++      _artworkSignature = null;
++      _startAutoplay();
++    }
++    if (oldWidget.autoplayActive != widget.autoplayActive) _startAutoplay();
++    _enrichSlides();
++  }
++
++  @override
++  void dispose() {
++    WidgetsBinding.instance.removeObserver(this);
++    _autoplayTimer?.cancel();
++    _touchResumeTimer?.cancel();
++    super.dispose();
++  }
++
++  @override
++  void didChangeAppLifecycleState(AppLifecycleState state) {
++    _appActive = state == AppLifecycleState.resumed;
++    if (_appActive) {
++      _startAutoplay();
++    } else {
++      _autoplayTimer?.cancel();
++    }
++  }
++
++  String _itemsSignature(List<MediaItem> items) =>
++      items.map((item) => item.id).join('|');
++
++  void _enrichSlides() {
++    if (widget.items.isEmpty) return;
++    final app = context.read<AppState>();
++    final language = app.webSettings['tmdbLanguage']?.toString() ?? 'en-US';
++    final region = app.webSettings['region']?.toString() ?? 'US';
++    final uiLanguage = app.english ? 'en' : 'ar';
++    final signature =
++        '${_itemsSignature(widget.items)}:$language:$region:$uiLanguage:'
++        '${app.webSettings['tmdbEnabled']}:${app.api.hasUserTmdbKey ? 'user' : 'default'}';
++    if (signature == _artworkSignature) return;
++    _artworkSignature = signature;
++    _artwork.clear();
++    if (app.webSettings['tmdbEnabled'] == false) return;
++    unawaited(_loadFeaturedArtwork(
++      app,
++      signature: signature,
++      language: language,
++      region: region,
++      uiLanguage: uiLanguage,
++    ));
++  }
++
++  Future<void> _loadFeaturedArtwork(
++    AppState app, {
++    required String signature,
++    required String language,
++    required String region,
++    required String uiLanguage,
++  }) async {
++    for (final item in widget.items) {
++      if (!mounted || signature != _artworkSignature) return;
++      final result = await app.catalogs.featuredArtwork(
++        item,
++        language: language,
++        region: region,
++        uiLanguage: uiLanguage,
++      );
++      if (!mounted || signature != _artworkSignature) return;
++      setState(() => _artwork[item.id] = result);
++      await Future<void>.delayed(const Duration(milliseconds: 150));
++    }
++  }
++
++  void _startAutoplay() {
++    _autoplayTimer?.cancel();
++    if (_reducedMotion ||
++        !_appActive ||
++        _touching ||
++        !widget.autoplayActive ||
++        widget.items.length < 2) {
++      return;
++    }
++    _autoplayTimer = Timer.periodic(const Duration(seconds: 6), (_) {
++      if (!mounted || _touching) return;
++      _setActiveSlide((_activeIndex + 1) % widget.items.length);
++    });
++  }
++
++  void _pauseForTouch() {
++    _touchResumeTimer?.cancel();
++    _autoplayTimer?.cancel();
++    _touching = true;
++  }
++
++  void _resumeAfterTouch() {
++    _touchResumeTimer?.cancel();
++    _touchResumeTimer = Timer(const Duration(seconds: 8), () {
++      if (!mounted) return;
++      _touching = false;
++      _startAutoplay();
++    });
++  }
++
++  void _goToSlide(int targetIndex) {
++    _pauseForTouch();
++    _resumeAfterTouch();
++    _setActiveSlide(targetIndex);
++  }
++
++  void _setActiveSlide(int targetIndex) {
++    if (!mounted || widget.items.length < 2) return;
++    final count = widget.items.length;
++    final target = ((targetIndex % count) + count) % count;
++    if (target == _activeIndex) return;
++    setState(() => _activeIndex = target);
++  }
++
++  void _handleSwipeEnd() {
++    if (_dragDistance.abs() < 36 || widget.items.length < 2) return;
++    final forward = Directionality.of(context) == TextDirection.rtl
++        ? _dragDistance > 0
++        : _dragDistance < 0;
++    _setActiveSlide((_activeIndex + (forward ? 1 : -1)) % widget.items.length);
++    _dragDistance = 0;
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final heroHeight = _featuredHeroHeight(context);
++    final activeItem = widget.items[_activeIndex];
++    return SizedBox(
++      height: heroHeight,
++      child: Listener(
++        behavior: HitTestBehavior.translucent,
++        onPointerDown: (_) => _pauseForTouch(),
++        onPointerUp: (_) => _resumeAfterTouch(),
++        onPointerCancel: (_) => _resumeAfterTouch(),
++        child: GestureDetector(
++          behavior: HitTestBehavior.opaque,
++          onHorizontalDragStart: (_) => _dragDistance = 0,
++          onHorizontalDragUpdate: (details) =>
++              _dragDistance += details.delta.dx,
++          onHorizontalDragEnd: (_) => _handleSwipeEnd(),
++          child: Stack(
++            fit: StackFit.expand,
++            children: [
++              AnimatedSwitcher(
++                duration: _reducedMotion
++                    ? Duration.zero
++                    : const Duration(milliseconds: 380),
++                switchInCurve: Curves.easeOutCubic,
++                switchOutCurve: Curves.easeOutCubic,
++                child: _FeaturedArtwork(
++                  key: ValueKey(activeItem.id),
++                  item: activeItem,
++                  artwork: _artwork[activeItem.id],
++                ),
++              ),
++              const Positioned.fill(child: _FeaturedScrim()),
++              Positioned.fill(
++                child: _FeaturedOverlay(
++                  item: activeItem,
++                  artwork: _artwork[activeItem.id],
++                  itemsCount: widget.items.length,
++                  activeIndex: _activeIndex,
++                  reduceMotion: _reducedMotion,
++                  onSelectPage: _goToSlide,
++                  onTap: () => widget.onTap(activeItem),
++                ),
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _FeaturedArtwork extends StatelessWidget {
++  const _FeaturedArtwork({
++    super.key,
++    required this.item,
++    required this.artwork,
++  });
++
++  final MediaItem item;
++  final FeaturedArtwork? artwork;
++
++  @override
++  Widget build(BuildContext context) {
++    final size = MediaQuery.sizeOf(context);
++    final large = size.width >= 600;
++    final portrait = artwork?.portrait ?? item.poster;
++    final landscape = artwork?.landscape ?? item.background;
++    final background =
++        large ? (landscape ?? portrait) : (portrait ?? landscape);
++
++    // FIX: Keep AnimatedSwitcher artwork at the full hero size instead of its image's intrinsic size.
++    return SizedBox.expand(
++      child: background != null
++          ? Image.network(
++              background,
++              width: double.infinity,
++              height: double.infinity,
++              fit: BoxFit.cover,
++              alignment: large ? Alignment.center : Alignment.topCenter,
++              errorBuilder: (_, __, ___) =>
++                  const ColoredBox(color: HorseTheme.raised),
++            )
++          : const ColoredBox(color: HorseTheme.raised),
++    );
++  }
++}
++
++class _FeaturedScrim extends StatelessWidget {
++  const _FeaturedScrim();
++
++  @override
++  Widget build(BuildContext context) => const Stack(
++        fit: StackFit.expand,
++        children: [
++          // Bottom fade into the canvas — the original hero scrim, unchanged.
++          DecoratedBox(
++            decoration: BoxDecoration(
++              gradient: LinearGradient(
++                begin: Alignment.topCenter,
++                end: Alignment.bottomCenter,
++                stops: [0, .34, .64, .9],
++                colors: [
++                  Color(0x00000000),
++                  Color(0x18000000),
++                  Color(0xB8000000),
++                  Color(0xFF000000),
++                ],
++              ),
++            ),
++          ),
++          // EDGE-TO-EDGE readability scrim (Task 119): the hero now bleeds
++          // behind the transparent status bar, so a short dark band keeps
++          // the clock/battery/signal icons readable over bright artwork
++          // (same idea as the web home hero's top gradient).
++          DecoratedBox(
++            decoration: BoxDecoration(
++              gradient: LinearGradient(
++                begin: Alignment.topCenter,
++                end: Alignment.bottomCenter,
++                stops: [0, .16],
++                colors: [Color(0x66000000), Color(0x00000000)],
++              ),
++            ),
++          ),
++        ],
++      );
++}
++
++class _FeaturedOverlay extends StatelessWidget {
++  const _FeaturedOverlay({
++    required this.item,
++    required this.artwork,
++    required this.itemsCount,
++    required this.activeIndex,
++    required this.reduceMotion,
++    required this.onSelectPage,
++    required this.onTap,
++  });
++
++  final MediaItem item;
++  final FeaturedArtwork? artwork;
++  final int itemsCount;
++  final int activeIndex;
++  final bool reduceMotion;
++  final ValueChanged<int> onSelectPage;
++  final VoidCallback onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    final size = MediaQuery.sizeOf(context);
++    final large = size.width >= 600;
++    final english = context.read<AppState>().english;
++    final logo = artwork?.logo ?? item.logo;
++    final genre = artwork?.genre ?? item.genres.firstOrNull;
++    final year = item.releaseInfo?.split('–').first.trim();
++    final metadataHeight = math
++        .max(24.0, MediaQuery.textScalerOf(context).scale(16) * 1.3)
++        .toDouble();
++    final typeLabel = switch (item.type.toLowerCase()) {
++      'movie' => english ? 'Movie' : 'فيلم',
++      'series' => english ? 'Series' : 'مسلسل',
++      _ => item.type,
++    };
++
++    return Stack(
++      fit: StackFit.expand,
++      children: [
++        Padding(
++          padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 12),
++          child: Column(
++            mainAxisAlignment: MainAxisAlignment.end,
++            children: [
++              SizedBox(
++                height: 50,
++                child: Align(
++                  alignment: Alignment.bottomCenter,
++                  child: AnimatedSwitcher(
++                    duration: reduceMotion ? Duration.zero : HorseTheme.durMed,
++                    transitionBuilder: (child, animation) => FadeTransition(
++                      opacity: animation,
++                      child: child,
++                    ),
++                    child: logo == null
++                        ? const SizedBox.shrink(key: ValueKey('empty-logo'))
++                        : Image.network(
++                            logo,
++                            key: ValueKey(logo),
++                            width: math.min(size.width * .5, 175.0),
++                            height: 50,
++                            fit: BoxFit.contain,
++                            semanticLabel: item.name,
++                            errorBuilder: (_, __, ___) =>
++                                const SizedBox.shrink(),
++                          ),
++                  ),
++                ),
++              ),
++              const SizedBox(height: 10),
++              SizedBox(
++                height: metadataHeight,
++                child: Center(
++                  child: AnimatedSwitcher(
++                    duration: reduceMotion
++                        ? Duration.zero
++                        : const Duration(milliseconds: 180),
++                    transitionBuilder: (child, animation) => FadeTransition(
++                      opacity: animation,
++                      child: child,
++                    ),
++                    child: ConstrainedBox(
++                      key: ValueKey(item.id),
++                      constraints: BoxConstraints(maxWidth: size.width - 32),
++                      child: Row(
++                        mainAxisSize: MainAxisSize.min,
++                        mainAxisAlignment: MainAxisAlignment.center,
++                        children: [
++                          if (year?.isNotEmpty == true) ...[
++                            Text(year!, style: _heroMetadataStyle),
++                            const Padding(
++                              padding: EdgeInsets.symmetric(horizontal: 10),
++                              child: _HeroMetadataDot(),
++                            ),
++                          ],
++                          if (genre?.isNotEmpty == true) ...[
++                            Flexible(
++                              child: Text(
++                                genre!,
++                                maxLines: 1,
++                                overflow: TextOverflow.ellipsis,
++                                style: _heroMetadataStyle,
++                              ),
++                            ),
++                            const Padding(
++                              padding: EdgeInsets.symmetric(horizontal: 10),
++                              child: _HeroMetadataDot(),
++                            ),
++                          ],
++                          Text(typeLabel, style: _heroMetadataStyle),
++                        ],
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++              SizedBox(height: large ? 12 : 10),
++              FilledButton(
++                onPressed: onTap,
++                style: FilledButton.styleFrom(
++                  minimumSize: Size(146, large ? 42 : 38),
++                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
++                  backgroundColor: const Color(0xFFF5F6F8),
++                  foregroundColor: const Color(0xFF0B0B0B),
++                  padding: const EdgeInsets.symmetric(horizontal: 28),
++                  shape: const StadiumBorder(),
++                  textStyle: const TextStyle(
++                    fontSize: 14,
++                    fontWeight: FontWeight.w700,
++                    height: 1,
++                  ),
++                ),
++                child: Text(english ? 'View details' : 'عرض التفاصيل'),
++              ),
++              if (itemsCount > 1) ...[
++                const SizedBox(height: 10),
++                Semantics(
++                  label: english ? 'Featured items' : 'العناوين المميزة',
++                  child: SizedBox(
++                    height: 8,
++                    child: Row(
++                      mainAxisSize: MainAxisSize.min,
++                      children: [
++                        for (var index = 0; index < itemsCount; index++) ...[
++                          if (index > 0) const SizedBox(width: 8),
++                          Semantics(
++                            button: true,
++                            selected: index == activeIndex,
++                            label: english
++                                ? 'Item ${index + 1} of $itemsCount'
++                                : 'العنوان ${index + 1} من $itemsCount',
++                            onTap: () => onSelectPage(index),
++                            child: GestureDetector(
++                              behavior: HitTestBehavior.opaque,
++                              onTap: () => onSelectPage(index),
++                              child: AnimatedContainer(
++                                duration: reduceMotion
++                                    ? Duration.zero
++                                    : const Duration(milliseconds: 180),
++                                width: index == activeIndex ? 32 : 8,
++                                height: 8,
++                                decoration: const BoxDecoration(
++                                  color: Colors.white,
++                                  borderRadius: BorderRadius.all(
++                                    Radius.circular(12),
++                                  ),
++                                ),
++                              ),
++                            ),
++                          ),
++                        ],
++                      ],
++                    ),
++                  ),
++                ),
++              ],
++            ],
++          ),
++        ),
++        if (itemsCount > 1)
++          PositionedDirectional(
++            start: 0,
++            end: 0,
++            bottom: 0,
++            child: Center(
++              child: SizedBox(
++                width: itemsCount * 16.0 + 16,
++                height: 40,
++                child: GestureDetector(
++                  behavior: HitTestBehavior.opaque,
++                  onTapUp: (details) {
++                    final rowWidth = itemsCount * 16.0 + 16;
++                    final logicalX =
++                        Directionality.of(context) == TextDirection.rtl
++                            ? rowWidth - details.localPosition.dx
++                            : details.localPosition.dx;
++                    var cursor = 0.0;
++                    var nearestIndex = 0;
++                    var nearestDistance = double.infinity;
++                    for (var dot = 0; dot < itemsCount; dot++) {
++                      final slotWidth = dot == activeIndex ? 32.0 : 8.0;
++                      final distance =
++                          (logicalX - (cursor + slotWidth / 2)).abs();
++                      if (distance < nearestDistance) {
++                        nearestDistance = distance;
++                        nearestIndex = dot;
++                      }
++                      cursor += slotWidth + 8;
++                    }
++                    onSelectPage(nearestIndex);
++                  },
++                  child: const SizedBox.expand(),
++                ),
++              ),
++            ),
++          ),
++      ],
++    );
++  }
++}
++
++/// Hero metadata row: plain white text with a soft shadow, as before the
++/// outlined-text experiment (user: "ارجع نص الهيرو كما هو سابقاً").
++const _heroMetadataStyle = TextStyle(
++  color: Colors.white,
++  fontSize: 16,
++  fontWeight: FontWeight.w700,
++  shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
++);
++
++class _HeroMetadataDot extends StatelessWidget {
++  const _HeroMetadataDot();
++
++  @override
++  Widget build(BuildContext context) => Container(
++        width: 4,
++        height: 4,
++        decoration: BoxDecoration(
++          color: Colors.white.withValues(alpha: .6),
++          shape: BoxShape.circle,
++        ),
++      );
++}
++
++/// First-load placeholder matching the real hero's height, scrim ladder and
++/// status-bar band so the loading state is geometry-identical.
++class FeaturedSkeleton extends StatelessWidget {
++  const FeaturedSkeleton({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    final heroHeight = _featuredHeroHeight(context);
++    final english = context.read<AppState>().english;
++    final metadataHeight = math
++        .max(24.0, MediaQuery.textScalerOf(context).scale(16) * 1.3)
++        .toDouble();
++    return SizedBox(
++      height: heroHeight,
++      child: Semantics(
++        label:
++            english ? 'Loading featured titles' : 'جارٍ تحميل العناوين المميزة',
++        child: Stack(
++          fit: StackFit.expand,
++          children: [
++            const ColoredBox(color: Color(0xFF050608)),
++            const DecoratedBox(
++              decoration: BoxDecoration(
++                gradient: LinearGradient(
++                  begin: Alignment.topCenter,
++                  end: Alignment.bottomCenter,
++                  stops: [0, .34, .64, .9],
++                  colors: [
++                    Color(0x00000000),
++                    Color(0x18000000),
++                    Color(0xB8000000),
++                    Color(0xFF000000),
++                  ],
++                ),
++              ),
++            ),
++            // Task 119: same status-bar readability band as the real hero,
++            // so the loading state matches the edge-to-edge presentation.
++            const DecoratedBox(
++              decoration: BoxDecoration(
++                gradient: LinearGradient(
++                  begin: Alignment.topCenter,
++                  end: Alignment.bottomCenter,
++                  stops: [0, .16],
++                  colors: [Color(0x66000000), Color(0x00000000)],
++                ),
++              ),
++            ),
++            Positioned.fill(
++              child: Padding(
++                padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 12),
++                child: Column(
++                  mainAxisAlignment: MainAxisAlignment.end,
++                  children: [
++                    const SizedBox(height: 50),
++                    const SizedBox(height: 10),
++                    SizedBox(
++                      height: metadataHeight,
++                      child: Center(
++                        child: Wrap(
++                          alignment: WrapAlignment.center,
++                          spacing: 10,
++                          children: [
++                            _HeroSkeletonChip(width: 38),
++                            _HeroSkeletonChip(width: 52),
++                            _HeroSkeletonChip(width: 30),
++                          ],
++                        ),
++                      ),
++                    ),
++                    const SizedBox(height: 10),
++                    Container(
++                      width: 146,
++                      height: 38,
++                      decoration: BoxDecoration(
++                        color: Colors.white.withValues(alpha: .2),
++                        borderRadius: BorderRadius.circular(24),
++                      ),
++                    ),
++                    const SizedBox(height: 10),
++                    const Row(
++                      mainAxisSize: MainAxisSize.min,
++                      children: [
++                        _HeroSkeletonDot(active: true),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                        SizedBox(width: 8),
++                        _HeroSkeletonDot(),
++                      ],
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _HeroSkeletonChip extends StatelessWidget {
++  const _HeroSkeletonChip({required this.width});
++
++  final double width;
++
++  @override
++  Widget build(BuildContext context) => Container(
++        width: width,
++        height: 16,
++        decoration: BoxDecoration(
++          color: Colors.white.withValues(alpha: .2),
++          borderRadius: BorderRadius.circular(12),
++        ),
++      );
++}
++
++class _HeroSkeletonDot extends StatelessWidget {
++  const _HeroSkeletonDot({this.active = false});
++
++  final bool active;
++
++  @override
++  Widget build(BuildContext context) => Container(
++        width: active ? 32 : 8,
++        height: 8,
++        decoration: BoxDecoration(
++          color: Colors.white.withValues(alpha: .28),
++          borderRadius: BorderRadius.circular(8),
++        ),
++      );
++}
++
++double _featuredHeroHeight(BuildContext context) {
++  final size = MediaQuery.sizeOf(context);
++  final viewPadding = MediaQuery.viewPaddingOf(context);
++  // Task: the featured hero takes ~58% of the screen height on every
++  // device. Since Task 119 it bleeds BEHIND the transparent status bar
++  // (its top edge is y=0), but the height guard is unchanged: the hero
++  // must never extend into the glass dock zone, and keeps a small floor
++  // for very short viewports (e.g. landscape phones).
++  final availableHeight =
++      (size.height - viewPadding.top - glassDockContentClearance(context))
++          .clamp(0.0, double.infinity);
++  final preferredHeight = (size.height * .58).clamp(280.0, double.infinity);
++  return math.min(availableHeight, preferredHeight).toDouble();
++}
+diff --git a/lib/features/home/widgets/home_section_header.dart b/lib/features/home/widgets/home_section_header.dart
+new file mode 100644
+index 0000000..e0aeda4
+--- /dev/null
++++ b/lib/features/home/widgets/home_section_header.dart
+@@ -0,0 +1,40 @@
++import 'package:flutter/material.dart';
++
++import '../../../core/theme/horse_theme.dart';
++
++/// The home gold-bar section header: a 3×19 rounded gold accent bar, a 10px
++/// gap, then the rail title in `titleLarge` — extracted verbatim from the
++/// three identical copies that lived in the continue-watching rails (local,
++/// linked, and the linked skeleton; evidence audit 121-a1). The generic
++/// [MediaRail] header is a separate implementation in shared/ and stays
++/// untouched.
++///
++/// The caller owns the surrounding horizontal padding (the CW rails pad
++/// with the rail gutter, `EdgeInsets.symmetric(horizontal: railPad)`).
++class HomeSectionHeader extends StatelessWidget {
++  const HomeSectionHeader({super.key, required this.title});
++
++  /// Pre-localized rail title (`english ? 'en' : 'ar'` at the call site,
++  /// matching the shared-widget convention — no language flag here).
++  final String title;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      children: [
++        Container(
++          width: 3,
++          height: 19,
++          decoration: BoxDecoration(
++            color: HorseTheme.gold,
++            borderRadius: BorderRadius.circular(4),
++          ),
++        ),
++        const SizedBox(width: 10),
++        Expanded(
++          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
++        ),
++      ],
++    );
++  }
++}
+diff --git a/lib/features/live_tv/live_tv_page.dart b/lib/features/live_tv/live_tv_page.dart
+index c360923..a6f2103 100644
+--- a/lib/features/live_tv/live_tv_page.dart
++++ b/lib/features/live_tv/live_tv_page.dart
+@@ -7,6 +7,7 @@ import '../../core/data/iptv_parser.dart';
+ import '../../core/models/media_item.dart';
+ import '../../core/state/app_state.dart';
+ import '../../core/theme/horse_theme.dart';
++import '../../shared/widgets/app_state_message.dart';
+ import '../player/video_player_page.dart';
+ 
+ class LiveTvPage extends StatefulWidget {
+@@ -243,25 +244,35 @@ class _LiveTvPageState extends State<LiveTvPage> {
+               if (_loading) const LinearProgressIndicator(minHeight: 2),
+               Expanded(
+                 child: _error != null
+-                    ? _StateMessage(
++                    ? AppStateMessage(
++                        icon: Icons.live_tv_outlined,
+                         message: _error!,
+-                        action: english ? 'Retry' : 'إعادة المحاولة',
+-                        onPressed: _reload)
++                        actionLabel: english ? 'Retry' : 'إعادة المحاولة',
++                        onAction: _reload,
++                        filledButton: true,
++                        actionIcon: Icons.add_rounded)
+                     : playlists.isEmpty
+-                        ? _StateMessage(
++                        ? AppStateMessage(
++                            icon: Icons.live_tv_outlined,
+                             message: english
+                                 ? 'Add an M3U playlist to browse live channels.'
+                                 : 'أضف قائمة M3U لعرض القنوات المباشرة.',
+-                            action: english ? 'Add playlist' : 'إضافة قائمة',
+-                            onPressed: _addPlaylist,
++                            actionLabel:
++                                english ? 'Add playlist' : 'إضافة قائمة',
++                            onAction: _addPlaylist,
++                            filledButton: true,
++                            actionIcon: Icons.add_rounded,
+                           )
+                         : _channels.isEmpty && !_loading
+-                            ? _StateMessage(
++                            ? AppStateMessage(
++                                icon: Icons.live_tv_outlined,
+                                 message: english
+                                     ? 'No channels were found in these playlists.'
+                                     : 'لم يتم العثور على قنوات في هذه القوائم.',
+-                                action: english ? 'Refresh' : 'تحديث',
+-                                onPressed: _reload)
++                                actionLabel: english ? 'Refresh' : 'تحديث',
++                                onAction: _reload,
++                                filledButton: true,
++                                actionIcon: Icons.add_rounded)
+                             : ListView.separated(
+                                 padding: const EdgeInsetsDirectional.fromSTEB(
+                                     16, 6, 16, 28),
+@@ -464,35 +475,6 @@ class _LiveChannel {
+   final IptvChannel channel;
+ }
+ 
+-class _StateMessage extends StatelessWidget {
+-  const _StateMessage(
+-      {required this.message, required this.action, required this.onPressed});
+-  final String message;
+-  final String action;
+-  final VoidCallback onPressed;
+-
+-  @override
+-  Widget build(BuildContext context) => Center(
+-        child: Padding(
+-          padding: const EdgeInsets.all(28),
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const Icon(Icons.live_tv_outlined,
+-                  size: 44, color: HorseTheme.muted),
+-              const SizedBox(height: 12),
+-              Text(message, textAlign: TextAlign.center),
+-              const SizedBox(height: 14),
+-              FilledButton.icon(
+-                  onPressed: onPressed,
+-                  icon: const Icon(Icons.add_rounded),
+-                  label: Text(action)),
+-            ],
+-          ),
+-        ),
+-      );
+-}
+-
+ bool _isHttp(Uri? uri) =>
+     uri != null &&
+     uri.hasAuthority &&
+diff --git a/lib/features/media/detail_hero.dart b/lib/features/media/detail_hero.dart
+index fd77771..438e874 100644
+--- a/lib/features/media/detail_hero.dart
++++ b/lib/features/media/detail_hero.dart
+@@ -17,8 +17,15 @@ import 'package:flutter/material.dart';
+ import '../../core/models/media_item.dart';
+ import '../../core/theme/horse_theme.dart';
+ import '../../shared/widgets/glass_navigation.dart';
++import '../../shared/widgets/shimmer_box.dart';
+ import 'detail_glass.dart';
+ 
++// Task 121: ShimmerBox moved to lib/shared/widgets/shimmer_box.dart (it is
++// still used below by _HeroImage/DetailLoadingSkeleton); the export shim
++// keeps existing consumers (episode_views.dart, tests) resolving it from
++// this library.
++export '../../shared/widgets/shimmer_box.dart';
++
+ /// Press feedback shared by the action-row controls (web: active:scale-…).
+ class _PressableScale extends StatefulWidget {
+   const _PressableScale({required this.child, required this.onTap});
+@@ -1075,99 +1082,6 @@ class _CircleButtonBody extends StatelessWidget {
+ // Skeleton
+ // ---------------------------------------------------------------------------
+ 
+-/// Animated linear-gradient shimmer box. Honors `MediaQuery.
+-/// disableAnimationsOf` by rendering a static base fill.
+-class ShimmerBox extends StatefulWidget {
+-  const ShimmerBox({
+-    super.key,
+-    this.width,
+-    this.height,
+-    this.borderRadius,
+-  });
+-
+-  final double? width;
+-  final double? height;
+-  final BorderRadiusGeometry? borderRadius;
+-
+-  @override
+-  State<ShimmerBox> createState() => _ShimmerBoxState();
+-}
+-
+-class _ShimmerBoxState extends State<ShimmerBox>
+-    with SingleTickerProviderStateMixin {
+-  late final AnimationController _controller = AnimationController(
+-    vsync: this,
+-    duration: const Duration(milliseconds: 1600),
+-  );
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller.repeat();
+-  }
+-
+-  @override
+-  void dispose() {
+-    _controller.dispose();
+-    super.dispose();
+-  }
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    final radius = widget.borderRadius ?? BorderRadius.circular(12);
+-    Widget box = LayoutBuilder(
+-      builder: (context, constraints) {
+-        final width = widget.width ?? constraints.maxWidth;
+-        final height = widget.height ?? constraints.maxHeight;
+-        final size = Size(width, height);
+-        if (MediaQuery.disableAnimationsOf(context)) {
+-          return _skeletonBase(size, radius);
+-        }
+-        return AnimatedBuilder(
+-          animation: _controller,
+-          builder: (context, _) {
+-            final phase = _controller.value * 2 - 1; // -1..1 sweep
+-            return _skeletonBase(
+-              size,
+-              radius,
+-              gradient: LinearGradient(
+-                begin: Alignment(phase - 1, 0),
+-                end: Alignment(phase + 1, 0),
+-                colors: const [
+-                  HorseTheme.raised,
+-                  HorseTheme.line,
+-                  HorseTheme.raised,
+-                ],
+-                stops: const [0.35, 0.5, 0.65],
+-              ),
+-            );
+-          },
+-        );
+-      },
+-    );
+-    if (widget.width != null || widget.height != null) {
+-      box = SizedBox(
+-        width: widget.width,
+-        height: widget.height,
+-        child: box,
+-      );
+-    }
+-    return box;
+-  }
+-
+-  Widget _skeletonBase(Size size, BorderRadiusGeometry radius,
+-      {Gradient? gradient}) {
+-    return DecoratedBox(
+-      decoration: BoxDecoration(
+-        borderRadius: radius,
+-        gradient: gradient,
+-        color: gradient == null ? HorseTheme.raised : null,
+-      ),
+-      child: SizedBox(width: size.width, height: size.height),
+-    );
+-  }
+-}
+-
+ /// Hero-shaped skeleton + content-column lines (mirrors the real layout).
+ class DetailLoadingSkeleton extends StatelessWidget {
+   const DetailLoadingSkeleton({super.key});
+diff --git a/lib/features/settings/addons_page.dart b/lib/features/settings/addons_page.dart
+index 39d110e..e0e41ac 100644
+--- a/lib/features/settings/addons_page.dart
++++ b/lib/features/settings/addons_page.dart
+@@ -149,7 +149,7 @@ class _AddonsPageState extends State<AddonsPage> {
+                           _message!,
+                           style: TextStyle(
+                             color: _messageError
+-                                ? const Color(0xFFFF8178)
++                                ? HorseTheme.danger
+                                 : HorseTheme.gold,
+                             fontSize: 12,
+                           ),
+diff --git a/lib/features/settings/settings_data_page.dart b/lib/features/settings/settings_data_page.dart
+index 5bc3751..f268cf2 100644
+--- a/lib/features/settings/settings_data_page.dart
++++ b/lib/features/settings/settings_data_page.dart
+@@ -155,8 +155,7 @@ class _SupabaseSyncCardState extends State<_SupabaseSyncCard> {
+ 
+   Future<void> _loadLastSync() async {
+     for (final bucket in NoorSyncService.buckets) {
+-      _lastSync[bucket] =
+-          await NoorSyncService.instance.lastSyncAt(bucket);
++      _lastSync[bucket] = await NoorSyncService.instance.lastSyncAt(bucket);
+     }
+     if (mounted) setState(() {});
+   }
+@@ -182,13 +181,11 @@ class _SupabaseSyncCardState extends State<_SupabaseSyncCard> {
+   }
+ 
+   String _bucketLabel(String bucket, bool english) => switch (bucket) {
+-        NoorSyncService.bucketSettings =>
+-          english ? 'Settings' : 'الإعدادات',
++        NoorSyncService.bucketSettings => english ? 'Settings' : 'الإعدادات',
+         NoorSyncService.bucketLibrary =>
+           english ? 'Continue watching' : 'متابعة المشاهدة',
+         NoorSyncService.bucketLists => english ? 'Lists' : 'القوائم',
+-        NoorSyncService.bucketWatchlist =>
+-          english ? 'Watchlist' : 'المحفوظات',
++        NoorSyncService.bucketWatchlist => english ? 'Watchlist' : 'المحفوظات',
+         NoorSyncService.bucketHistory => english ? 'History' : 'السجل',
+         NoorSyncService.bucketAddons => english ? 'Add-ons' : 'الإضافات',
+         _ => bucket,
+@@ -208,7 +205,8 @@ class _SupabaseSyncCardState extends State<_SupabaseSyncCard> {
+     final english = app.english;
+     final enabled = app.webSettings['cloudSyncEnabled'] != false;
+     final id = app.deviceId ?? '';
+-    final shortId = id.length >= 8 ? id.substring(0, 8) : (id.isEmpty ? '—' : id);
++    final shortId =
++        id.length >= 8 ? id.substring(0, 8) : (id.isEmpty ? '—' : id);
+     return Container(
+       margin: const EdgeInsets.only(bottom: 8),
+       padding: const EdgeInsets.all(18),
+@@ -227,15 +225,16 @@ class _SupabaseSyncCardState extends State<_SupabaseSyncCard> {
+               const SizedBox(width: 10),
+               Expanded(
+                 child: Text(
+-                  english ? 'Cloud sync (Supabase)' : 'مزامنة سحابية (Supabase)',
++                  english
++                      ? 'Cloud sync (Supabase)'
++                      : 'مزامنة سحابية (Supabase)',
+                   style: Theme.of(context).textTheme.titleMedium,
+                 ),
+               ),
+               Switch(
+                 value: enabled,
+                 activeThumbColor: HorseTheme.gold,
+-                onChanged: (value) =>
+-                    app.setSetting('cloudSyncEnabled', value),
++                onChanged: (value) => app.setSetting('cloudSyncEnabled', value),
+               ),
+             ],
+           ),
+@@ -452,8 +451,7 @@ class _TorrentDownloadsCardState extends State<_TorrentDownloadsCard> {
+     final app = context.watch<AppState>();
+     final english = app.english;
+     final entries = _entries;
+-    final total =
+-        entries?.fold<int>(0, (sum, e) => sum + e.size) ?? 0;
++    final total = entries?.fold<int>(0, (sum, e) => sum + e.size) ?? 0;
+     return Container(
+       margin: const EdgeInsets.only(bottom: 14),
+       padding: const EdgeInsets.all(16),
+@@ -632,15 +630,14 @@ class _DataRow extends StatelessWidget {
+             onTap: onTap,
+             minVerticalPadding: 10,
+             leading: Icon(icon,
+-                color: destructive ? const Color(0xFFFF8178) : HorseTheme.gold),
++                color: destructive ? HorseTheme.danger : HorseTheme.gold),
+             title: Text(title,
+                 style: TextStyle(
+                     color: destructive ? const Color(0xFFFFA29B) : null)),
+             subtitle:
+                 Text(detail, maxLines: 2, overflow: TextOverflow.ellipsis),
+-            trailing: const Icon(
+-                Icons.chevron_left_rounded,
+-                color: HorseTheme.muted),
++            trailing:
++                const Icon(Icons.chevron_left_rounded, color: HorseTheme.muted),
+           ),
+         ),
+       );
+diff --git a/lib/features/settings/settings_page.dart b/lib/features/settings/settings_page.dart
+index f3a3429..c8ac452 100644
+--- a/lib/features/settings/settings_page.dart
++++ b/lib/features/settings/settings_page.dart
+@@ -11,6 +11,7 @@ import 'stats_page.dart';
+ import 'settings_preferences_page.dart';
+ import 'settings_data_page.dart';
+ import 'settings_display_page.dart';
++import 'widgets/settings_tiles.dart';
+ 
+ class SettingsPage extends StatelessWidget {
+   const SettingsPage({super.key, this.onOpenLibrary});
+@@ -35,9 +36,7 @@ class SettingsPage extends StatelessWidget {
+               width >= 700 ? 32 : 20,
+               10,
+               width >= 700 ? 32 : 20,
+-              onOpenLibrary == null
+-                  ? 36
+-                  : glassDockContentClearance(context),
++              onOpenLibrary == null ? 36 : glassDockContentClearance(context),
+             ),
+             children: [
+               Text(
+@@ -55,7 +54,7 @@ class SettingsPage extends StatelessWidget {
+               ),
+               if (onOpenLibrary != null) ...[
+                 const SizedBox(height: 16),
+-                _SettingsTile(
++                SettingsTile(
+                   icon: Icons.video_library_outlined,
+                   title: english ? 'My library' : 'مكتبتي',
+                   subtitle: english
+@@ -65,8 +64,8 @@ class SettingsPage extends StatelessWidget {
+                 ),
+               ],
+               const SizedBox(height: 24),
+-              _SectionTitle(title: english ? 'Playback' : 'التشغيل'),
+-              _SettingsTile(
++              SettingsSectionTitle(title: english ? 'Playback' : 'التشغيل'),
++              SettingsTile(
+                 icon: Icons.tune_rounded,
+                 title: english ? 'Player settings' : 'إعدادات المشغّل',
+                 subtitle: english
+@@ -79,7 +78,7 @@ class SettingsPage extends StatelessWidget {
+                   ),
+                 ),
+               ),
+-              _SettingsTile(
++              SettingsTile(
+                 icon: Icons.closed_caption_outlined,
+                 title:
+                     english ? 'Subtitles and translation' : 'الترجمة واللغات',
+@@ -94,8 +93,8 @@ class SettingsPage extends StatelessWidget {
+                 ),
+               ),
+               const SizedBox(height: 22),
+-              _SectionTitle(title: english ? 'Add-ons' : 'الإضافات'),
+-              _SettingsTile(
++              SettingsSectionTitle(title: english ? 'Add-ons' : 'الإضافات'),
++              SettingsTile(
+                 icon: Icons.extension_rounded,
+                 title: english ? 'Installed add-ons' : 'الإضافات المثبتة',
+                 subtitle: english
+@@ -105,7 +104,7 @@ class SettingsPage extends StatelessWidget {
+                   MaterialPageRoute<void>(builder: (_) => const AddonsPage()),
+                 ),
+               ),
+-              _SettingsTile(
++              SettingsTile(
+                 icon: Icons.hub_outlined,
+                 title: english ? 'Connected services' : 'الخدمات المرتبطة',
+                 subtitle: english
+@@ -118,11 +117,11 @@ class SettingsPage extends StatelessWidget {
+                 ),
+               ),
+               const SizedBox(height: 22),
+-              _SectionTitle(title: english ? 'Sync' : 'المزامنة'),
++              SettingsSectionTitle(title: english ? 'Sync' : 'المزامنة'),
+               const _SyncPanel(),
+               const SizedBox(height: 22),
+-              _SectionTitle(title: english ? 'App' : 'التطبيق'),
+-              _SettingsTile(
++              SettingsSectionTitle(title: english ? 'App' : 'التطبيق'),
++              SettingsTile(
+                 icon: Icons.dashboard_customize_outlined,
+                 title: english ? 'Catalog and display' : 'الكتالوج والمظهر',
+                 subtitle: english
+@@ -134,7 +133,7 @@ class SettingsPage extends StatelessWidget {
+                   ),
+                 ),
+               ),
+-              _SettingsTile(
++              SettingsTile(
+                 icon: Icons.language_rounded,
+                 title: english ? 'Language' : 'اللغة',
+                 trailing: Switch(
+@@ -144,7 +143,7 @@ class SettingsPage extends StatelessWidget {
+                 ),
+                 onTap: () => app.setLanguage(!english),
+               ),
+-              _SettingsTile(
++              SettingsTile(
+                 icon: Icons.palette_outlined,
+                 title: english ? 'Noor design' : 'تصميم Noor',
+                 subtitle: english
+@@ -158,8 +157,8 @@ class SettingsPage extends StatelessWidget {
+                 onTap: null,
+               ),
+               const SizedBox(height: 22),
+-              _SectionTitle(title: english ? 'Usage' : 'الإحصائيات'),
+-              _SettingsTile(
++              SettingsSectionTitle(title: english ? 'Usage' : 'الإحصائيات'),
++              SettingsTile(
+                 icon: Icons.query_stats_rounded,
+                 title: english ? 'Viewing statistics' : 'إحصائيات المشاهدة',
+                 subtitle: english
+@@ -170,9 +169,9 @@ class SettingsPage extends StatelessWidget {
+                 ),
+               ),
+               const SizedBox(height: 22),
+-              _SectionTitle(
++              SettingsSectionTitle(
+                   title: english ? 'Data and privacy' : 'البيانات والخصوصية'),
+-              _SettingsTile(
++              SettingsTile(
+                 icon: Icons.privacy_tip_outlined,
+                 title: english ? 'Data and privacy' : 'البيانات والخصوصية',
+                 subtitle: english
+@@ -184,8 +183,8 @@ class SettingsPage extends StatelessWidget {
+                 ),
+               ),
+               const SizedBox(height: 22),
+-              _SectionTitle(title: english ? 'About' : 'حول التطبيق'),
+-              _SettingsTile(
++              SettingsSectionTitle(title: english ? 'About' : 'حول التطبيق'),
++              SettingsTile(
+                 icon: Icons.info_outline_rounded,
+                 title: english ? 'About Noor' : 'حول Noor',
+                 subtitle: english
+@@ -265,7 +264,8 @@ class _SyncPanelState extends State<_SyncPanel> {
+     final app = context.watch<AppState>();
+     final english = app.english;
+     final id = app.deviceId ?? '';
+-    final shortId = id.length >= 8 ? id.substring(0, 8) : (id.isEmpty ? '—' : id);
++    final shortId =
++        id.length >= 8 ? id.substring(0, 8) : (id.isEmpty ? '—' : id);
+     return Container(
+       padding: const EdgeInsets.all(18),
+       decoration: BoxDecoration(
+@@ -320,71 +320,3 @@ class _SyncPanelState extends State<_SyncPanel> {
+     );
+   }
+ }
+-
+-class _SectionTitle extends StatelessWidget {
+-  const _SectionTitle({required this.title});
+-  final String title;
+-  @override
+-  Widget build(BuildContext context) => Padding(
+-        padding: const EdgeInsetsDirectional.only(bottom: 9, start: 3),
+-        child: Text(
+-          title,
+-          style: Theme.of(
+-            context,
+-          ).textTheme.titleMedium?.copyWith(color: HorseTheme.gold),
+-        ),
+-      );
+-}
+-
+-class _SettingsTile extends StatelessWidget {
+-  const _SettingsTile({
+-    required this.icon,
+-    required this.title,
+-    this.subtitle,
+-    this.trailing,
+-    this.onTap,
+-  });
+-  final IconData icon;
+-  final String title;
+-  final String? subtitle;
+-  final Widget? trailing;
+-  final VoidCallback? onTap;
+-  @override
+-  Widget build(BuildContext context) => Container(
+-        margin: const EdgeInsets.only(bottom: 8),
+-        child: Material(
+-          color: HorseTheme.surface,
+-          shape: RoundedRectangleBorder(
+-            borderRadius: BorderRadius.circular(15),
+-            side: const BorderSide(color: HorseTheme.line),
+-          ),
+-          clipBehavior: Clip.antiAlias,
+-          child: ListTile(
+-            onTap: onTap,
+-            minVerticalPadding: 12,
+-            leading: Container(
+-              width: 42,
+-              height: 42,
+-              decoration: BoxDecoration(
+-                color: HorseTheme.gold.withValues(alpha: .10),
+-                borderRadius: BorderRadius.circular(12),
+-              ),
+-              child: Icon(icon, color: HorseTheme.gold, size: 21),
+-            ),
+-            title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+-            subtitle: subtitle == null
+-                ? null
+-                : Padding(
+-                    padding: const EdgeInsets.only(top: 4),
+-                    child: Text(subtitle!,
+-                        style: Theme.of(context).textTheme.bodySmall),
+-                  ),
+-            trailing: trailing ??
+-                Icon(
+-                  Icons.chevron_left_rounded,
+-                  color: onTap == null ? HorseTheme.muted : HorseTheme.gold,
+-                ),
+-          ),
+-        ),
+-      );
+-}
+diff --git a/lib/features/settings/widgets/settings_tiles.dart b/lib/features/settings/widgets/settings_tiles.dart
+new file mode 100644
+index 0000000..4a30877
+--- /dev/null
++++ b/lib/features/settings/widgets/settings_tiles.dart
+@@ -0,0 +1,92 @@
++import 'package:flutter/material.dart';
++
++import '../../../core/theme/horse_theme.dart';
++
++/// Shared primitives for the settings feature, extracted verbatim from
++/// settings_page.dart (Task 121-d). Pages adopt these only where their
++/// geometry is pixel-identical; near-miss rows keep their local widgets
++/// (settings_data_page `_DataRow`, settings_preferences_page
++/// `_PreferenceTile`, addons_page `_AddonRow`, the integrations_page
++/// panel cards).
++///
++/// Localization stays caller-owned: strings arrive pre-localized via the
++/// inline `english ? :` convention — no language flag lives here.
++
++/// Gold caption above a group of [SettingsTile]s (padding bottom 9 /
++/// start 3, `titleMedium` tinted [HorseTheme.gold]).
++class SettingsSectionTitle extends StatelessWidget {
++  const SettingsSectionTitle({super.key, required this.title});
++
++  final String title;
++
++  @override
++  Widget build(BuildContext context) => Padding(
++        padding: const EdgeInsetsDirectional.only(bottom: 9, start: 3),
++        child: Text(
++          title,
++          style: Theme.of(
++            context,
++          ).textTheme.titleMedium?.copyWith(color: HorseTheme.gold),
++        ),
++      );
++}
++
++/// Standard tappable settings row: bordered [HorseTheme.surface] card
++/// (radius 15, [HorseTheme.line] border, bottom margin 8) with a 42×42
++/// gold-tinted leading icon box and a default chevron trailing that goes
++/// muted when the tile is not tappable.
++class SettingsTile extends StatelessWidget {
++  const SettingsTile({
++    super.key,
++    required this.icon,
++    required this.title,
++    this.subtitle,
++    this.trailing,
++    this.onTap,
++  });
++
++  final IconData icon;
++  final String title;
++  final String? subtitle;
++  final Widget? trailing;
++  final VoidCallback? onTap;
++
++  @override
++  Widget build(BuildContext context) => Container(
++        margin: const EdgeInsets.only(bottom: 8),
++        child: Material(
++          color: HorseTheme.surface,
++          shape: RoundedRectangleBorder(
++            borderRadius: BorderRadius.circular(15),
++            side: const BorderSide(color: HorseTheme.line),
++          ),
++          clipBehavior: Clip.antiAlias,
++          child: ListTile(
++            onTap: onTap,
++            minVerticalPadding: 12,
++            leading: Container(
++              width: 42,
++              height: 42,
++              decoration: BoxDecoration(
++                color: HorseTheme.gold.withValues(alpha: .10),
++                borderRadius: BorderRadius.circular(HorseTheme.radiusChip),
++              ),
++              child: Icon(icon, color: HorseTheme.gold, size: 21),
++            ),
++            title: Text(title, style: Theme.of(context).textTheme.titleMedium),
++            subtitle: subtitle == null
++                ? null
++                : Padding(
++                    padding: const EdgeInsets.only(top: 4),
++                    child: Text(subtitle!,
++                        style: Theme.of(context).textTheme.bodySmall),
++                  ),
++            trailing: trailing ??
++                Icon(
++                  Icons.chevron_left_rounded,
++                  color: onTap == null ? HorseTheme.muted : HorseTheme.gold,
++                ),
++          ),
++        ),
++      );
++}
+diff --git a/lib/shared/widgets/app_state_message.dart b/lib/shared/widgets/app_state_message.dart
+new file mode 100644
+index 0000000..1a70383
+--- /dev/null
++++ b/lib/shared/widgets/app_state_message.dart
+@@ -0,0 +1,110 @@
++import 'package:flutter/material.dart';
++
++import '../../core/theme/horse_theme.dart';
++
++/// Shared empty/error/loading state message — the single implementation of
++/// the centered "icon → 12 → message → 14 → action button" column
++/// that existed as 8 near-identical private widgets across features
++/// (evidence: audit 121-a1 + 121-a2 — live_tv `_StateMessage`, catalog
++/// `_Message` + `_GridMessage`, calendar `_CalendarMessage`, anime
++/// `_CatalogState`, home `_RailMessage`/`_ServiceMessage`, detail
++/// `_ErrorView`; the live-tv/catalog/calendar family was pixel-identical
++/// apart from padding 28 vs 24 and icon 44 vs 42).
++///
++/// Visual spec (audit 121-a2 §3): a [Center]ed, non-scrolling column sized
++/// for `Expanded`/`SliverFillRemaining` slots; muted icon (or the standard
++/// gold spinner when [loading]); unstyled centered message text; one action
++/// button — [filledButton] selects `FilledButton` vs `OutlinedButton`, and
++/// [actionIcon] reproduces the page-specific button glyph (live TV's
++/// `Icons.add_rounded`) without altering any existing visual.
++///
++/// Usage rules:
++///  * Strings are pre-localized by the caller (`english ? 'en' : 'ar'`
++///    ternary) — this widget deliberately takes no `english` flag, matching
++///    the MediaRail shared-widget convention.
++///  * The icon always renders [HorseTheme.muted] at [iconSize]; pages whose
++///    state needs a different icon color or gap rhythm (e.g. anime's gold
++///    `_CatalogState`) keep their local widget.
++///  * Pass [iconSize]/[padding] to reproduce the page being migrated
++///    (catalog family: 42 + `EdgeInsets.all(24)`; live-tv/calendar: the
++///    44 + 28 defaults).
++class AppStateMessage extends StatelessWidget {
++  const AppStateMessage({
++    super.key,
++    required this.icon,
++    required this.message,
++    this.actionLabel,
++    this.onAction,
++    this.loading = false,
++    this.filledButton = false,
++    this.actionIcon,
++    this.iconSize = 44,
++    this.padding = const EdgeInsets.all(28),
++  });
++
++  /// State icon (muted) shown unless [loading] is true.
++  final IconData icon;
++
++  /// Pre-localized body line under the icon.
++  final String message;
++
++  /// Pre-localized button label; the button renders only when both this and
++  /// [onAction] are provided.
++  final String? actionLabel;
++  final VoidCallback? onAction;
++
++  /// Swap the icon for the app-standard gold spinner
++  /// (`CircularProgressIndicator(color: HorseTheme.gold, strokeWidth: 2)`).
++  final bool loading;
++
++  /// `true` → `FilledButton`, `false` (default) → `OutlinedButton`.
++  final bool filledButton;
++
++  /// Optional glyph inside the action button (mirrors `XxxButton.icon`).
++  final IconData? actionIcon;
++
++  final double iconSize;
++  final EdgeInsetsGeometry padding;
++
++  @override
++  Widget build(BuildContext context) {
++    return Center(
++      child: Padding(
++        padding: padding,
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            if (loading)
++              const CircularProgressIndicator(
++                color: HorseTheme.gold,
++                strokeWidth: 2,
++              )
++            else
++              Icon(icon, size: iconSize, color: HorseTheme.muted),
++            const SizedBox(height: 12),
++            Text(message, textAlign: TextAlign.center),
++            if (actionLabel != null && onAction != null) ...[
++              const SizedBox(height: 14),
++              if (filledButton && actionIcon != null)
++                FilledButton.icon(
++                  onPressed: onAction,
++                  icon: Icon(actionIcon),
++                  label: Text(actionLabel!),
++                )
++              else if (filledButton)
++                FilledButton(onPressed: onAction, child: Text(actionLabel!))
++              else if (actionIcon != null)
++                OutlinedButton.icon(
++                  onPressed: onAction,
++                  icon: Icon(actionIcon),
++                  label: Text(actionLabel!),
++                )
++              else
++                OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
++            ],
++          ],
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/shared/widgets/media_rail.dart b/lib/shared/widgets/media_rail.dart
+index 57eb2e3..149db75 100644
+--- a/lib/shared/widgets/media_rail.dart
++++ b/lib/shared/widgets/media_rail.dart
+@@ -63,7 +63,7 @@ class MediaRail extends StatelessWidget {
+                 width: 3,
+                 height: 19,
+                 decoration: BoxDecoration(
+-                  color: const Color(0xFFC99C62),
++                  color: HorseTheme.gold,
+                   borderRadius: BorderRadius.circular(4),
+                 ),
+               ),
+diff --git a/lib/shared/widgets/shimmer_box.dart b/lib/shared/widgets/shimmer_box.dart
+new file mode 100644
+index 0000000..49f7a82
+--- /dev/null
++++ b/lib/shared/widgets/shimmer_box.dart
+@@ -0,0 +1,96 @@
++import 'package:flutter/material.dart';
++
++import '../../core/theme/horse_theme.dart';
++
++/// Animated linear-gradient shimmer box. Honors `MediaQuery.
++/// disableAnimationsOf` by rendering a static base fill.
++class ShimmerBox extends StatefulWidget {
++  const ShimmerBox({
++    super.key,
++    this.width,
++    this.height,
++    this.borderRadius,
++  });
++
++  final double? width;
++  final double? height;
++  final BorderRadiusGeometry? borderRadius;
++
++  @override
++  State<ShimmerBox> createState() => _ShimmerBoxState();
++}
++
++class _ShimmerBoxState extends State<ShimmerBox>
++    with SingleTickerProviderStateMixin {
++  late final AnimationController _controller = AnimationController(
++    vsync: this,
++    duration: const Duration(milliseconds: 1600),
++  );
++
++  @override
++  void initState() {
++    super.initState();
++    _controller.repeat();
++  }
++
++  @override
++  void dispose() {
++    _controller.dispose();
++    super.dispose();
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final radius = widget.borderRadius ?? BorderRadius.circular(12);
++    Widget box = LayoutBuilder(
++      builder: (context, constraints) {
++        final width = widget.width ?? constraints.maxWidth;
++        final height = widget.height ?? constraints.maxHeight;
++        final size = Size(width, height);
++        if (MediaQuery.disableAnimationsOf(context)) {
++          return _skeletonBase(size, radius);
++        }
++        return AnimatedBuilder(
++          animation: _controller,
++          builder: (context, _) {
++            final phase = _controller.value * 2 - 1; // -1..1 sweep
++            return _skeletonBase(
++              size,
++              radius,
++              gradient: LinearGradient(
++                begin: Alignment(phase - 1, 0),
++                end: Alignment(phase + 1, 0),
++                colors: const [
++                  HorseTheme.raised,
++                  HorseTheme.line,
++                  HorseTheme.raised,
++                ],
++                stops: const [0.35, 0.5, 0.65],
++              ),
++            );
++          },
++        );
++      },
++    );
++    if (widget.width != null || widget.height != null) {
++      box = SizedBox(
++        width: widget.width,
++        height: widget.height,
++        child: box,
++      );
++    }
++    return box;
++  }
++
++  Widget _skeletonBase(Size size, BorderRadiusGeometry radius,
++      {Gradient? gradient}) {
++    return DecoratedBox(
++      decoration: BoxDecoration(
++        borderRadius: radius,
++        gradient: gradient,
++        color: gradient == null ? HorseTheme.raised : null,
++      ),
++      child: SizedBox(width: size.width, height: size.height),
++    );
++  }
++}
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 9b462ff..088210d 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+ # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+ # In Windows, build-name is used as the major, minor, and patch parts
+ # of the product and file versions while build-number is used as the build suffix.
+-version: 1.2.23+26
++version: 1.2.24+27
+ 
+ environment:
+   sdk: '>=3.5.0 <4.0.0'
+-- 
+2.47.3
+
