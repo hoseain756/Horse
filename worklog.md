@@ -3505,3 +3505,21 @@ Stage Summary:
 - instantPlay now applies only to the Watch Now CTA (episode taps always show sources) — deliberate per the user mandate; the old bottom-sheet picker is fully replaced.
 - Residual: on-device feel confirmation (scroll handoff, % pacing) remains with the owner; sources page re-fetches streams on each visit (no cache — same as before); in-player streams/onSwitchStream still unwired (unchanged scope).
 - Next candidates: keep sources-page filter + sort-by-quality chips; wire streams/streamIndex into the player push so in-player switching stops being dead code; dark iOS launch storyboard variant.
+
+---
+Task ID: 119
+Agent: Z.ai Code (solo)
+Task: USER (AR): "This (the transparent status bar / edge-to-edge mandate) was NOT applied on the Home page — apply it." Requirements: transparent status bar overlaying app content, edge-to-edge drawing, status icons preserved and readable, safe-area handling, adaptive icon brightness, preserve existing UI/functionality.
+
+Work Log:
+- ROOT CAUSE: MainShell wrapped its ENTIRE body Stack in SafeArea(bottom:false) — every page (including Home) started BELOW the status bar, so the featured hero's top edge sat at y=safeTop and the strip above it showed the solid black scaffold canvas. The Task 115/117 plumbing (transparent overlay styles, edgeToEdge mode, launch themes) was already correct; the missing piece was purely this shell-level inset.
+- main_shell.dart: removed the shell-wide SafeArea → body Stack is FULL-BLEED. HomePage is intentionally unwrapped (its hero bleeds to y=0 behind the transparent status bar); Anime/Kids/Library/Settings are each wrapped in SafeArea(bottom:false) — pixel-identical geometry to the old shell-wide padding. Floating chrome re-anchored with explicit insets: glass search button + tablet hamburger at top: safeTop+12, tablet nav panel top: safeTop+68 (same visual positions as before, now expressed against the physical top).
+- home_page.dart: safeTop added to the two non-hero top elements (classic-mode header 22+safeTop, service-message fallback 28+safeTop). _FeaturedScrim rebuilt as a Stack: the original bottom-fade gradient is untouched + NEW top readability band (40% black → transparent over the top 16%) so the clock/battery/signal icons stay readable over bright artwork now that the hero bleeds behind them. Same band mirrored into _FeaturedSkeleton so loading matches the edge-to-edge presentation. _featuredHeroHeight guard kept (hero never extends into the dock zone).
+- Icon brightness: no code change needed — the shell's AnnotatedRegion derives the overlay style from the live theme brightness (dark canvas → light icons; flips automatically if a light theme ships), matching system_bars.dart contract.
+- NEW test/shell_edge_to_edge_test.dart (offline FakeCatalogRepository subclass; real AppState/MainShell): pins home CustomScrollView at y=0, the 4 non-home tabs SafeArea-ancestor-wrapped (skipOffstage:false — IndexedStack gotcha), HomePage with NO SafeArea ancestor, GlassSearchButton top == safeTop+12, and a scroll-drag regression. Two iteration fixes during authoring: matched tmdbRecommendations' real (non-required) named params; replaced the private Element.parent/visitAncestors walk with find.ancestor.
+- GATES: dart format clean; flutter analyze → No issues found; flutter test → 148/148 (was 147). Version 1.2.22+25. Commit eeb7f50 pushed (81f1e87..eeb7f50 main→main).
+
+Stage Summary:
+- The home page now draws behind the fully transparent status bar on both platforms: the featured hero (artwork + scrim) extends to y=0, status icons stay readable via the new top scrim, and every other tab/chrome element keeps its previous safe-area geometry — the rest of the UI is untouched.
+- Residual: on-device visual confirmation is with the owner (no emulator in repo); when the user scrolls, rails pass under the transparent bar (standard edge-to-edge behavior, same as Netflix/Disney+); classic home mode + service-message states carry the inset, so no content collides with the icons.
+- Next candidates: Task 118 residuals (in-player stream switching is still unwired; per-season TMDB stills port); anime/kids tabs could get the same hero-bleed treatment later if wanted; dark iOS launch storyboard variant.
