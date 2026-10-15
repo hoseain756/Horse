@@ -3948,3 +3948,42 @@ Work Log:
 Stage Summary:
 - Push pipeline proven working end-to-end twice in one session (8625abf was already on GitHub; 72185b5 pushed fresh at 09:07:59Z). If the user still reports a stale repo page, it is client-side (browser/app cache or not logged in as hoseain756) — direct links: /commit/8625abf, /commit/72185b5, /commits/main.
 - Both deferred Task 122 follow-ups are now CLOSED; remaining known deferrals: 2 AR-only core exception strings, player_sheets subtitle-preview cosmetic RTL. Next major task per user: mpv player customization (media_kit/fvp research pending).
+
+---
+Task ID: 124-plan
+Agent: Z.ai Code (orchestrator — solo execution; single-feature surface like Task 123)
+Task: USER (AR): full mpv player redesign to their spec. Discovery via audits 124-a1/a2: an in-app media_kit (libmpv) player ALREADY exists (video_player_page.dart 1535 lines, playback_engine.dart, player_chrome.dart, player_sheets.dart) with debrid+jlibtorrent torrent engine and addon subtitle fetching. Task 124 = spec-exact chrome/sheets redesign, NOT a from-scratch player.
+
+BINDING CONTRACT (orchestrator-executed; no parallel agents — zero file overlap by construction):
+1. playback_engine.dart: applySubtitleStyle gains `int? position` → mpv `sub-pos` (0=top, 100=bottom, default 100). No other engine changes.
+2. player_chrome.dart REWRITE:
+   - PlayerTopBar → spec layout ONLY: exit arrow LEFT, title column RIGHT-aligned (name + zero-padded `S01E12` under it for series; movies show stream label). Old top-bar icons (subs/episodes/settings/streams pill) move out.
+   - PlayerBottomCluster redesigned: progress row UNCHANGED ([current] [timeline] [total] LTR) ABOVE all controls; controls row = LEFT: volume icon (tap=mute) + persistent horizontal volume slider + fullscreen toggle (immersive↔edgeToEdge); CENTER exactly [rewind−N][play][forward+N] (N = seekBackStepSec/seekForwardStepSec from AppState.webSettings, default 10); RIGHT: [prev-ep][source-swap][subtitles][audio][next-ep] (prev/next series-only).
+   - NEW DoubleTapRipple widget (side-anchored circle, icon+±N s, scale+fade) + VolumeSlider widget + fullscreen icon. Side rails (orientation/fit/lock/episodes/speed) kept.
+3. player_sheets.dart:
+   - SubtitleTracksSheet → language UX per spec: search field + horizontal language chips (All + per-language counts, Arabic first) + list (Off tile; external rows tagged with addon name; embedded section 'In this file'). Auto-fetch all languages already exists (kept).
+   - AudioTracksSheet: language-grouped headers, same visual language.
+   - SubtitleStyleSheet: adds position slider (subPos 0..100 default 100) + preview unchanged; new key subPos persisted via setSetting.
+   - Local const kSubtitleLanguageNames (~30 codes → native names, fallback = code).
+4. video_player_page.dart: wiring only — double-tap uses settings steps + ripple state; fullscreen toggle; bottom cluster new callbacks; top bar simplified; subs sheet gets current contentLanguage default chip; _applySubtitleValues passes position.
+OWNERSHIP: only these 4 files. app_state.dart/pubspec/detail-page untouched. Gates after: dart format, flutter analyze, flutter test 151+, bump 1.2.27+31, commit, push, report (user then tests on device).
+
+---
+Task ID: 124
+Agent: Z.ai Code (orchestrator, solo — per 124-plan contract; player surface concentrated in 4 files)
+Task: USER (AR): mpv player redesign to full spec (torrent support / source-change icon / language-grouped subtitles + search + auto-fetch-all-languages + inline style settings incl. position & ±ms delay / dub window / centered rewind-play-forward with settings steps / volume bar + fullscreen bottom-left / progress row above all / exit-left title-right with S01E12 / right-volume left-brightness vertical drags / double-tap ±N with animation).
+
+Work Log:
+- Audits 124-a1/a2 (Explore) revealed an existing media_kit (libmpv) player: video_player_page.dart, player_chrome.dart, player_sheets.dart, playback_engine.dart + debrid/jlibtorrent torrent engine + CatalogRepository.subtitles() fetching from all addons. Task therefore became a spec-exact chrome/sheets redesign.
+- playback_engine.dart: applySubtitleStyle + `position` param → mpv `sub-pos` (100=bottom default, 0=top), clamped.
+- player_chrome.dart rewritten: PlayerTopBar = exit arrow LEFT + title column RIGHT (end-aligned) with zero-padded seasonEpisodeTag S01E12 pill under the name; PlayerBottomCluster = progress row ([current][timeline][total] LTR) above ALL controls, then Stack-based row: LEFT volume icon (tap=mute) + persistent _VolumeSlider + fullscreen toggle; CENTER exactly [_SkipButton −N][play][+N] (N from seekBackStepSec/seekForwardStepSec, circular-arrow glyphs with baked step number); RIGHT [prev-ep][source-swap][subtitles][audio][next-ep]; DoubleTapRipple (TweenSequence scale .55→1 + fade, 750ms, side-anchored). Side rails (orientation/fit/lock/episodes/speed) kept. _SkipButton replaces fixed replay_10/forward_10.
+- player_sheets.dart: kSubtitleLanguageNames (33 codes→native) + subtitleLanguageName(); SubtitleTracksSheet → StatefulWidget with search TextField + horizontal language chips (All + per-language counts, ar first, embedded last) + grouped list (Off row leads; external rows tagged addon·lang, cloud_download glyph for URI subs; embedded section 'In this file'); AudioTracksSheet grouped by language with gold headers + dub-aware empty note; SubtitleStyleSheet + position slider (subPos, labels أسفل/منتصف/أعلى/%) persisted via setSetting.
+- video_player_page.dart: settings-driven seek steps (getter + double-tap), _showRipple state (+ValueKey retrigger), _toggleFullscreen (immersiveSticky↔edgeToEdge, default fullscreen), _externalSubs→_externalSubRows (raw maps to sheet), bottom cluster rewiring, top bar simplified, subPos passed in both style appliers, _topBarSubtitle removed.
+- Self-review fixes during gates: 'S$sE$e' interpolation bug → 'S${s}E$e'; _centerGroup missing controlSize param; _TorrentHud._speed curly-braces lint (formatter-revealed pre-existing style).
+- GATES: dart format clean · flutter analyze → No issues found · flutter test → 151/151. Version 1.2.26+30 → 1.2.27+31.
+- Commit 56e5bd1 pushed 72185b5..56e5bd1 (verified origin/main = 56e5bd1).
+
+Stage Summary:
+- Task 124 SHIPPED at v1.2.27+31 @ 56e5bd1: every mandated control/gesture/window is in place over the real mpv (libmpv) core with the existing torrent pipeline (debrid + on-device jlibtorrent + localhost stream server) untouched. Spec deltas: volume/brightness drags & horizontal scrub & chrome auto-hide were already present and kept; S01E12 uses zero-padding per mandate.
+- Deferred/notes: PlayerSettingsSheet still reachable via the side speed pill (fit/orientation/lock/episodes remain in side rails by design); 'auto-search all languages' = lazy fetch on first sheet open (existing behavior, unchanged); embedded-sub detection relies on media_kit track.uri flag.
+- Next per user: on-device testing of the new player, then further mpv customization requests.
