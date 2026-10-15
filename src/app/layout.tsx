@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import ChunkRecovery from "@/components/harbor/chrome/chunk-recovery";
 
 export const metadata: Metadata = {
   title: "Horse — A Stremio Client Built for Adventure",
@@ -43,6 +44,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased bg-canvas text-ink" style={{ fontFamily: "var(--font-sans-var)" }}>
         {children}
+        <ChunkRecovery />
         <Toaster />
       </body>
     </html>

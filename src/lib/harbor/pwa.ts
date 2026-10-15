@@ -53,6 +53,19 @@ export const usePwa = create<PwaState>((set) => ({
           const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
           await reg.update();
           set({ swReady: true });
+
+          // Stale-deploy healing for long-lived sessions (PWA standalone can
+          // stay open for days): re-check the worker byte-diff when the app
+          // becomes visible, throttled to once per 30 minutes.
+          let lastUpdateCheck = Date.now();
+          const checkForUpdate = () => {
+            if (document.visibilityState !== "visible") return;
+            if (Date.now() - lastUpdateCheck < 30 * 60_000) return;
+            lastUpdateCheck = Date.now();
+            void reg.update().catch(() => {});
+          };
+          document.addEventListener("visibilitychange", checkForUpdate);
+          window.addEventListener("focus", checkForUpdate);
         } catch {
           /* SW is a progressive enhancement — ignore failures */
         }

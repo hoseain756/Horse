@@ -4019,3 +4019,22 @@ Work Log:
 Stage Summary:
 - Task 125 SHIPPED at v1.2.28+32 @ 213b313: bidirectional chrome with frozen (non-mirrored) center/progress/gestures, landscape-locked phone+tablet adaptive layout with tablet side panels and labels, accordion subtitles with search, full subtitle-styling screen (position chips, ±ms buttons, reset, live preview incl. position), audio dub window with audio-delay control, cumulative double-tap ripple, side gesture HUDs with linger, unified Cairo font.
 - Remaining known deferrals: real thumbnails (needs sprite/preview pipeline), settings-page rows for audioDelayMs (only in-player control for now), AR-only core exception strings (older deferral).
+
+---
+Task ID: 126
+Agent: Z.ai Code (orchestrator, solo — 4 files, no overlap)
+Task: USER (AR): "horse site now shows 'Application error: a client-side exception has occurred' on horse-1.vercel.app — fix in Horse only, don't touch anything else in Noor."
+
+Work Log:
+- Reproduction sweep on PROD (agent-browser, fresh profile): home desktop+mobile, Settings, Kids, Anime, detail (Peddi w/ TMDB+Trakt+MDBList ratings), stream picker empty-state, search — ALL render clean, zero console errors. Conclusion: crash is user-state-dependent, not a code-path bug on the golden path.
+- Root cause identified: stale service-worker shell after deploys. public/sw.js (cache harbor-web-v4) serves the cached offline HTML shell on network failure; that old shell references OLD hashed chunks; a Vercel deploy replaces them → lazy chunk 404 → "HTML as JS" parse error / ChunkLoadError → uncaught → Next.js "Application error: a client-side exception has occurred". Explains fresh-browser-works / user-device-cracks exactly.
+- FIX 1 — public/sw.js hardened (v4 → v5): cache bump force-purges every stale shell/chunk on activate (one-time global self-heal); install precache now allSettled per-asset (one flaky fetch no longer aborts install and leaves the old worker in charge); static-asset cache-miss + !ok now returns empty 504 instead of feeding 404 HTML into <script> tags; added SKIP_WAITING message hook.
+- FIX 2 — NEW src/components/harbor/chrome/chunk-recovery.tsx: client sentinel mounted in root layout (outside app shell). Listens error (capture, incl. resource targets) + unhandledrejection for chunk-load-shaped failures (ChunkLoadError / Loading chunk N failed / dynamically imported module patterns) → hard reload ONCE per 20s window (sessionStorage guard prevents loops; offline boot stays on cached shell). Converts the persistent error screen into a one-time silent recovery.
+- FIX 3 — pwa.ts: register()+update() now followed by visibilitychange/focus re-checks (30-min throttle) so long-lived PWA standalone sessions pull the new worker without a fresh navigation.
+- layout.tsx: mounts <ChunkRecovery /> before <Toaster />.
+- package.json 0.2.1 → 0.2.2.
+- VERIFIED (agent-browser behavioral): (a) simulated ChunkLoadError → page auto-reloaded (navType=reload + guard written); (b) unhandledrejection path → page navigated (CDP "target navigated" = reload fired); (c) within 20s guard window → reload BLOCKED (eval stayed alive) — loop protection confirmed. bun run lint → 0 errors. Localhost render clean after all tests.
+GATES: node --check sw.js OK · lint 0 errors · behavioral tests a/b/c PASS.
+
+Stage Summary:
+- Horse-only deploy-recovery shipped (Noor untouched, per user mandate): stale-SW chunk crashes self-heal — v5 cache purge + reload-on-chunk-error. After this deploy lands, a user hitting "Application error" recovers automatically on the next open (or via one manual refresh); standing self-help if needed: close+reopen PWA or clear site data for horse-1.vercel.app.
