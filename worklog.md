@@ -3749,3 +3749,25 @@ Work Log:
 Stage Summary:
 - Task 121 complete and verified: reusable-widget architecture shipped with ZERO behavior/UI change — analyze clean, 151/151 tests, independent QA SHIP verdict. Home 2216→586 L, settings_page 390→323 L, 9 duplicated state widgets collapsed into one shared component, design tokens centralized (additive), ShimmerBox liberated to shared/.
 - OPEN ITEM: push pending — awaiting either owner's `git am` of the patch or a PAT. Next candidates after push: adopt AppStateMessage in anime_page (needs icon-color/gap params — deliberate skip), open_media.dart nav-helper (deferred: 8 call sites, toast-vs-snackbar drift), RemoteImage shimmer wrapper (deferred: touches frozen files), token adoption sweep across player/chrome files.
+
+---
+Task ID: 121-g
+Agent: Z.ai Code (orchestrator)
+Task: USER (AR): "ارفع الى القت هوب" — execute the pending push of 8643b2d (Task 121 release).
+
+Work Log:
+- Verified local state first: main @ 8643b2d, clean tree, ahead of origin by exactly 1 commit; pubspec 1.2.24+27; all new widget files present (home/widgets ×4, settings/widgets ×1, shared ×2).
+- git push origin main → FAILED (exit 128): sandbox reset had wiped ~/.git-credentials, no gh CLI / netrc / env tokens.
+- Recovery path found in worklog history: GitHub OAuth DEVICE FLOW with public GitHub CLI client_id 178c6fc778ccc68e1d6a, scope=repo (previously proven in Task 34-era rounds).
+- POST /login/device/code → user_code 0F3A-6D60 (15-min window); armed nohup poller /home/z/ghflow/poll.sh to store creds + push on authorization.
+- User reported "لم يتم الرفع": diagnosed that the background poller was killed between turns (nohup does not survive cross-turn process cleanup) — log showed only "poller armed", no AUTH_OK.
+- Direct one-shot poll of the SAME device_code → TOKEN_RECEIVED (user HAD approved; token was still claimable inside the window).
+- Stored credential durably: git config --global credential.helper store; https://hoseain756:<TOKEN>@github.com → ~/.git-credentials (chmod 600, token NEVER printed); scrubbed /tmp/ghdev.json + /tmp/ghdev_code.
+- git push origin main → ac92b1d.. wait, corrected: ac92a1d..8643b2d main -> main SUCCESS.
+- Verified end-to-end: git ls-remote origin main == local HEAD == 8643b2d4a916e68c21efa6569464d16115d11180; branch shows main...origin/main in sync.
+- Deprecated: /home/z/my-project/public/patches/0001-*.patch fallback no longer needed (kept on disk, harmless).
+
+Stage Summary:
+- Task 121 FULLY SHIPPED: commit 8643b2d (Modular refactor: reusable widget system + Home/Settings decomposition) is on github.com/hoseain756/Noor main. v1.2.24+27.
+- Durable push credential restored in ~/.git-credentials (survives until next sandbox reset; re-grant recipe = device flow documented here + worklog line 1220).
+- No open items for Task 121. Future push rounds: plain `git push origin main` works while ~/.git-credentials exists.
