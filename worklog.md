@@ -3930,3 +3930,21 @@ Work Log:
 
 Stage Summary:
 - Task 123 SHIPPED at commit (this): all-sources page now has glass filter menus (sort/addon/quality/type) and the mandated row identity — addon icon square leading (language-flipping), title, seeds/quality/size/codec facts line. Next per user: mpv (github.com/mpv-player/mpv) player customization — sandbox note: that work will need the media3/mpv decision researched (flutter mpv bindings: media_kit / fvp / dart_vlc alternatives) before implementation.
+
+---
+Task ID: 123-b
+Agent: Z.ai Code (orchestrator)
+Task: USER (AR): "لم يتم الرفع للقت هوب" — investigate the reported failed GitHub push; produce fresh visible proof of the pipeline.
+
+Work Log:
+- Server-side verification via GitHub API (not just local refs): repo hoseain756/Noor, default branch main, pushed_at 2026-10-15T08:44:43Z = Task 123 commit 8625abf already on GitHub; token owner = hoseain756; only one Noor repo exists on the account; ls-remote + /commits endpoint both served 8625abf as HEAD. Conclusion: push had succeeded; user's view was stale (client cache/wrong page), not a failed upload.
+- To give the user undeniable fresh evidence, shipped the two deferred Task 122 follow-ups as a new commit:
+  1. lib/features/shell/search_sheet.dart: build() context.watch<AppState> → context.select<AppState,bool>(english) — modal no longer rebuilds on unrelated AppState notifications (last watch remnant flagged in 122-e).
+  2. catalog_repository.dart: _prefersNativeAnimeTitles → public static prefersNativeAnimeTitles (3 internal call sites updated); anime_search_sheet.dart _search() now passes preferNativeTitles: await CatalogRepository.prefersNativeAnimeTitles() — ja native-title preference now applies to anime search results too, matching catalog/meta paths.
+- pubspec.yaml build number 1.2.26+29 → 1.2.26+30.
+- GATES: dart format clean (3 files, 1 changed) · flutter analyze → No issues found · flutter test → 151/151.
+- Commit 72185b5 "Search polish: scoped search-sheet rebuild + AniList native titles (Task 122 follow-ups)"; push 8625abf..72185b5 SUCCESS; API re-check: pushed_at 2026-10-15T09:07:59Z, origin/main = 72185b5.
+
+Stage Summary:
+- Push pipeline proven working end-to-end twice in one session (8625abf was already on GitHub; 72185b5 pushed fresh at 09:07:59Z). If the user still reports a stale repo page, it is client-side (browser/app cache or not logged in as hoseain756) — direct links: /commit/8625abf, /commit/72185b5, /commits/main.
+- Both deferred Task 122 follow-ups are now CLOSED; remaining known deferrals: 2 AR-only core exception strings, player_sheets subtitle-preview cosmetic RTL. Next major task per user: mpv player customization (media_kit/fvp research pending).
