@@ -1,0 +1,10 @@
+{
+  "id": "horse-fixture-streams",
+  "version": "1.0.0",
+  "name": "Horse QA Fixture Streams",
+  "description": "Internal QA fixture addon used to exercise the streams pipeline end-to-end. Provides no real content.",
+  "types": ["movie", "series"],
+  "resources": ["stream"],
+  "catalogs": [],
+  "idPrefixes": ["tt"]
+}

@@ -1,0 +1,12 @@
+{
+  "streams": [
+    {
+      "title": "QA Fixture 1080p S01E01",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    {
+      "title": "QA Fixture 720p",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    }
+  ]
+}
