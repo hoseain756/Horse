@@ -3908,3 +3908,25 @@ Work Log:
 Stage Summary:
 - Task 122 SHIPPED: instant settings toggles (optimistic switches + scoped rebuilds + notify-before-I/O), AR/EN UI-language dropdown replacing the hidden switch, 11-language content-language dropdown wired to TMDB + strictly-gated addon extras + AniList ja titles. v1.2.25+28 on GitHub main.
 - Deferred follow-ups: search_sheet.dart:95 select (1-liner), anime_search_sheet ja native-title param (1-liner), 2 AR-only core exception strings, player_sheets subtitle-preview cosmetic RTL.
+
+---
+Task ID: 123
+Agent: Z.ai Code (orchestrator, solo — no parallel agents needed: single-file UI feature)
+Task: USER (AR): tapping an episode must open a page with ALL sources from ALL addons + filter lists; row redesign = addon icon in a square (start-aligned, flips with language), title beside it, info line below (seeds, quality, size, …). Then report so the user can start the mpv player customization.
+
+Work Log:
+- Read current SourcesPage (Task 118): streams arrive pre-fetched/deduped/ranked from every enabled addon as raw Stremio maps stamped with addonName only — no icon.
+- lib/core/models/addon.dart: added `String? get iconUrl` (manifest['icon'], http/https-validated).
+- lib/core/data/catalog_repository.dart streams(): stamps `'addonIcon'` per stream when the addon manifest carries an icon (additive key; rank/dedupe untouched).
+- lib/features/media/sources_page.dart rebuilt:
+  · _SourceFacts pure parser — height/qualityLabel (2160|1080|720|480|360p + standalone '4K' token), seeds (👤 n / ⬆ n / S: n / "n seed(s)" / "seeds: n"), sizeBytes (4.37 GB-style, binary multipliers), codec tag (AV1/HEVC/H.264). All-null-safe: rows simply render fewer facts.
+  · Glass filter bar (GlassPillSurface recipe = Task 120 frozen recipe): sort chip (showGlassMenu: Best=delivered rank / Seeds / Size / Quality-then-seeds), add-ons chip (glass menu with per-addon icon + count + check; 0 = All), exact quality buckets (Any/4K/1080p/720p/480p), torrent/direct toggle chips. Single 40px horizontally-scrollable row; appears only when streams exist.
+  · Row redesign: _AddonBadge 44px (38 condensed) rounded-12 square, start-aligned → sits right in AR / left in EN via Row directionality; addon Image.network with gold-initial fallback + tiny cloud_off corner badge for unsupported rows; title beside it (1/2 lines by condensed); Wrap facts line below = kind glyph (torrent gold bolt / direct green play #22C55E / unsupported) · gold-bordered quality pill · green seeds (groups icon, #22C55E when >0) · size · codec. Chevron trailing, dim+untappable unchanged.
+  · Empty states → shared AppStateMessage (cloud_off for no sources / filter_alt_off for zero filter matches).
+  · Text filter extended to description; StreamPrepareDialog untouched (imported by media_detail_page).
+- Self-review fixes: local desc() return type int; Positioned.directional for the corner badge (RTL-correct); record list typed <(int?, String)>; _fourKRe naming; removed unused map; added Key forwarding for menu anchors.
+- GATES: dart format clean (3 files) · flutter analyze → No issues found · flutter test → 151/151.
+- Version 1.2.25+28 → 1.2.26+29.
+
+Stage Summary:
+- Task 123 SHIPPED at commit (this): all-sources page now has glass filter menus (sort/addon/quality/type) and the mandated row identity — addon icon square leading (language-flipping), title, seeds/quality/size/codec facts line. Next per user: mpv (github.com/mpv-player/mpv) player customization — sandbox note: that work will need the media3/mpv decision researched (flutter mpv bindings: media_kit / fvp / dart_vlc alternatives) before implementation.
