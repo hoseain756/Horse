@@ -10,8 +10,11 @@
  * Install is now best-effort per asset (one flaky fetch no longer aborts
  * the whole worker), and static-asset misses never feed a 404 HTML page
  * into <script> tags.
+ * v6 (boot-guard era): refreshes the precached shell so it carries the inline
+ * pre-React boot guard (see src/app/layout.tsx) and the custom global-error
+ * recovery screen. Same strategies as v5.
  */
-const CACHE = "harbor-web-v5";
+const CACHE = "harbor-web-v6";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
