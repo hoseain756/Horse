@@ -849,10 +849,6 @@ export const APP_STRINGS = {
   contentRating: { en: "Content rating", ar: "التصنيف العمري" },
   pressPlayHint: { en: "Press Play to fetch streams from your installed addons for this title.", ar: "اضغط تشغيل لجلب البثوث من إضافاتك المثبتة لهذا العنوان." },
 
-  // ---- footer ----
-  footerTagline: { en: "Horse — an open-source media center. Not affiliated with Stremio. Addons are user-installed; Horse hosts no content.", ar: "Horse — مركز وسائط مفتوح المصدر. غير تابع لـ Stremio. الإضافات يثبّتها المستخدم؛ ولا يستضيف Horse أي محتوى." },
-  footerCredit: { en: "Inspired by the Harbor desktop app: github.com/harborstremio/harbor (MIT). This is a web port.", ar: "مستوحى من تطبيق Harbor لسطح المكتب: github.com/harborstremio/harbor (‏MIT). هذه نسخة ويب." },
-
   // ---- HORSE platform account (settings → data) ----
   accountTitle: { en: "HORSE account", ar: "حساب HORSE" },
   accountSignedInChip: { en: "Signed in", ar: "مسجّل الدخول" },

@@ -3190,16 +3190,6 @@ html[lang^="ar"] {
   direction: ltr;
 }
 
-/* ---- D: footer ------------------------------------------------------------- */
-.harbor-footer-logo {
-  width: auto;
-  height: 64px;
-}
-.harbor-footer-wordmark {
-  font-size: clamp(1.75rem, 5vw, 2rem); /* 28–32dp */
-  line-height: 1.1;
-}
-
 /* ==========================================================================
    EPISODES SECTION (detail page) — grid/list rebuild
    All sizes/radii/gaps/colors/blur strength live in --ep-* tokens here.

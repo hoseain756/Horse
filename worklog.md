@@ -4127,3 +4127,19 @@ Stage Summary:
 - Site-wide fullscreen toggle lives in the top glass pair (next to search on phones, pill row on ≥600), with honest state sync and dead-button avoidance.
 - Settings now ships two intentional designs: phone = grouped inset cards with restored hierarchy, tablet/desktop = widened two-pane with single-line rows and premium controls; the squeeze bug is root-caused and fixed.
 - Open operator items unchanged from Task 128 (Vercel POSTGRES update + Redeploy; HORSE_TOKEN_SECRET/ENCRYPTION_KEY handover for k0 envelopes).
+
+---
+Task ID: 130
+Agent: Z.ai Code (solo)
+Task: USER (AR): "اريد ان تزيل الفوتر من جميع الصفحات" — remove the footer from all pages.
+
+Work Log:
+- AUDIT: grepped src for <footer/page-footer usages — the ONLY page footer was in src/components/harbor/chrome/app-shell.tsx (brand lockup + tagline + credit + TMDB attribution, rendered on root views). All other matches were shadcn DialogFooter/AlertDialogFooter button rows (dialogs — untouched) and the share-card canvas footer text in ar-dict.ts (canvas asset — untouched).
+- REMOVED: footer JSX block from app-shell.tsx; now-unused imports (HorseMark from ./brand, RichBidi from ../common/bidi); dead i18n keys footerTagline/footerCredit in lib/harbor/i18n.ts; footer CSS section (.harbor-footer-logo/.harbor-footer-wordmark) in app/globals.css.
+- LAYOUT: main keeps flex-1 + pb-[var(--nav-clearance)] so short pages still fill the viewport — no dangling gap, no orphaned mt-auto.
+- SANDBOX RESET RECOVERY (again): .env had been reverted to the default SQLite stub → rebuilt with Horse Supabase creds (6543 runtime / 5432 direct, CRON_SECRET, MAIL_FROM; DATABASE_URL deliberately absent to protect vault dev-key derivation); bun run db:push → "already in sync"; dev server relaunched via .zscripts/dev.sh (setsid nohup, logs to .zscripts/dev.log), next-server v16.1.3 healthy; ~/.git-credentials + ~/.gh-autopush.sh lost to the reset — GitHub token must be re-issued by the operator for pushes to resume.
+- E2E (agent-browser): home bottom screenshot → no footer; document.querySelectorAll('footer').length = 0 on Home and Settings; footer strings ("TMDB API", "مركز وسائط") absent from DOM; Settings + detail-capable views render normally; browser console + dev.log: 0 errors. lint: 0 errors (168 pre-existing warnings).
+
+Stage Summary:
+- The site footer (brand lockup, tagline, credit, TMDB attribution) is fully removed from every page — code, styles, and dictionary keys cleaned up; verified visually + in DOM on Home and Settings.
+- Environment restored after another sandbox reset (env, db push, dev server). Open: GitHub token re-authorization needed to resume auto-push; operator items from Task 128/129 unchanged.

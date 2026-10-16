@@ -43,8 +43,6 @@ import { AddonDetail } from "../views/addon-detail";
 import { WrappedView } from "../views/wrapped-view";
 import { ListDetailView } from "../views/list-detail-view";
 import { ArrowLeft, Palette, Check, X, ListVideo, ListPlus } from "lucide-react";
-import { HorseMark } from "./brand";
-import { RichBidi } from "../common/bidi";
 import { useT } from "@/hooks/use-t";
 import { useToast } from "@/hooks/use-toast";
 
@@ -490,32 +488,6 @@ export function AppShell() {
         {stack.map((_, i) => (
           <ViewFrame key={i} index={i} />
         ))}
-        {top.kind === "view" && stack.length === 1 && (
-          <footer className="mt-auto pt-12 pb-2 px-4 md:px-8 text-center text-[11px] text-ink-subtle">
-            {/* Brand lockup: primary galloping-horse mark (64dp) + wordmark (28–32dp) */}
-            <div className="mb-4 flex flex-col items-center justify-center gap-1.5">
-              <HorseMark className="harbor-footer-logo text-ink-subtle" label="Horse logo" />
-              <span className="harbor-footer-wordmark font-display font-bold tracking-tight text-ink-muted">
-                Horse
-              </span>
-            </div>
-            <p className="max-w-xl mx-auto">
-              <RichBidi text={tr("footerTagline")} />
-            </p>
-            <p className="mt-1 max-w-xl mx-auto">
-              <RichBidi text={tr("footerCredit")} />
-            </p>
-            <p className="mt-2 flex items-center justify-center gap-1.5 flex-wrap">
-              {/* Official TMDB lockup, smaller than the Horse mark. Required
-                  attribution sentence stays EXACTLY as TMDB mandates —
-                  translate="no" keeps the Arabic DOM layer from touching it. */}
-              <span className="inline-flex h-4 items-center rounded-[4px] bg-[#01b4e4] px-1.5 text-[9px] font-black tracking-wide text-[#0d253f]" aria-hidden>
-                TMDB
-              </span>
-              <span translate="no">This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
-            </p>
-          </footer>
-        )}
       </main>
       {pickerActive && overlayFrame.kind === "picker" && (
         <PickerOverlay
