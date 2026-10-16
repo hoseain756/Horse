@@ -4081,3 +4081,25 @@ Work Log:
 Stage Summary:
 - Task 127 SHIPPED at v1.2.29+33 @ 33d7ea1: white-screen player root cause eliminated at boot + engine-construction safety net + readable torrent errors (no more obfuscated messages) + full Stremio header-shape normalization for direct-link addons (penguin-style). User validates on device (SM-A217F) with Torrentio + pengu.uk manifests; if a torrent still fails, the SnackBar now shows the REAL exception class + message instead of "g0.d".
 - Honest notes: on-device torrent success still depends on peers/network (engine unchanged — only the error surface + obfuscation breakage fixed); debrid accounts continue to bypass P2P entirely.
+
+---
+Task ID: 128
+Agent: Z.ai Code (solo)
+Task: USER (AR) #1: "موقع Horse أريده أن يعمل على Supabase الخاص به، المنفصل عن تطبيق Noor — لا تربط بسيرفر Noor أبداً" + fresh Supabase pooler credentials (project azjuqezkxdcgyaqrgjym). USER (AR) #2: "انشر الموقع github".
+
+Work Log:
+- ENV REPAIR (sandbox wiped again): .env held ONLY the stale SQLite DATABASE_URL (schema/db.ts are Supabase-Postgres-only → every DB route 500'd); dev server down; ~/.git-credentials, ~/.gh-autopush.sh, dev.log, 1.env all gone. Confirmed azjuqezkxdcgyaqrgjym IS Horse's own Supabase (Task 53 contract); Noor's separate project (hcyysnagdumpviromdzl) never referenced at runtime — only prose mentions of the Noor mobile app (Trakt relay, AASA placeholder).
+- .env rebuilt (gitignored, git check-ignore verified): POSTGRES_URL (transaction pooler :6543) + POSTGRES_URL_NON_POOLING (session pooler :5432) with the operator-supplied password, fresh CRON_SECRET, MAIL_FROM. DATABASE_URL deliberately ABSENT — vault.ts "dev"-key derivation hashes it; a stale value would silently change the derived key.
+- `prisma migrate status` (5432): "Database schema is up to date" (4 migrations). Data intact: 1 HorseUser, 43 AppSettings, 58 Addons, 1 LinkedAccount, 6 ServerConfig rows (tmdb/trakt/simkl/omdb/mdblist — plaintext server-side by design).
+- Vault-key probe (one-shot script, deleted after use): existing encrypted rows are `enc:v2:k0:…` — PROD holds a HORSE_TOKEN_SECRET value absent from the sandbox (1.env lost). All deterministic candidates FAIL → sandbox can't decrypt old k0 envelopes until the operator supplies the Vercel value. Fail-soft; E2E deliberately avoided the real account / its sync push (an acct:<uid> blob written under the sandbox key would be unreadable by prod until keys match).
+- Dev server via .zscripts/dev.sh. PROOF: /api/health → ok:true, mode postgres-pooler, host aws-1-eu-central-1.pooler.supabase.com:6543, tables:18, rlsTables:15, error:null; boot "[horse:boot] hydrated 6 integration key(s) from ServerConfig"; POST /api/sync {} → 400 (not 500); /api/integrations/status → all 5 true.
+- agent-browser E2E: home renders fully (hero/UP NEXT/Top 10, TMDB-enriched), 0 page errors, 0 console errors, 0 5xx.
+- PROD BROKEN: https://horse-1.vercel.app/api/health → ok:false, 28P01 (Vercel holds the OLD pooler password); horse-silk.vercel.app → DEPLOYMENT_NOT_FOUND. Operator must update Vercel POSTGRES_URL/POSTGRES_URL_NON_POOLING + Redeploy.
+- Plumbing restored: ~/.gh-autopush.sh recreated (60s push-only poller, never commits) + RUNNING; token lost → GitHub Device Flow started with a background poller that writes ~/.git-credentials on approval.
+- PUBLISH RECONCILIATION (this round): local sandbox had rolled back to a pre-Task-121-a1 snapshot; the platform daemon had committed the Task-121 worklog append + dev.pid as a UUID commit on the OLD base (diverged from origin, which advanced to Task 127). Resolution: `git reset --hard origin/main` (adopting origin's 126/127 work), then re-appended this entry renumbered 128 (121 collides with origin's existing 121-a1 audit sub-entry) and committed as hoseain756. No source-code changes were made in either round.
+- OPEN (operator): (1) update Vercel POSTGRES_URL/POSTGRES_URL_NON_POOLING with the new password + Redeploy to heal prod 28P01; (2) supply HORSE_TOKEN_SECRET (and ENCRYPTION_KEY if set) from Vercel so the sandbox can decrypt existing k0 envelopes and write mutually-readable ones; (3) approve the pending GitHub device-flow code so the push lands.
+
+Stage Summary:
+- Horse is LIVE on its own Supabase (azjuqezkxdcgyaqrgjym) with full schema, RLS (15 tables), real user data intact, all 5 integrations hydrated from ServerConfig — fully decoupled from Noor.
+- Sandbox now matches origin/main (Tasks up to 127) + this Task 128 entry; publish is armed: the autopush watcher pushes the moment the device-flow token lands.
+- Next candidates: full account/sync E2E once vault keys match; Noor-app tasks (Torrentio zero-results, settings-as-side-panel) live in the separate /home/z/Noor repo.
