@@ -10,6 +10,7 @@ import type { Meta, CatalogDef } from "@/lib/harbor/types";
 import { fetchCinemetaCatalog, fetchCatalog } from "@/lib/harbor/api";
 import { Rail, RailSkeleton } from "../common/rail";
 import { MetaCard } from "../common/meta-card";
+import { PosterImage } from "../common/poster";
 import { IntegrationsStrip } from "../chrome/integrations-strip";
 import { HomeHero, type HeroSlide } from "./home-hero";
 import { HomeCwSection } from "./home-cw";
@@ -200,28 +201,64 @@ export function HomeView() {
   );
 }
 
-// ---------- Top 10 rank row (Harbor signature numerals) ----------
+// ---------- Top 10 rank row (exact port of the Noor app rail) ----------
+// Constants live in CSS (.home-top10-track) and mirror the app's
+// top10_rail.dart: poster 120 @ .68, Roboto Black numerals = posterH*1.05
+// with height .78, digit width .58em, ranks 1–9 tuck the poster at 65% of
+// the digit width, rank 10 is a one-digit-wide tight lockup ("1" pulled 30%
+// onto "0") tucked at 88%, canvas fill under a 2.5px white rim.
 function Top10Row({ metas, onOpen }: { metas: Meta[]; onOpen: (m: Meta) => void }) {
   const language = useSettings((s) => s.settings.uiLanguage || "en");
   const ar = /^ar(?:-|_|$)/i.test(language);
+  const ranked = metas.slice(0, 10);
   return (
     <section className="home-top10" dir={ar ? "rtl" : "ltr"} aria-labelledby="home-top10-title">
       <div className="home-top10-heading">
-        <h2 id="home-top10-title" className="md-title-medium text-ink">
+        <h2 id="home-top10-title" className="home-top10-title text-ink">
           {ar ? "أفضل 10 اليوم" : "Top 10 Today"}
         </h2>
       </div>
       <div className="home-top10-track harbor-scroll-x">
-        {metas.map((m, i) => (
-          <div key={m.id} className="home-top10-item group/top10">
-            <span className="home-top10-rank" aria-hidden="true">
-              {i + 1}
-            </span>
-            <div className="home-top10-card">
-              <MetaCard meta={m} onOpen={() => onOpen(m)} />
+        {ranked.map((m, i) => {
+          const isTen = i === 9;
+          return (
+            <div key={m.id} className={`home-top10-item${isTen ? " is-ten" : ""}`}>
+              <span className="home-top10-num" aria-hidden="true">
+                {/* Inner LTR shell: pins the digit ORDER ("10", never "01")
+                    without flipping the outer box's logical-inset mapping —
+                    exactly the app's Directionality-over-PositionedDirectional
+                    layering. */}
+                <span className="home-top10-num-inner">
+                  {isTen ? (
+                    <>
+                      <span className="home-top10-digit d0">
+                        <span className="glyph-fill">0</span>
+                        <span className="glyph-stroke">0</span>
+                      </span>
+                      <span className="home-top10-digit d1">
+                        <span className="glyph-fill">1</span>
+                        <span className="glyph-stroke">1</span>
+                      </span>
+                    </>
+                  ) : (
+                    <span className="home-top10-digit">
+                      <span className="glyph-fill">{i + 1}</span>
+                      <span className="glyph-stroke">{i + 1}</span>
+                    </span>
+                  )}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="home-top10-sticker"
+                onClick={() => onOpen(m)}
+                aria-label={`${i + 1}. ${m.name}`}
+              >
+                <PosterImage src={m.poster} alt="" className="absolute inset-0" />
+              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

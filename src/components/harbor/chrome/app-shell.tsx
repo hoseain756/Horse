@@ -20,6 +20,7 @@ import { GlassDock } from "./glass-dock";
 import { SideRail } from "./side-rail";
 import { ArabicTextLayer } from "./ar-text-layer";
 import { FloatingSearch, focusFloatingSearch } from "./floating-search";
+import { FullscreenButton } from "./fullscreen-button";
 import { CommandPalette, useCommandPalette } from "./command-palette";
 import { ShortcutsOverlay, useShortcutsHelp } from "./shortcuts-overlay";
 import { HomeView } from "../views/home-view";
@@ -530,6 +531,9 @@ export function AppShell() {
         <PlayerOverlay payload={overlayFrame.payload} />
       )}
       <FloatingSearch />
+      {/* Site-wide fullscreen toggle — top chrome icon; the player owns its
+          own fullscreen control, so this stays out of playback. */}
+      {!playerActive && <FullscreenButton />}
       <CommandPalette />
       <ShortcutsOverlay />
       <ResetPasswordDialog />

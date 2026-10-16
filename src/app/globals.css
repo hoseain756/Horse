@@ -2918,6 +2918,18 @@ html[data-appearance="light"] .home-void {
   unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 
+/* Roboto Black — the Top-10 rank numerals. The app PINS these digits to
+   Roboto on purpose (its tight-10 geometry — .58 digit advance, 30% pull —
+   is calibrated on Roboto metrics); the Tajawal cascade must not restyle
+   them. Scoped to the .home-top10-num stack via the "Roboto Rank" alias. */
+@font-face {
+  font-family: "Roboto Rank";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("/fonts/roboto-black-latin.woff2") format("woff2");
+}
+
 /* ============ Subtitle font — Rubik (self-hosted VARIABLE, arabic + latin) ============
    Captions must NOT ride the UI font: Rubik is a single variable family
    (wght 300–900) with full Arabic + Latin coverage, deliberately distinct
@@ -5108,8 +5120,27 @@ html[lang^="ar"] {
 .set-mobile-back,
 .set-mobile-title { display: none; }
 
+/* Degraded segmented dropdown (SegmentedControl overflows its column and
+   falls back to a native <select class="harbor-field">) — strip the native
+   chrome, add a custom chevron at the inline end, weight the label. */
+.set-shell select.harbor-field {
+  appearance: none;
+  -webkit-appearance: none;
+  min-inline-size: 9.5rem;
+  padding: 9px 38px 9px 14px;
+  font-weight: 600;
+  border-radius: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+}
+[dir="rtl"] .set-shell select.harbor-field {
+  padding: 9px 14px 9px 38px;
+  background-position: left 13px center;
+}
+
 @media (min-width: 840px) {
-  :root { --settings-list-w: clamp(236px, 15.5vw, 280px); }
+  :root { --settings-list-w: clamp(284px, 21vw, 340px); }
   .settings-view-frame:has(.set-shell[data-layout="panes"]) {
     padding-block-start: 0;
     padding-inline-start: 0;
@@ -5176,11 +5207,25 @@ html[lang^="ar"] {
     font-weight: 600;
   }
   .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item {
-    min-block-size: 64px;
-    gap: 10px;
-    padding: 7px 6px;
+    min-block-size: 60px;
+    gap: 11px;
+    padding: 8px 8px;
     border-block-end-color: var(--color-edge-soft-var);
-    border-radius: 8px;
+    border-radius: 10px;
+  }
+  /* Single-line anatomy: title + summary ellipsize instead of wrapping into
+     3-4 cramped lines; the status value rides under the summary, muted. */
+  .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item > span:nth-child(2) > span:first-child,
+  .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item > span:nth-child(2) > span:nth-child(2) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item[data-active="true"] > span:nth-child(2) > span:first-child {
+    color: var(--color-accent-var);
+  }
+  .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item[data-active="true"] .set-cat-icon {
+    background: color-mix(in oklch, var(--color-accent-var) 16%, var(--color-surface-var));
   }
   .set-shell[data-layout="panes"] .set-category-list-navigation .set-cat-item[data-active="true"] {
     background: color-mix(in oklch, var(--color-ink-var) 9%, var(--color-surface-var));
@@ -5211,7 +5256,13 @@ html[lang^="ar"] {
 }
 
 @media (max-width: 639px) {
-  .settings-view-frame { padding-block-start: 12px; }
+  /* ---- Mobile Settings (design #1 of 2): phone drill-down ----------------
+     iOS/Material grouped-list language: big title + full-width search up
+     top, then inset rounded GROUP CARDS (tinted squircle icon, 58dp row,
+     hairline separators, chevron). The old flat variant squeezed rows to
+     their content width (align-items:start carries over from the 3-col
+     grid into the flex column) and hid every heading — both fixed here. */
+  .settings-view-frame { padding-block-start: 10px; }
   .set-shell[data-layout="overview"] { gap: 0; background: none; }
   .set-shell[data-layout="overview"] .set-overview-top {
     display: flex;
@@ -5223,7 +5274,7 @@ html[lang^="ar"] {
   .set-mobile-back {
     display: flex;
     align-self: flex-start;
-    min-block-size: 38px;
+    min-block-size: 40px;
   }
   .set-mobile-title {
     position: absolute;
@@ -5234,131 +5285,242 @@ html[lang^="ar"] {
     white-space: nowrap;
   }
   .set-shell[data-layout="overview"] .set-overview-search { order: 1; inline-size: 100%; }
-  .set-shell[data-layout="overview"] .set-overview-head {
-    order: 2;
-    inline-size: 100%;
-    align-items: stretch;
-  }
+  .set-shell[data-layout="overview"] .set-overview-head { order: 2; inline-size: 100%; align-items: stretch; }
+  /* The big title comes back (it was sr-only on phones): 28dp hero title +
+     one-line description, kicker dropped for compactness. */
   .set-shell[data-layout="overview"] .set-home-title {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+    position: static;
+    inline-size: 100%;
+    block-size: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    margin-block: 6px 2px;
   }
+  .set-shell[data-layout="overview"] .set-home-title .set-overview-kicker { display: none; }
+  .set-shell[data-layout="overview"] .set-home-title h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
+  .set-shell[data-layout="overview"] .set-home-title p { margin-block-start: 3px; font-size: 0.84rem; line-height: 1.45; }
+  /* Account / sign-in strip becomes the first grouped card. */
   .set-overview-user { inline-size: 100%; }
   .set-overview-user > div { inline-size: 100%; }
   .set-overview-user button.glass-surface {
     inline-size: 100%;
     justify-content: flex-start;
-    padding: 10px 0;
-    border: 0;
-    border-block-end: 1px solid var(--color-edge-soft-var);
-    border-radius: 0;
-    background: transparent;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--color-edge-soft-var);
+    border-radius: 18px;
+    background: var(--color-surface-var);
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+  .set-overview-user button.glass-surface:hover { background: color-mix(in oklch, var(--color-ink-var) 5%, var(--color-surface-var)); }
   .set-overview-user button.glass-surface > span:nth-child(2) { display: block; }
   .set-overview-user button.glass-surface > span:first-child { inline-size: 40px; block-size: 40px; }
+  /* Quick-access shortcuts stay hidden on phones (dock covers navigation). */
   .set-shell[data-layout="overview"] .set-overview-shortcuts { display: none; }
-  .set-shell[data-layout="overview"] .set-directory { padding-block-start: 14px; }
-  .set-shell[data-layout="overview"] .set-directory-heading,
-  .set-shell[data-layout="overview"] .set-category-heading { display: none; }
+  .set-shell[data-layout="overview"] .set-directory { padding-block-start: 18px; }
+  .set-shell[data-layout="overview"] .set-directory-heading {
+    display: flex;
+    margin-block-end: 12px;
+  }
+  /* Group headings return as small overline labels above each card. */
+  .set-shell[data-layout="overview"] .set-category-heading {
+    display: block;
+    margin: 0 4px 7px;
+    padding-inline: 0;
+  }
+  /* One-column stack of inset group cards. */
   .set-shell[data-layout="overview"] .set-category-list-directory {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    align-items: stretch; /* FIX: base grid's align-items:start shrank cards */
+    gap: 16px;
   }
-  .set-shell[data-layout="overview"] .set-category-group { margin: 0; }
-  .set-shell[data-layout="overview"] .set-category-rows { display: block; }
+  .set-shell[data-layout="overview"] .set-category-group { margin: 0; min-inline-size: 0; }
+  .set-shell[data-layout="overview"] .set-category-rows {
+    display: block;
+    background: var(--color-surface-var);
+    border: 1px solid var(--color-edge-soft-var);
+    border-radius: 18px;
+    overflow: hidden;
+  }
   .set-shell[data-layout="overview"] .set-cat-item {
-    min-block-size: 50px;
-    gap: 12px;
-    padding: 5px 2px;
+    min-block-size: 58px;
+    gap: 13px;
+    padding: 9px 14px;
     border: 0;
     border-block-end: 1px solid var(--color-edge-soft-var);
     border-radius: 0;
     background: transparent;
     box-shadow: none;
   }
+  .set-shell[data-layout="overview"] .set-cat-item:active { transform: none; background: color-mix(in oklch, var(--color-ink-var) 7%, transparent); }
   .set-shell[data-layout="overview"] .set-cat-item[data-active="true"] {
-    border-color: var(--color-edge-soft-var);
-    background: transparent;
+    border-color: transparent;
+    background: color-mix(in oklch, var(--color-accent-var) 8%, transparent);
   }
   .set-shell[data-layout="overview"] .set-cat-icon {
-    inline-size: 24px;
-    block-size: 24px;
-    flex-basis: 24px;
+    inline-size: 32px;
+    block-size: 32px;
+    flex-basis: 32px;
     border: 0;
-    border-radius: 0;
-    background: transparent;
+    border-radius: 10px;
+    background: color-mix(in oklch, var(--color-accent-var) 13%, var(--color-surface-var));
     box-shadow: none;
   }
-  .set-shell[data-layout="overview"] .set-cat-icon svg { inline-size: 19px; block-size: 19px; }
+  .set-shell[data-layout="overview"] .set-cat-icon svg { inline-size: 17px; block-size: 17px; }
+  .set-shell[data-layout="overview"] .set-cat-item > span:nth-child(2) > span:first-child {
+    font-size: 0.98rem;
+    font-weight: 620;
+  }
+  .set-shell[data-layout="overview"] .set-cat-item > span:nth-child(2) > span:nth-child(2) {
+    font-size: 0.78rem;
+    line-height: 1.4;
+    margin-block-start: 1px;
+  }
   .set-shell[data-layout="overview"] .set-cat-item > span:nth-child(2) > span:nth-child(2),
   .set-shell[data-layout="overview"] .set-cat-item .set-cat-value { display: none; }
-  .set-shell[data-layout="overview"] .set-cat-item > span:nth-child(2) > span:first-child {
-    font-size: 0.95rem;
-    font-weight: 600;
-  }
   .set-shell[data-layout="overview"] .set-cat-item > svg:last-child {
-    inline-size: 16px;
-    block-size: 16px;
+    inline-size: 18px;
+    block-size: 18px;
     color: var(--color-ink-subtle-var);
   }
 }
 
-/* ============ Home Top 10 poster strip =================================== */
-.home-top10 { min-inline-size: 0; }
+/* Site-wide fullscreen toggle (chrome/fullscreen-button.tsx) — top inline-END
+   corner on every breakpoint. Phones: sits BESIDE the 48dp search trigger
+   (end:72) as a paired glass circle — that row is free on all pages (home
+   hero pairs them; settings/hub pages keep their back buttons top-start and
+   their search fields start below the pair). ≥600: the centered search pill
+   frees the whole top-end corner, so it moves to end:12 at the pill's own
+   offset and grows to 56dp. Same glass recipe as the search bar. */
+.fs-full-btn {
+  position: fixed; /* .glass-surface is unlayered relative — re-assert here */
+  inset-inline-start: auto;
+  inset-inline-end: 72px;
+  top: max(0.75rem, env(safe-area-inset-top));
+}
+@media (min-width: 600px) {
+  .fs-full-btn {
+    inset-inline-end: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-full-btn { transition: none; }
+}
+
+/* ============ Home Top 10 — exact port of the Noor app rail ==============
+   Constants mirror lib/features/home/top10_rail.dart (the app the user wants
+   copied 100/100): poster 120w @ ratio .68 · numerals pinned to Roboto Black
+   (w900) at fontSize = posterH*1.05, line-height .78, digit width = .58em ·
+   ranks 1–9 tuck the poster at 65% of the digit width · rank 10 is a tight
+   one-digit-wide lockup ("1" pulled 30% onto "0") tucked at 88% · glyph fill
+   = page canvas UNDER a 2.5px white rim (two stacked text layers, exactly the
+   app's fill+stroke Text pair) · gap 14 · start padding 16 (phone) / 34
+   (≥700) · title 19/700 with clamp(width*3%, 8..14) spacing under it. */
+.home-top10 { --t10-pad: 16px; min-inline-size: 0; }
+@media (min-width: 700px) { .home-top10 { --t10-pad: 34px; } }
 .home-top10-heading {
   display: flex;
   align-items: center;
-  padding-inline: clamp(16px, 2.2vw, 34px);
-  margin-block-end: 2px;
+  padding-inline: var(--t10-pad);
 }
-.home-top10-heading h2 { margin: 0; font-size: clamp(1rem, 1.1vw, 1.2rem); font-weight: 700; }
+.home-top10-title { margin: 0; font-size: 19px; font-weight: 700; line-height: 1.25; }
 .home-top10-track {
+  --t10-poster-w: 120px;
+  --t10-poster-h: calc(var(--t10-poster-w) / 0.68);
+  --t10-item-h: calc(var(--t10-poster-h) + 30px);
+  --t10-font: calc(var(--t10-poster-h) * 1.05);
+  --t10-text-h: calc(var(--t10-font) * 0.78);
+  --t10-num-top: calc((var(--t10-item-h) - var(--t10-text-h)) / 2 + 2px);
+  --t10-digit-w: calc(var(--t10-font) * 0.58);
+  --t10-start-single: calc(var(--t10-digit-w) * 0.65);
+  --t10-start-ten: calc(var(--t10-digit-w) * 0.88);
   display: flex;
-  align-items: flex-end;
-  gap: clamp(12px, 1.6vw, 24px);
+  align-items: flex-start;
+  gap: 14px;
   overflow-x: auto;
-  padding: 18px clamp(24px, 4vw, 64px) 18px;
+  padding: 0 var(--t10-pad);
+  margin-block-start: clamp(8px, 3vw, 14px);
   scrollbar-width: none;
-  scroll-snap-type: inline mandatory;
   overscroll-behavior-inline: contain;
   touch-action: pan-x;
 }
 .home-top10-track::-webkit-scrollbar { display: none; }
 .home-top10-item {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-end;
-  scroll-snap-align: start;
-}
-.home-top10-rank {
-  margin-inline-end: -1.55rem;
-  padding-block-end: 0.12em;
-  color: transparent;
-  font-family: var(--font-display-var);
-  font-size: clamp(120px, 12vw, 190px);
-  font-weight: 300;
-  letter-spacing: -0.08em;
-  line-height: 0.78;
-  -webkit-text-stroke: 1.35px color-mix(in srgb, var(--color-ink-var) 58%, transparent);
-  transition: -webkit-text-stroke-color 180ms ease;
-  user-select: none;
-}
-.home-top10-item:hover .home-top10-rank { -webkit-text-stroke-color: color-mix(in srgb, var(--color-accent-var) 68%, var(--color-ink-var)); }
-.home-top10-card {
   position: relative;
-  z-index: 1;
-  flex: 0 0 clamp(104px, 7.5vw, 128px);
-  inline-size: clamp(104px, 7.5vw, 128px);
+  flex: 0 0 auto;
+  inline-size: calc(var(--t10-start-single) + var(--t10-poster-w));
+  block-size: var(--t10-item-h);
 }
-.home-top10-card .md-title-small { text-align: center; }
+.home-top10-item.is-ten { inline-size: calc(var(--t10-start-ten) + var(--t10-poster-w)); }
+/* The rank numeral: Roboto Black, canvas-filled glyph under the white rim —
+   fill + stroke are two stacked layers exactly like the app's glyph Stack.
+   The outer box stays direction-aware (mirrors with the row); the inner
+   shell pins digit order. */
+.home-top10-num {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: var(--t10-num-top);
+  inline-size: var(--t10-digit-w);
+  block-size: var(--t10-text-h);
+  pointer-events: none;
+  user-select: none;
+  font-family: "Roboto Rank", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 900;
+  font-size: var(--t10-font);
+  line-height: 0.78;
+  font-kerning: none;
+}
+/* Inner LTR shell — pins the digit ORDER ("10", never "01" in RTL) without
+   flipping the OUTER box's logical-inset mapping (logical properties resolve
+   against the element's OWN direction, so direction:ltr must live one level
+   down — same layering as the app's Directionality-inside-PositionedDirectional). */
+.home-top10-num-inner {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.home-top10-digit { position: absolute; inset-block-start: 0; inset-inline-start: 0; }
+/* rank 10 tight lockup: the "0" fills the digit box, the "1" is pulled onto
+   it until the outlines cross — the pair reads as a single digit. The "1"
+   paints LAST so its canvas fill cuts out the "0" rim at the crossing. */
+.home-top10-digit.d1 { inset-inline-start: calc(var(--t10-digit-w) * -0.30); }
+.home-top10-digit .glyph-fill,
+.home-top10-digit .glyph-stroke {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  white-space: pre;
+}
+.home-top10-digit .glyph-fill { color: var(--color-canvas-var); }
+.home-top10-digit .glyph-stroke { color: transparent; -webkit-text-stroke: 2.5px rgba(255, 255, 255, 0.85); }
+/* Poster sticker: 12px radius, soft shadow falling toward the number (the
+   start side), raised surface while loading, movie fallback on error —
+   the app's _Top10Sticker recipe. */
+.home-top10-sticker {
+  position: absolute;
+  inset-inline-start: var(--t10-start-single);
+  inset-block-start: 15px;
+  inline-size: var(--t10-poster-w);
+  block-size: var(--t10-poster-h);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--color-raised-var);
+  box-shadow: -4px 4px 14px 1px rgba(0, 0, 0, 0.35);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 220ms var(--md-sys-motion-easing-standard, ease);
+}
+.home-top10-item.is-ten .home-top10-sticker { inset-inline-start: var(--t10-start-ten); }
+[dir="rtl"] .home-top10-sticker { box-shadow: 4px 4px 14px 1px rgba(0, 0, 0, 0.35); }
+@media (hover: hover) {
+  .home-top10-sticker:hover { transform: scale(1.03); }
+}
+.home-top10-sticker:focus-visible { outline: 2px solid var(--color-accent-var); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
-  .home-top10-rank { transition: none; }
+  .home-top10-sticker { transition: none; }
 }

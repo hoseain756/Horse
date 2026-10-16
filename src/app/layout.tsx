@@ -82,6 +82,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Top-10 rank numerals are Roboto Black (app-pinned family); preload
+            keeps the tight "10" lockup from flashing with a fallback face. */}
+        <link
+          rel="preload"
+          href="/fonts/roboto-black-latin.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="antialiased bg-canvas text-ink" style={{ fontFamily: "var(--font-sans-var)" }}>
         <script dangerouslySetInnerHTML={{ __html: BOOT_GUARD_SCRIPT }} />
         {children}
