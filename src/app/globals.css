@@ -4067,11 +4067,15 @@ html[lang^="ar"] {
 .set-shell > * {
   min-inline-size: 0;
 }
-/* Two-pane ≥840: fixed list column + fluid detail column. */
+/* Two-pane ≥840: fixed list column + fluid detail column.
+   The pane GROUP is centered in the viewport once the detail column hits
+   its max-width cap (justify-content only bites when free space appears,
+   so narrower viewports keep the old fill behaviour). */
 @media (min-width: 840px) {
   .set-shell[data-layout="panes"] {
     flex-direction: row;
     align-items: stretch;
+    justify-content: center;
     gap: clamp(20px, 2.5vw, 36px);
   }
   .set-shell[data-layout="panes"] > .set-pane-list {

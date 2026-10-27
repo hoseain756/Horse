@@ -4143,3 +4143,18 @@ Work Log:
 Stage Summary:
 - The site footer (brand lockup, tagline, credit, TMDB attribution) is fully removed from every page — code, styles, and dictionary keys cleaned up; verified visually + in DOM on Home and Settings.
 - Environment restored after another sandbox reset (env, db push, dev server). Open: GitHub token re-authorization needed to resume auto-push; operator items from Task 128/129 unchanged.
+
+---
+Task ID: 131
+Agent: Z.ai Code (solo)
+Task: USER (AR, screenshot): "اجعلها في المنتصف" — on wide screens the Settings two-pane group (nav list + detail content) hugged the viewport edge leaving all dead space on one side; center it.
+
+Work Log:
+- ROOT CAUSE: at ≥840 the panes row (fixed list ~320px + detail capped at --settings-detail-max:880px) left all free space at flex-end — on a 1534px RTL viewport ~300px of dead space stacked on the far side.
+- FIX (globals.css, ≥840 panes block only): added justify-content:center to .set-shell[data-layout="panes"] — it only bites when free space appears (detail hits its 880px cap), so 840–1230px viewports keep the old fill behaviour with zero visual change.
+- SANDBOX RESET #3 mid-task: .env wiped again (rebuilt with Horse Supabase creds), dev server relaunched (health 200, /api/health ok:true postgres-pooler 18 tables); ~/.git-credentials + ghflow /tmp state lost again — device-flow code 9581-BA21 is dead (poller + device_code gone); fresh code re-issued to the operator after this commit; autopush watcher re-armed (pushes automatically once creds return).
+- E2E (agent-browser, 1534×775): settings → Playback two-pane: shell 0→1488, list starts +143, detail ends −143 → gapLeft == gapRight == 143px, group perfectly centered; screenshot matches request. At 1024×768: gapRight=0, detail fills — narrower viewports unchanged. lint: 0 errors.
+
+Stage Summary:
+- Settings two-pane layout is now centered in the viewport on wide screens (balanced margins, direction-agnostic — RTL mirrors automatically); narrower screens unchanged.
+- Push still pending operator authorization (fresh device code issued); local commits queued: footer removal (ec478f3) + system commit + this centering fix.
