@@ -4176,3 +4176,21 @@ Work Log:
 Stage Summary:
 - Letterboxd integration shipped ToS-safe: Letterboxd score chip on movie pages (via MDBList) + import of official CSV exports and public RSS feeds into real Horse collections (TMDB-matched, ordered, with posters + ratings). Card lives in Settings → Integrations between Simkl and TMDB.
 - Push to GitHub still pending operator device-flow authorization (code 50C5-751A issued during Task 131; may need a fresh code if expired).
+
+---
+Task ID: 133
+Agent: Z.ai Code (main)
+Task: دفع المشروع إلى GitHub (hoseain756/Horse) بعد فشل محاولة سابقة
+
+Work Log:
+- تشخيص: المستطلع (ghflow-poll) مات قبل استبدال كود الجهاز بالتوكن رغم أن المستخدم اعتمد 700F-82B8
+- استطلعت يدوياً مرة واحدة → TOKEN_RECEIVED (الاعتماد كان سارياً)
+- خزّنت التوكن في ~/.git-credentials (chmod 600، بدون طباعة) + credential.helper store
+- صححت سابقاً هوية كوميتين (Z User → hoseain756 <hoseain756@gmail.com>) عبر rebase --reset-author
+- git push origin main → 7a28fc4..afe457e ناجح، origin/main..main = 0 (متزامن)
+- أعدت تسليح مراقب ~/.gh-autopush.sh (يعمل الآن، يدفع كل 60s عند وجود كوميتات جديدة)
+
+Stage Summary:
+- GitHub متزامن بالكامل: afe457e (Letterboxd/132) + 2596acd (تمركز/131) + f3b3b4a + 2d04b02 + ec478f3 (فوتر/130)
+- التوكن محفوظ للجلسة؛ أي reset مستقبلي سيتطلب Device Flow جديد
+- المراقب الدائم مسلّح — الكوميتات القادمة تُدفع تلقائياً
