@@ -21,11 +21,17 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import WebTorrent from "webtorrent";
+import { ensureConfig } from "./setup.mjs";
+import { resolveEngineSettings, lanIPs, PID_FILE } from "./config.mjs";
 
-// ENGINE_PORT / ENGINE_HOST allow self-hosted deployments (Docker/PaaS bind
-// 0.0.0.0) while the sandbox default stays loopback-only behind the gateway.
-const PORT = Number.parseInt(process.env.ENGINE_PORT ?? process.env.PORT ?? "3031", 10) || 3031;
-const HOST = (process.env.ENGINE_HOST ?? "127.0.0.1").trim() || "127.0.0.1";
+// First run → interactive wizard (port + horse-start / horse-stop shortcuts).
+// Headless boots (sandbox/Docker/CI) get silent defaults, no questions asked.
+// ENGINE_PORT / ENGINE_HOST env vars still win afterwards, so Docker/PaaS
+// deployments keep working exactly as before.
+const { cfg: engineConfig } = await ensureConfig();
+const SETTINGS = resolveEngineSettings(engineConfig);
+const PORT = SETTINGS.port;
+const HOST = SETTINGS.host;
 const CACHE_DIR = path.join(os.tmpdir(), "harbor-web-torrent-cache");
 const METADATA_TIMEOUT_MS = 35_000;
 const IDLE_TTL_MS = 45 * 60 * 1000; // destroy torrents nobody touched for 45 min
@@ -358,7 +364,7 @@ const server = http.createServer(async (req, res) => {
       const open = authorized(req, url);
       return send(res, 200, {
         ok: true,
-        version: "1.3.0",
+        version: "1.4.0",
         paused,
         // Private internals only for authenticated callers (health probes
         // from load balancers / the app's availability check stay public).
@@ -670,11 +676,63 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
+// ---------- startup banner (clear screen + local/network/phone URLs) ----------
+function clearScreen() {
+  // 2J wipe, 3J scrollback (xterm/newer terminals), H home — Windows 10+ VT ok
+  process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+}
+
+function printBanner(port, host) {
+  const bold = (s) => `\x1b[1m${s}\x1b[0m`;
+  const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
+  const dim = (s) => `\x1b[2m${s}\x1b[0m`;
+  const pad = (u) => `  ${cyan(u)}`.padEnd(46);
+
+  if (process.stdout.isTTY) clearScreen();
+  console.log("");
+  console.log(`  ${bold("🐴 Horse torrent engine — يعمل الآن")}`);
+  console.log(`  ${dim("─".repeat(56))}`);
+  console.log(`${pad(`1. http://localhost:${port}`)}${dim("← هذا الجهاز (PC)")}`);
+  console.log(`${pad(`2. http://${host}:${port}`)}${dim("← الشبكة المحلية")}`);
+  const ips = lanIPs();
+  ips.forEach((ip, i) => {
+    console.log(`${pad(`${3 + i}. http://${ip}:${port}`)}${dim("← ايفون / اندرويد — نفس الواي فاي")}`);
+  });
+  if (!ips.length) console.log(`  ${dim("(لا يوجد IP شبكة — الجوال لن يصل، تحقق من الواي فاي)")}`);
+  console.log(`  ${dim("─".repeat(56))}`);
+  console.log(`  الإغلاق والتنظيف: ${bold(cyan(engineConfig.stopShortcut))}   ${dim("من أي تيرمنال")}`);
+  if (ips.length) console.log(`  ${dim("لم يفتح من الجوال؟ اسمح بالبورت في جدار حماية الجهاز")}`);
+  console.log("");
+}
+
 server.listen(PORT, HOST, () => {
-  log(`torrent-service listening on http://${HOST}:${PORT}`);
+  printBanner(PORT, HOST);
+  log(`torrent-service listening on http://${HOST}:${PORT} (pid ${process.pid})`);
   log(`cache dir: ${CACHE_DIR}`);
+  try {
+    fs.writeFileSync(PID_FILE, String(process.pid), "utf8");
+  } catch {}
+});
+
+server.on("error", (e) => {
+  if (e?.code === "EADDRINUSE") {
+    console.log("");
+    console.log(`  \x1b[33m⚠ البورت ${PORT} مستخدم من عملية أخرى.\x1b[0m`);
+    console.log(`  شغّل \x1b[36m${engineConfig.stopShortcut}\x1b[0m لإيقاف النسخة القديمة والتنظيف، ثم أعد التشغيل.`);
+    console.log(`  أو غيّر البورت: احذف \x1b[2mengine.config.json\x1b[0m وأعد \x1b[2mnpm start\x1b[0m`);
+    process.exit(1);
+  }
+  log("server error:", e?.message ?? e);
 });
 
 client.on("error", (e) => log("client error:", e?.message ?? e));
-process.on("SIGINT", () => client.destroy(() => process.exit(0)));
-process.on("SIGTERM", () => client.destroy(() => process.exit(0)));
+function shutdown(sig) {
+  try {
+    fs.rmSync(PID_FILE, { force: true });
+  } catch {}
+  log(`received ${sig} — destroying client...`);
+  client.destroy(() => process.exit(0));
+  setTimeout(() => process.exit(0), 1500).unref(); // never hang the terminal
+}
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

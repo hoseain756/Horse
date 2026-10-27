@@ -4194,3 +4194,23 @@ Stage Summary:
 - GitHub متزامن بالكامل: afe457e (Letterboxd/132) + 2596acd (تمركز/131) + f3b3b4a + 2d04b02 + ec478f3 (فوتر/130)
 - التوكن محفوظ للجلسة؛ أي reset مستقبلي سيتطلب Device Flow جديد
 - المراقب الدائم مسلّح — الكوميتات القادمة تُدفع تلقائياً
+
+---
+Task ID: 134
+Agent: Z.ai Code (main)
+Task: تطوير torrent-service — معالج إعداد أول تشغيل (بورت + اختصارات) + بانر شاشة + أمر إيقاف وتنظيف
+
+Work Log:
+- config.mjs جديد: قراءة/كتابة engine.config.json (gitignored لكل جهاز) + resolveEngineSettings (env يتغلب على الكونفيغ) + lanIPs()
+- setup.mjs جديد: معالج تفاعلي بأسئلة المستخدم الثلاثة (البورت 3031 / اختصار التشغيل horse-start / اختصار الإغلاق والتنظيف horse-stop) مع تحقق مدخلات
+- تثبيت الاختصارات: يونكس → ~/.local/bin + تصدير PATH في .bashrc/.zshrc/.profile، أو /usr/local/bin إذا كان قابلاً للكتابة؛ ويندوز → .cmd shims + إضافة مجلد الخدمة لـ PATH المستخدم عبر PowerShell (بلا setx truncation)
+- طابور إجابات readline: اللصق الدفعي للأسطر لا يُفقد (كان يُفقد مع rl.question المتسلسل)
+- إقلاع لامتفاعلي (sandbox/Docker/CI): قيم صامتة بلا أسئلة، host يبقى 127.0.0.1؛ المعالج التفاعلي فقط يكتب 0.0.0.0
+- stop.mjs جديد: PID file أولاً (مع تحقق /proc cmdline ضد PIDs المُعاد استخدامها) ثم مسح البورت fallback (lsof/fuser/netstat)؛ حذف كاش التنزيل + engine.pid؛ رسائل عربية
+- index.mjs: top-level await ensureConfig قبل الإقلاع، بانر كل تشغيل ينظف الشاشة (\x1b[2J\x1b[3J\x1b[H) ويطبع 1. localhost / 2. host / 3+ IP الشبكة (ايفون-اندرويد) + تلميح horse-stop، ملف engine.pid عند listen، معالج EADDRINUSE برسالة عربية، shutdown يزيل PID
+- package.json 1.4.0 + scripts setup/stop؛ version في /health صارت 1.4.0؛ README قسم جديد؛ .gitignore engine.config.json/engine.pid/horse-*.cmd؛ تحديث نص الم_launchers الثلاثة
+
+Stage Summary:
+- اختبارات E2E نجحت كلها: معالج pty بثلاث إجابات مخصصة (3100/my-start/my-stop) → كونفيغ صحيح + سكربتات مثبتة /usr/local/bin و~/.local/bin chmod 755؛ EADDRINUSE طبع الرسالة العربية وخرج 1؛ stop.mjs قتل المحرك الحقيقي (PID 5758) ونظف الكاش؛ الإقلاع الصامت أعاد 127.0.0.1:3031 و/health ok version 1.4.0
+- الساندبوكس مستعاد لـ 3031 (يطلبه p2p.ts/Caddy)؛ node --watch يعيد التشغيل تلقائياً
+- اختصارات المستخدم النهائي: horse-start (تشغيل بنفس البانر) / horse-stop (إيقاف + تنظيف كاش) من أي مجلد

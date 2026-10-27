@@ -82,3 +82,8 @@ qa-shots/*.tsv
 
 # Trakt OAuth relay runtime registry (in-memory mirror)
 db/trakt-relay.json
+
+# torrent-service first-run wizard state (per machine, never commit)
+mini-services/torrent-service/engine.config.json
+mini-services/torrent-service/engine.pid
+mini-services/torrent-service/horse-*.cmd

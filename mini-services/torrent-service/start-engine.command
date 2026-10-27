@@ -16,6 +16,6 @@ if [ ! -d node_modules ]; then
   npm install || { echo "[start-engine] npm install failed — check your internet connection and try again."; exit 1; }
 fi
 
-echo "[start-engine] Starting the engine on http://localhost:3031 ..."
+echo "[start-engine] Starting the engine (first run opens the setup wizard) ..."
 echo "[start-engine] Keep this window open while watching. Press Ctrl+C to stop."
 exec npm start

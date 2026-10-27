@@ -22,7 +22,7 @@ if not exist "node_modules" (
   )
 )
 
-echo [start-engine] Starting the engine on http://localhost:3031 ...
+echo [start-engine] Starting the engine (first run opens the setup wizard) ...
 echo [start-engine] Keep this window open while watching. Press Ctrl+C to stop.
 call npm start
 echo [start-engine] The engine stopped.

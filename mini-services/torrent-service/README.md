@@ -60,7 +60,7 @@ cd Horse/mini-services/torrent-service
 # 2. run (first run downloads dependencies)
 npm install
 npm start
-# → [torrent-service] listening on http://127.0.0.1:3031
+# → the first-run setup wizard opens (see below)
 ```
 
 Then, in Horse (even the vercel.app deployment): **Settings → Integrations →
@@ -71,10 +71,50 @@ while you watch. The setting is stored on that device only (localStorage).
 Optional hardening: start it with a shared secret and enter the same key in
 the app (`ENGINE_API_KEY=some-long-secret npm start`).
 
+### First-run wizard + shortcuts (v1.4+)
+
+The first `npm start` on a new machine asks three questions (Enter accepts the
+default, runs once, saved to `engine.config.json` — gitignored):
+
+1. **البورت** — engine port (default `3031`)
+2. **اختصار التشغيل** — global start command (default `horse-start`)
+3. **اختصار الإغلاق والتنظيف** — global stop command (default `horse-stop`)
+
+The shortcuts are installed system-wide (Linux/macOS: `~/.local/bin` +
+PATH export, or `/usr/local/bin` when writable; Windows: `.cmd` shims + user
+PATH via the registry), so from any terminal, any folder:
+
+| Command | What it does |
+| --- | --- |
+| `horse-start` | starts the engine (same banner as `npm start`) |
+| `horse-stop` | stops the engine **and wipes the download cache** |
+
+Every start clears the screen and prints the reachable addresses:
+
+```
+  🐴 Horse torrent engine — يعمل الآن
+  ────────────────────────────────────────
+  1. http://localhost:3031        ← هذا الجهاز (PC)
+  2. http://0.0.0.0:3031          ← الشبكة المحلية
+  3. http://192.168.1.7:3031      ← ايفون / اندرويد — نفس الواي فاي
+  ────────────────────────────────────────
+  الإغلاق والتنظيف: horse-stop    من أي تيرمنال
+```
+
+Line 3 (your LAN IP) is the one to put in Horse on the **phone** — same
+Wi-Fi. If the phone can't open it, allow the port through the PC firewall.
+The engine binds `0.0.0.0` by default since v1.4 (config `host`), and
+`ENGINE_PORT` / `ENGINE_HOST` env vars still override the saved config for
+Docker/PaaS runs. Headless boots (Docker, CI, sandbox) skip the wizard
+entirely and use silent defaults.
+
+Re-run the wizard any time: delete `engine.config.json`, or `npm run setup`.
+`npm run stop` is the same as `horse-stop` from inside the folder.
+
 Environment variables (all optional): `ENGINE_PORT` (default 3031),
-`ENGINE_HOST` (default `127.0.0.1` — use `0.0.0.0` only on trusted networks),
-`ENGINE_API_KEY` (shared secret), `TRANSCODE_ENABLED` (HEVC → H.264
-transcoding; CPU-heavy), `PORT` (fallback for ENGINE_PORT).
+`ENGINE_HOST` (default `0.0.0.0` since v1.4 — use `127.0.0.1` to keep it
+local-only), `ENGINE_API_KEY` (shared secret), `TRANSCODE_ENABLED`
+(HEVC → H.264 transcoding; CPU-heavy), `PORT` (fallback for ENGINE_PORT).
 
 ## Docker / PaaS
 
