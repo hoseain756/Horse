@@ -2,8 +2,10 @@
 // Provider-adapter architecture: one adapter per platform, a common interface,
 // a registry, aggressive server-side caching, and per-provider failure
 // isolation (one dead provider never breaks the page).
-// Platform note: Letterboxd has NO public API and scraping is against its
-// ToS — we deliberately do not integrate it (deep links only, see final notes).
+// Letterboxd note: its API is invite-only and scraping is against its ToS, so
+// the Letterboxd chip is sourced from MDBList's licensed ratings feed (no
+// letterboxd.com request), and history import uses Letterboxd's official CSV
+// export + public RSS (see lib/harbor/letterboxd.ts).
 import { tmdbFetch } from "@/lib/harbor/tmdb-server";
 
 export type RatingKind = "movie" | "series";
@@ -242,6 +244,7 @@ type MdblistResponse = {
 const mdbRawCache = new Map<string, { body: MdblistResponse | null; at: number }>();
 const mdbSideRt = new Map<string, number | null>();
 const mdbSideMc = new Map<string, number | null>();
+const mdbSideLb = new Map<string, number | null>();
 
 async function mdblistRaw(kind: RatingKind, imdbId: string): Promise<MdblistResponse | null> {
   const key = process.env.MDBLIST_API_KEY?.trim();
@@ -258,8 +261,10 @@ async function mdblistRaw(kind: RatingKind, imdbId: string): Promise<MdblistResp
   if (usable) {
     const rt = usable.ratings!.find((r) => r.source === "tomatoes");
     const mc = usable.ratings!.find((r) => r.source === "metacritic");
+    const lb = usable.ratings!.find((r) => r.source === "letterboxd");
     mdbSideRt.set(imdbId, rt && typeof rt.value === "number" && rt.value > 0 ? rt.value : null);
     mdbSideMc.set(imdbId, mc && typeof mc.value === "number" && mc.value > 0 ? mc.value : null);
+    mdbSideLb.set(imdbId, lb && typeof lb.value === "number" && lb.value > 0 ? lb.value : null);
   }
   return usable;
 }
@@ -443,6 +448,32 @@ const kitsuAdapter: RatingAdapter = {
     }),
 };
 
+// ---------- Letterboxd (via MDBList's licensed ratings feed) ----------
+// Letterboxd's native scale is 0–5 (half stars). MDBList relays the value;
+// we accept either the native 0–5 or a pre-doubled 0–10 defensively.
+
+const letterboxdAdapter: RatingAdapter = {
+  id: "letterboxd",
+  label: "Letterboxd",
+  color: "bg-[#00e054]/90 text-black",
+  supports: (ctx) => !!process.env.MDBLIST_API_KEY && ctx.kind === "movie" && /^tt\d+$/.test(ctx.imdbId ?? ""),
+  fetch: (ctx) =>
+    cached("letterboxd", ctx.imdbId ?? "", async () => {
+      const raw = await mdblistRaw(ctx.kind, ctx.imdbId!);
+      const v = raw ? (mdbSideLb.get(ctx.imdbId!) ?? null) : null;
+      if (v === null) return null;
+      const isFiveScale = v <= 5.001;
+      const stars = isFiveScale ? v : v / 2; // normalize to 0..5
+      return {
+        provider: "letterboxd",
+        score: Math.min(10, stars * 2),
+        display: stars.toFixed(1),
+        originalScale: "/5",
+        url: `https://letterboxd.com/search/${encodeURIComponent(ctx.title)}/`,
+      };
+    }),
+};
+
 // ---------- registry ----------
 
 export const RATING_ADAPTERS: RatingAdapter[] = [
@@ -452,6 +483,7 @@ export const RATING_ADAPTERS: RatingAdapter[] = [
   tmdbAdapter,
   traktAdapter,
   mdbAdapter,
+  letterboxdAdapter,
   anilistAdapter,
   jikanAdapter,
   kitsuAdapter,

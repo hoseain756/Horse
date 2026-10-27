@@ -4158,3 +4158,21 @@ Work Log:
 Stage Summary:
 - Settings two-pane layout is now centered in the viewport on wide screens (balanced margins, direction-agnostic — RTL mirrors automatically); narrower screens unchanged.
 - Push still pending operator authorization (fresh device code issued); local commits queued: footer removal (ec478f3) + system commit + this centering fix.
+
+---
+Task ID: 132
+Agent: Z.ai Code (solo)
+Task: USER (AR): "توجد طريقة لجعل الموقع قادر على الارطباط مع letterboxd وجلب البينات منه" — Letterboxd integration.
+
+Work Log:
+- CONSTRAINTS RESEARCH: Letterboxd API is invite-only (closed for years); scraping letterboxd.com violates its ToS (list pages return Cloudflare "Just a moment…" 403 from datacenters). ToS-safe channels implemented instead: (1) the OFFICIAL CSV data export, (2) the public per-profile RSS feed, (3) Letterboxd scores relayed via MDBList's licensed ratings feed (no letterboxd.com request).
+- RATING CHIP (ratings/adapters.ts): new letterboxdAdapter (movies only, needs MDBLIST_API_KEY) reading the "letterboxd" source from the existing MDBList v4 response (new mdbSideLb side-map beside tomatoes/metacritic); scale guard accepts native 0–5 (halves) or pre-doubled 0–10; chip color = Letterboxd green #00e054/black; deep link to letterboxd search; registered after mdbAdapter; header ToS note updated; client RATING_PROVIDERS entry added (needsKey MDBLIST_API_KEY) so it appears in Settings → Ratings toggles automatically.
+- IMPORT BACKEND (NEW lib/harbor/letterboxd.ts + api/letterboxd/import/route.ts): RFC-4180 CSV parser (quoted fields/BOM; column autodetect name/year/rating/date for diary/ratings/watchlist/films exports), RSS fetch+parse (letterboxd:filmTitle/filmYear/memberRating/watchedDate, entity-unescaped, username-validated [A-Za-z0-9_-]{2,30}, also accepts pasted profile URLs), TMDB matching via tmdbFetch (search movie title+year with year-match preference → external_ids for imdb → w185 poster), 300-row cap, concurrency 4, 5k resolve-cache, rate limit 10/min, 2MB CSV cap. Order-preserving parallel resolve (slots[i] fix — first version returned completion order, caught via saved-list order check). TMDB-unconfigured → explicit lbErrTmdb.
+- IMPORT UI (NEW settings/letterboxd-import.tsx + LetterboxdCard in settings-view IntegrationsPanel): dialog with CSV/Public-profile tabs, file picker (client-side read), username input (Enter submits), loading state, results view (matched/total, poster strip, unmatched list scrollable, editable collection name, Save as collection via createList+addToList reverse-walk so CSV order is preserved, "Import another"), specific error per failure kind. FIXED: error mapping read data.ok===false but server error payloads are {error} without ok → generic message shown instead of the specific one; now data.ok!==true + error extraction. All strings via i18n (lb* keys en+ar).
+- RSS REALITY CHECK: profile feeds from this datacenter return a valid-but-EMPTY 512B shell (davidsims/gemma/karl/andy all 0 items — Letterboxd soft-blocks server IPs; list feeds 403 challenge). Code kept (works from permitted networks) + lbErrRss message now explains and points to CSV. CSV is the reliable primary path.
+- E2E (agent-browser + curl): CSV API 3/4 matched with correct imdb ids/posters/ratings/dates (fake title → unmatched); after order fix 5/5 in exact file order; full UI flow: Integrations → Letterboxd card → dialog → upload lb-diary.csv → "5 of 5 films matched" → Save → localStorage list "Letterboxd — CSV" (5 items, first=The Shawshank Redemption, rating "★ 4.5/5", posters) → Library view consumes it via existing getLists(); RSS error path shows the specific message; screenshots taken. lint 0 errors; console clean; dev.log only benign abort noise.
+- Sandbox reset #3 happened mid-Task 130 follow-up (before this task): .env rebuilt, server relaunched, autopush watcher re-armed.
+
+Stage Summary:
+- Letterboxd integration shipped ToS-safe: Letterboxd score chip on movie pages (via MDBList) + import of official CSV exports and public RSS feeds into real Horse collections (TMDB-matched, ordered, with posters + ratings). Card lives in Settings → Integrations between Simkl and TMDB.
+- Push to GitHub still pending operator device-flow authorization (code 50C5-751A issued during Task 131; may need a fresh code if expired).

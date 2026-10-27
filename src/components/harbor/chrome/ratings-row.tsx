@@ -26,6 +26,7 @@ export const RATING_PROVIDERS: { id: string; label: string; color: string; needs
   { id: "tmdb", label: "TMDB", color: "bg-sky-600/90 text-white", needsKey: "TMDB key" },
   { id: "trakt", label: "Trakt", color: "bg-red-500/90 text-white", needsKey: "TRAKT_CLIENT_ID" },
   { id: "mdblist", label: "MDBList", color: "bg-teal-600/90 text-white", needsKey: "MDBLIST_API_KEY" },
+  { id: "letterboxd", label: "Letterboxd", color: "bg-[#00e054]/90 text-black", needsKey: "MDBLIST_API_KEY" },
   { id: "anilist", label: "AniList", color: "bg-violet-600/90 text-white", needsKey: "" },
   { id: "mal", label: "MyAnimeList", color: "bg-blue-500/90 text-white", needsKey: "" },
   { id: "kitsu", label: "Kitsu", color: "bg-orange-500/90 text-black", needsKey: "" },

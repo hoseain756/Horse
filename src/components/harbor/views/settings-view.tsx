@@ -16,7 +16,7 @@ import {
   Images, Info, KeyRound, Languages, ListVideo, Loader2, Lock, LogOut, MailCheck, MailWarning,
   MonitorSmartphone, Network, Palette, Play, Plug, Puzzle, QrCode, RefreshCw, Rocket, RotateCcw, Server,
   Shield, ShieldCheck, SlidersHorizontal, Square, Trash2, TvMinimalPlay, Type, Unplug, Upload,
-  UploadCloud, UserPlus, UserRound, X, Zap,
+  UploadCloud, UserPlus, UserRound, X, Zap, Clapperboard,
 } from "lucide-react";
 import { useSettings } from "@/lib/harbor/store";
 import { useT } from "@/hooks/use-t";
@@ -50,6 +50,7 @@ import { LinkAccountFlow } from "../chrome/link-account-flow";
 import { DevicePairingCard } from "../chrome/device-pairing";
 import { QrLoginPanel, openQrApprove } from "../chrome/qr-login";
 import { RatingsSettingsCard } from "../chrome/ratings-row";
+import { LetterboxdImportDialog } from "../settings/letterboxd-import";
 import { useLinking } from "@/lib/harbor/linking";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -762,6 +763,7 @@ function IntegrationsPanel() {
       </div>
       <TraktCard />
       <SimklCard />
+      <LetterboxdCard />
       <TmdbCard />
       <RatingsSettingsCard />
       <DebridCard />
@@ -771,6 +773,35 @@ function IntegrationsPanel() {
           <RichBidi text={tr("privacyNote")} />
         </p>
       </div>
+    </div>
+  );
+}
+
+// ---------- Letterboxd (ToS-safe: official CSV export + public RSS) ----------
+
+function LetterboxdCard() {
+  const tr = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-edge-soft bg-elevated p-5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3">
+          <span className="w-10 h-10 rounded-xl bg-[#00e054]/10 flex items-center justify-center shrink-0">
+            <Clapperboard className="w-5 h-5 text-[#00e054]" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-ink">{tr("lbCardTitle")}</h3>
+            <p className="text-xs text-ink-subtle mt-0.5">
+              <RichBidi text={tr("lbCardDesc")} />
+            </p>
+          </div>
+        </div>
+        <Button type="button" variant="outline" className="min-h-11 shrink-0" onClick={() => setOpen(true)}>
+          <Clapperboard className="h-4 w-4" aria-hidden />
+          {tr("lbOpenImport")}
+        </Button>
+      </div>
+      <LetterboxdImportDialog open={open} onOpenChange={setOpen} />
     </div>
   );
 }
